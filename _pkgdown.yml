@@ -1,0 +1,13 @@
+url: ~
+template:
+  bootstrap: 5
+
+reference:
+  - title: Session
+    contents:
+      - has_keyword("internal")
+
+articles:
+  - title: Getting started
+    navbar: ~
+    contents: []

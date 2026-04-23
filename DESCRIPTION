@@ -1,0 +1,36 @@
+Package: uscogdata
+Type: Package
+Title: Curated Reader for the Civilytics US Census of Governments Finance Corpus
+Version: 0.1.0
+Authors@R:
+    person("Civilytics", , , "jknowles@gmail.com", role = c("aut", "cre"))
+Description: Curated R verbs over the Civilytics US Census of Governments
+    finance corpus. Provides unit-level financial profiles, geographic
+    rollups, and peer comparisons with auditable provenance and built-in
+    cross-vintage correctness.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: false
+Depends: R (>= 4.1)
+Imports:
+    DBI (>= 1.1.0),
+    dbplyr (>= 2.4.0),
+    duckdb (>= 1.0.0),
+    dplyr (>= 1.1.0),
+    tibble,
+    cli,
+    jsonlite,
+    httr2,
+    digest
+Suggests:
+    testthat (>= 3.0.0),
+    withr,
+    knitr,
+    rmarkdown,
+    pkgdown,
+    ggplot2
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+RoxygenNote: 7.3.3
+MinCorpusSchema: 2
+MaxCorpusSchema: 2

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://civilytics.org/schemas/uscogdata/provenance-v1.json",
+  "title": "uscogdata provenance v1",
+  "type": "object",
+  "required": ["verb", "target", "years", "scope", "manifest", "sql_query"],
+  "properties": {
+    "verb":           { "type": "string" },
+    "call":           { "type": "string" },
+    "target":         { "type": "object" },
+    "years":          { "type": "array", "items": { "type": "integer" } },
+    "category":       { "type": ["string", "array", "null"] },
+    "scope":          { "type": "object" },
+    "codes_summed":   { "type": "object" },
+    "aggregate_fallback": { "type": ["object", "null"] },
+    "transformations":{ "type": "object" },
+    "series_break_refs": { "type": "array", "items": { "type": "string" } },
+    "manifest":       { "type": "object" },
+    "sql_query":      { "type": "string" }
+  }
+}
