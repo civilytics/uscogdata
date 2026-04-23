@@ -11,7 +11,7 @@ cog_open <- function(url = .resolve_url(),
   DBI::dbExecute(con, "INSTALL httpfs; LOAD httpfs;")
 
   manifest <- .fetch_or_cache_manifest(url, cache_dir)
-  .validate_schema(manifest, expected_version = 2L)
+  .validate_schema(manifest, expected_version = 3L)
   .validate_scope(manifest)
 
   .register_views(con, url, manifest)

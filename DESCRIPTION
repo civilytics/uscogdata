@@ -32,5 +32,5 @@ Suggests:
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 RoxygenNote: 7.3.3
-MinCorpusSchema: 2
-MaxCorpusSchema: 2
+MinCorpusSchema: 3
+MaxCorpusSchema: 3
