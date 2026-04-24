@@ -33,13 +33,13 @@ cog_open <- function(url = .resolve_url(),
   .uscogdata_env$con
 }
 
+# Coerce an input to a character vector of canonical_govid values.
+# Accepts either a character vector (returned as-is after `as.character`)
+# or a data.frame / tibble with a `canonical_govid` column (such as the
+# output of cog_gov_search() or cog_find_peers()) — in that case the
+# column is extracted so results from discovery verbs can pipe directly
+# into the query verbs.
 #' @noRd
-#' Coerce an input to a character vector of canonical_govid values.
-#' Accepts either a character vector (returned as-is after `as.character`)
-#' or a data.frame / tibble with a `canonical_govid` column (such as the
-#' output of [cog_gov_search()] or [cog_find_peers()]) — in that case the
-#' column is extracted so results from discovery verbs can pipe directly
-#' into the query verbs.
 .coerce_govid_input <- function(x, arg = "govid") {
   if (is.data.frame(x)) {
     if (!"canonical_govid" %in% names(x)) {
@@ -58,11 +58,11 @@ cog_open <- function(url = .resolve_url(),
   as.character(x)
 }
 
+# Check which of the supplied govids exist in canonical_fips_xwalk.
+# Emits a cli message listing any missing ones alongside a pointer to the
+# v0.1 scope explanation; returns both sets so callers can attach them to
+# provenance.
 #' @noRd
-#' Check which of the supplied govids exist in canonical_fips_xwalk.
-#' Emits a cli message listing any missing ones alongside a pointer to the
-#' v0.1 scope explanation; returns both sets so callers can attach them to
-#' provenance.
 .check_govids_in_scope <- function(govids) {
   govids <- unique(as.character(govids))
   if (length(govids) == 0L) return(list(found = character(0), missing = character(0)))
