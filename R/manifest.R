@@ -1,8 +1,19 @@
 # R/manifest.R
 
-#' Fetch manifest.json from URL, cache locally, validate TTL.
+#' Fetch manifest.json from URL (or read from a local fixture path),
+#' cache locally, validate TTL.
 #' @noRd
 .fetch_or_cache_manifest <- function(url, cache_dir) {
+  # Local fixture path: read manifest directly; skip cache/TTL plumbing so
+  # tests pick up regenerated manifests immediately.
+  if (.is_local_path(url)) {
+    local_manifest <- file.path(url, "manifest.json")
+    if (!file.exists(local_manifest)) {
+      cli::cli_abort("Local fixture has no manifest.json at {local_manifest}")
+    }
+    return(jsonlite::fromJSON(local_manifest, simplifyVector = FALSE))
+  }
+
   cache_path <- file.path(cache_dir, "manifest.json")
   ttl <- as.integer(.cfg("manifest_ttl_secs"))
 
@@ -17,6 +28,11 @@
   }
 
   jsonlite::fromJSON(cache_path, simplifyVector = FALSE)
+}
+
+#' @noRd
+.is_local_path <- function(url) {
+  !grepl("^[a-zA-Z][a-zA-Z0-9+.-]*://", url)
 }
 
 #' @noRd
