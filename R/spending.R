@@ -49,6 +49,7 @@ cog_spending <- function(govid, years, category = NULL,
   if (!is.null(adjust_to_year)) adjust_to_year <- as.integer(adjust_to_year)
 
   con <- .ensure_session()
+  scope <- .check_govids_in_scope(govid)
 
   sql <- .build_verb_sql(view, subtype_col, govid, years, category)
   result <- tibble::as_tibble(DBI::dbGetQuery(con, sql))
@@ -60,7 +61,7 @@ cog_spending <- function(govid, years, category = NULL,
 
   result$notes <- .notes_column(result)
 
-  attr(result, "provenance") <- .build_provenance(
+  prov <- .build_provenance(
     verb           = verb,
     call           = call,
     govid          = govid,
@@ -72,6 +73,9 @@ cog_spending <- function(govid, years, category = NULL,
     sql            = sql,
     subtype_col    = subtype_col
   )
+  prov$scope$govids_found   <- scope$found
+  prov$scope$govids_missing <- scope$missing
+  attr(result, "provenance") <- prov
   result
 }
 

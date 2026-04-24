@@ -50,14 +50,29 @@ test_that("cog_spending with per_capita + adjust_to_year adds all columns", {
                   names(r)))
 })
 
-test_that("cog_spending for unknown govid returns empty tibble", {
+test_that("cog_spending for unknown govid returns empty tibble + informs", {
   skip_if_no_corpus()
-  r <- cog_spending("XXXINVALID", 2020L, "Corrections")
+  expect_message(
+    r <- cog_spending("XXXINVALID", 2020L, "Corrections"),
+    "not found|v0.1"
+  )
   expect_s3_class(r, "tbl_df")
   expect_equal(nrow(r), 0L)
   expect_true("notes" %in% names(r))
-  # provenance still attached
-  expect_false(is.null(attr(r, "provenance")))
+  prov <- attr(r, "provenance")
+  expect_false(is.null(prov))
+  expect_equal(prov$scope$govids_missing, "XXXINVALID")
+  expect_equal(length(prov$scope$govids_found), 0L)
+})
+
+test_that("cog_spending records found + missing govids in provenance", {
+  skip_if_no_corpus()
+  suppressMessages(
+    r <- cog_spending(c("101006006", "XXXINVALID"), 2020L, "Corrections")
+  )
+  prov <- attr(r, "provenance")
+  expect_equal(sort(prov$scope$govids_found), "101006006")
+  expect_equal(sort(prov$scope$govids_missing), "XXXINVALID")
 })
 
 test_that("cog_spending result has provenance attribute matching schema", {

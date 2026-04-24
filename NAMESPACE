@@ -3,6 +3,8 @@
 export(cog_explain)
 export(cog_find_peers)
 export(cog_geographic_rollup)
+export(cog_gov_search)
+export(cog_mirror)
 export(cog_peer_compare)
 export(cog_revenue)
 export(cog_spending)
