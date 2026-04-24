@@ -1,0 +1,90 @@
+test_that("cog_find_peers returns same-type peers in the default pop band", {
+  skip_if_no_corpus()
+  peers <- cog_find_peers("101006006")                # Broward County
+  expect_s3_class(peers, "tbl_df")
+  expected_cols <- c("canonical_govid", "gov_name", "fips_state",
+                     "population_acs", "pop_ratio", "rank")
+  expect_true(all(expected_cols %in% names(peers)))
+  expect_true(all(peers$pop_ratio >= 0.7 & peers$pop_ratio <= 1.3))
+  expect_false("101006006" %in% peers$canonical_govid)
+  expect_equal(peers$rank, seq_len(nrow(peers)))
+})
+
+test_that("cog_find_peers respects same_state restriction", {
+  skip_if_no_corpus()
+  peers <- cog_find_peers("101006006", same_state = TRUE,
+                          pop_range = c(0.1, 10))
+  expect_true(all(peers$fips_state == "12"))
+})
+
+test_that("cog_find_peers absolute pop range works", {
+  skip_if_no_corpus()
+  peers <- cog_find_peers("101006006",
+                          pop_range = c(1.5e6, 2.5e6),
+                          is_ratio = FALSE, max_peers = 20L)
+  expect_true(all(peers$population_acs >= 1.5e6 &
+                  peers$population_acs <= 2.5e6))
+})
+
+test_that("cog_find_peers errors cleanly on unknown govid", {
+  skip_if_no_corpus()
+  expect_error(cog_find_peers("XXXINVALID"), "not found")
+})
+
+test_that("cog_peer_compare accepts a cog_find_peers result directly", {
+  skip_if_no_corpus()
+  peers <- cog_find_peers("101006006", max_peers = 4L)
+  r <- cog_peer_compare("101006006", peers, "Police", years = 2020L)
+  expect_s3_class(r, "tbl_df")
+  expect_true("role" %in% names(r))
+  expect_setequal(
+    unique(r$role),
+    c("target", "peer", "summary_p25", "summary_p50", "summary_p75")
+  )
+  expect_equal(sum(r$role == "target" & r$spend_subtype == "operations"), 1L)
+})
+
+test_that("cog_peer_compare accepts a character vector of govids", {
+  skip_if_no_corpus()
+  r <- cog_peer_compare(
+    "101006006",
+    peers = c("441015015", "441220220"),     # Bexar, Tarrant
+    category = "Police", years = 2020L
+  )
+  expect_true("peer" %in% r$role)
+  expect_equal(sum(r$role == "peer" & r$spend_subtype == "operations"), 2L)
+})
+
+test_that("cog_peer_compare summary rows use real per-capita when requested", {
+  skip_if_no_corpus()
+  r <- cog_peer_compare(
+    "101006006",
+    peers = c("441015015", "441220220", "231082082"),
+    category = "Police", years = 2019:2020,
+    per_capita = TRUE, adjust_to_year = 2022L
+  )
+  summaries <- dplyr::filter(r, grepl("^summary_", role))
+  expect_true(all(is.finite(summaries$amt_per_capita_real)))
+  # summary rows have NA canonical_govid and named gov_name
+  expect_true(all(is.na(summaries$canonical_govid)))
+  expect_true(all(grepl("Peer", summaries$gov_name)))
+})
+
+test_that("cog_peer_compare provenance reports the outer verb + peer count", {
+  skip_if_no_corpus()
+  r <- cog_peer_compare("101006006",
+                        peers = c("441015015", "441220220"),
+                        category = "Police", years = 2020L)
+  prov <- attr(r, "provenance")
+  expect_equal(prov$verb, "cog_peer_compare")
+  expect_equal(prov$peer_count, 2L)
+})
+
+test_that("cog_peer_compare handles zero peers gracefully", {
+  skip_if_no_corpus()
+  r <- cog_peer_compare("101006006",
+                        peers = character(0),
+                        category = "Police", years = 2020L)
+  expect_true(all(r$role == "target"))
+  expect_equal(sum(grepl("^summary_", r$role)), 0L)
+})
