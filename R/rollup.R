@@ -26,8 +26,14 @@
 cog_geographic_rollup <- function(govids, category, years,
                                   per_capita = FALSE, adjust_to_year = NULL) {
   call <- match.call()
-  .validate_rollup_govids(govids)
+  .validate_rollup_layers(govids)
 
+  # Accept character vector OR a data.frame with canonical_govid per layer,
+  # so cog_gov_search() output can be piped into one of the layer slots.
+  govids <- lapply(govids, .coerce_govid_input, arg = "govids[[layer]]")
+  if (any(lengths(govids) == 0L)) {
+    cli::cli_abort("Each layer in `govids` must be non-empty after coercion.")
+  }
   layer_names <- names(govids)
   all_govids  <- unlist(govids, use.names = FALSE)
   layer_map   <- tibble::tibble(
@@ -51,7 +57,7 @@ cog_geographic_rollup <- function(govids, category, years,
 }
 
 #' @noRd
-.validate_rollup_govids <- function(govids) {
+.validate_rollup_layers <- function(govids) {
   if (!is.list(govids) || is.data.frame(govids)) {
     cli::cli_abort("`govids` must be a named list.")
   }
@@ -67,9 +73,6 @@ cog_geographic_rollup <- function(govids, category, years,
     cli::cli_abort(
       "`govids` names must be one of 'state', 'county', 'city'. Got: {bad}."
     )
-  }
-  if (any(lengths(govids) == 0L)) {
-    cli::cli_abort("Each layer in `govids` must be non-empty.")
   }
   invisible(TRUE)
 }

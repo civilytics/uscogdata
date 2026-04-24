@@ -92,6 +92,27 @@ test_that("cog_spending result has provenance attribute matching schema", {
 })
 
 test_that("cog_spending rejects invalid inputs", {
-  expect_error(cog_spending(123, 2020L), "character")
+  expect_error(cog_spending(list(), 2020L), "character|data frame")
   expect_error(cog_spending("101006006", "2020"), "years")
+})
+
+test_that("cog_spending accepts a cog_gov_search result directly", {
+  skip_if_no_corpus()
+  picks <- cog_gov_search("^BROWARD COUNTY$", state = "FL", type = "county")
+  expect_gt(nrow(picks), 0L)
+  r <- cog_spending(picks, 2020L, "Corrections")
+  expect_equal(unique(r$canonical_govid), "101006006")
+})
+
+test_that("cog_spending accepts a cog_find_peers result directly", {
+  skip_if_no_corpus()
+  peers <- cog_find_peers("101006006", max_peers = 3L)
+  r <- cog_spending(peers, 2020L, "Police")
+  expect_setequal(unique(r$canonical_govid),
+                  sort(peers$canonical_govid))
+})
+
+test_that("cog_spending rejects data.frame without canonical_govid column", {
+  bad <- tibble::tibble(foo = "bar")
+  expect_error(cog_spending(bad, 2020L), "canonical_govid")
 })

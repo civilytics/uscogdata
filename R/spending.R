@@ -42,9 +42,9 @@ cog_spending <- function(govid, years, category = NULL,
 .verb_spendrev <- function(verb, view, subtype_col, call,
                            govid, years, category,
                            per_capita, adjust_to_year) {
+  govid <- .coerce_govid_input(govid, arg = "govid")
   .validate_verb_inputs(govid, years, category, per_capita, adjust_to_year)
 
-  govid   <- as.character(govid)
   years   <- as.integer(years)
   if (!is.null(adjust_to_year)) adjust_to_year <- as.integer(adjust_to_year)
 

@@ -34,5 +34,5 @@ test_that("cog_revenue result has provenance attribute", {
 })
 
 test_that("cog_revenue rejects invalid inputs", {
-  expect_error(cog_revenue(123, 2020L), "character")
+  expect_error(cog_revenue(list(), 2020L), "character|data frame")
 })

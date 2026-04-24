@@ -78,6 +78,18 @@ test_that("cog_geographic_rollup provenance reports the outer verb", {
   expect_true(grepl("cog_geographic_rollup", prov$call))
 })
 
+test_that("cog_geographic_rollup accepts data.frames per layer", {
+  skip_if_no_corpus()
+  fl_state  <- cog_gov_search("^FLORIDA STATE GOVT$", type = "state")
+  broward   <- cog_gov_search("^BROWARD COUNTY$", state = "FL", type = "county")
+  r <- cog_geographic_rollup(
+    govids = list(state = fl_state, county = broward),
+    category = "Police", years = 2020L
+  )
+  expect_setequal(unique(r$layer), c("state", "county"))
+  expect_gt(nrow(r), 0L)
+})
+
 test_that("cog_geographic_rollup rejects invalid inputs", {
   expect_error(cog_geographic_rollup(list(), "Police", 2020L), "length")
   expect_error(cog_geographic_rollup(c("101006006"), "Police", 2020L), "list")

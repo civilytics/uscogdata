@@ -34,6 +34,31 @@ cog_open <- function(url = .resolve_url(),
 }
 
 #' @noRd
+#' Coerce an input to a character vector of canonical_govid values.
+#' Accepts either a character vector (returned as-is after `as.character`)
+#' or a data.frame / tibble with a `canonical_govid` column (such as the
+#' output of [cog_gov_search()] or [cog_find_peers()]) — in that case the
+#' column is extracted so results from discovery verbs can pipe directly
+#' into the query verbs.
+.coerce_govid_input <- function(x, arg = "govid") {
+  if (is.data.frame(x)) {
+    if (!"canonical_govid" %in% names(x)) {
+      cli::cli_abort(c(
+        "`{arg}` data frame must have a `canonical_govid` column.",
+        i = "Use the result of cog_gov_search() or cog_find_peers() directly, or pass a character vector of canonical_govids."
+      ))
+    }
+    return(as.character(x$canonical_govid))
+  }
+  if (!is.character(x) && !is.numeric(x)) {
+    cli::cli_abort(
+      "`{arg}` must be a character vector or a data frame with a `canonical_govid` column."
+    )
+  }
+  as.character(x)
+}
+
+#' @noRd
 #' Check which of the supplied govids exist in canonical_fips_xwalk.
 #' Emits a cli message listing any missing ones alongside a pointer to the
 #' v0.1 scope explanation; returns both sets so callers can attach them to
@@ -55,7 +80,8 @@ cog_open <- function(url = .resolve_url(),
     cli::cli_inform(c(
       i = sprintf("%d govid%s not found in v0.1 corpus: %s%s",
                   n, if (n == 1L) "" else "s", shown, more),
-      i = "v0.1 covers gov_types 0-3 (state/county/city/township). Types 4/5 excluded; see vignette('coverage-scope')."
+      i = "Common causes: typo, pre-2017 PID that isn't bridged, or a scope-excluded type (4=special district, 5=school district).",
+      i = "Resolve canonical names with cog_gov_search() first."
     ))
   }
   list(found = found, missing = missing)
