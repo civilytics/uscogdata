@@ -24,3 +24,37 @@ package implements.
 - `USCOGDATA_URL` — corpus root URL (public Nextcloud share, trailing slash)
 - `USCOGDATA_CACHE_DIR` — optional override for the manifest cache directory
 - `USCOGDATA_MANIFEST_TTL_SECS` — optional manifest re-fetch TTL (default 3600)
+
+## Developer notes
+
+### Testing
+
+The package ships a bundled fixture corpus at `inst/extdata/fixture_corpus/` —
+a 3.6 MB two-year slice (2019 + 2020) of the full corpus covering all 50
+states. `tests/testthat/setup.R` automatically points `USCOGDATA_URL` at this
+fixture, so the full test suite runs offline with no network dependency:
+
+```r
+devtools::test()   # uses bundled fixture, no credentials required
+```
+
+### Releasing against the live corpus
+
+Before cutting a release, run the test suite against the published corpus to
+catch any drift between the fixture and the real data:
+
+```r
+Sys.setenv(USCOGDATA_URL = "<published-corpus-url-with-trailing-slash>")
+devtools::test()
+```
+
+When the live-corpus run is clean, strip the fixture from the built package by
+adding this line to `.Rbuildignore`:
+
+```
+^inst/extdata/fixture_corpus$
+```
+
+The test suite is URL-agnostic — `setup.R` falls back to `USCOGDATA_URL` when
+the bundled fixture is absent, so no test code changes are needed for the
+release run or after stripping the fixture.
