@@ -34,11 +34,11 @@ test_that("cog_spending with per_capita adds per-capita nominal column", {
 
 test_that("cog_spending with adjust_to_year adds real column", {
   skip_if_no_corpus()
-  r <- cog_spending("101006006", 2015:2020, "Corrections",
+  r <- cog_spending("101006006", 2019:2020, "Corrections",
                     adjust_to_year = 2022L)
   expect_true("amt_real" %in% names(r))
-  r2015 <- dplyr::filter(r, year == 2015L)
-  expect_true(any(r2015$amt_nominal != r2015$amt_real))
+  r2019 <- dplyr::filter(r, year == 2019L)
+  expect_true(any(r2019$amt_nominal != r2019$amt_real))
 })
 
 test_that("cog_spending with per_capita + adjust_to_year adds all columns", {

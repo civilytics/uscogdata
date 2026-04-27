@@ -1,0 +1,86 @@
+{
+  "schema_version": 3,
+  "built_at": "2026-04-27T16:43:46Z",
+  "pipeline_commit": "899af37",
+  "fixture_note": "Two-year (2019-2020) fixture for uscogdata tests. Full corpus available via USCOGDATA_URL.",
+  "data_vintage": {
+    "census_source_downloaded": "unknown",
+    "cpi_vintage": "FRED CPIAUCSL",
+    "acs_vintage": "ACS 2018-2022 5-year"
+  },
+  "scope": {
+    "gov_types_included": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "gov_types_excluded": [
+      4,
+      5
+    ],
+    "scope_note": "v0.1 covers state, county, city/municipality, and township governments. Special districts (type 4) and school districts (type 5) are excluded pending validation in a future cycle."
+  },
+  "schema": {
+    "long_column_count": 24,
+    "long_columns": [
+      "fips_state",
+      "type",
+      "fips_county",
+      "govid",
+      "gov_blank",
+      "gov_name",
+      "county_name",
+      "fips_state_code",
+      "fips_county_code",
+      "fips_place_code",
+      "population",
+      "popyear",
+      "enrollment",
+      "enrollyear",
+      "function_code",
+      "sch_level_code",
+      "fiscal_year_end",
+      "srvy_year",
+      "item_code",
+      "amt",
+      "srv_data",
+      "impute_flag",
+      "is_aggregate",
+      "canonical_govid"
+    ],
+    "data_dictionary": "docs/data_dictionary.md"
+  },
+  "files": {
+    "long_partitions": [
+      {
+        "year": 2019,
+        "path": "data/long/year=2019/part-0.parquet",
+        "sha256": "e1c9f426c6d7d3c51d06b3a652473b987b304836619c213f019cee4887714daa",
+        "row_count": 318139,
+        "size_bytes": 1424231
+      },
+      {
+        "year": 2020,
+        "path": "data/long/year=2020/part-0.parquet",
+        "sha256": "9b795853a848e8c955c80261b96b79630fc77394dcfb1a1ca288e2cd634053a3",
+        "row_count": 317500,
+        "size_bytes": 1427150
+      }
+    ],
+    "metadata": [
+      {
+        "path": "data/canonical_fips_xwalk.parquet",
+        "sha256": "86e53e04a35f6f90bb74bb1a273e053392afa782d6f518e3e3da9c976d47f7af",
+        "description": "canonical_fips_xwalk.parquet"
+      },
+      {
+        "path": "data/summary_categories.parquet",
+        "sha256": "60045e22bc2723318fa2cb73f8e5038250dc54d24b3447c6750dfe29035335b8",
+        "description": "summary_categories.parquet"
+      }
+    ]
+  },
+  "series_breaks_ref": "docs/series_breaks.md",
+  "reader_spec_ref": "docs/reader-specification.md"
+}
