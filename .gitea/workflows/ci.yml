@@ -1,0 +1,45 @@
+name: R-CMD-check
+
+on: [push, pull_request]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    container:
+      image: rocker/r-ver:4.4
+
+    steps:
+      - name: Install system libraries and Node.js (required by actions/checkout)
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends \
+            nodejs git \
+            libcurl4-openssl-dev libssl-dev libxml2-dev \
+            libfontconfig1-dev libharfbuzz-dev libfribidi-dev
+
+      - uses: actions/checkout@v4
+
+      - name: Install pak
+        run: |
+          Rscript -e 'install.packages("pak", repos = "https://r-lib.github.io/p/pak/stable/")'
+
+      - name: Install package dependencies
+        run: |
+          Rscript -e 'pak::local_install_deps(dependencies = TRUE)'
+
+      - name: Install rcmdcheck (check runner)
+        run: |
+          Rscript -e 'pak::pak("rcmdcheck")'
+
+      - name: Run tests
+        run: |
+          Rscript -e 'devtools::test(stop_on_failure = TRUE)'
+
+      - name: R CMD check
+        run: |
+          Rscript -e '
+            rcmdcheck::rcmdcheck(
+              args     = c("--no-manual", "--no-vignettes"),
+              error_on = "error"
+            )
+          '
