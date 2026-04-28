@@ -2,29 +2,81 @@
 
 #' Search for governments by name, state, and/or type
 #'
-#' Two modes:
+#' Resolves human-readable place names into rows of `canonical_fips_xwalk`,
+#' the cross-vintage canonical-government registry. Operates in two modes:
 #'
-#' * **Utility mode** (single `name`): returns all rows from
-#'   `canonical_fips_xwalk` whose `gov_name` matches the regex
-#'   case-insensitively, sorted by `population_acs` descending.
+#' * **Utility mode** (single `name`, the original behavior): returns all
+#'   rows whose `gov_name` matches the regex case-insensitively, sorted by
+#'   `population_acs` descending. Useful for exploratory lookups.
 #' * **Basket mode** (`length(name) > 1`): resolves each input row to a
-#'   single canonical govid via exact-then-substring matching with
-#'   deterministic disambiguation. Returns up to `length(name)` rows in
-#'   input order plus a `"resolution"` sidecar attribute. See
-#'   [cog_basket_resolution()].
+#'   single canonical govid and returns a tibble in input order, suitable
+#'   for piping straight into [cog_spending()] / [cog_revenue()] /
+#'   [cog_geographic_rollup()]. Carries an audit sidecar accessible via
+#'   [cog_basket_resolution()] / [cog_basket_unresolved()].
+#'
+#' @details
+#' **Basket-mode resolution algorithm** (per input row):
+#' 1. Filter `canonical_fips_xwalk` by `state` and (if non-NA) `type`.
+#' 2. **Exact pass:** case-insensitive equality against `gov_name`.
+#'    Single hit -> resolved. Multiple -> step 4.
+#' 3. **Substring fallback:** case-insensitive regex against `gov_name`.
+#'    Single hit -> resolved (`match_method = "substring"`). Zero hits ->
+#'    `status = "no_match"`. Multiple hits -> step 4.
+#' 4. **Disambiguation:** if matches share one `govs_type`, pick the
+#'    largest-population row (`status = "largest_pop"`). If they span >=2
+#'    types, no row is added (`status = "ambiguous"`); the user should
+#'    re-run with `type` specified.
+#'
+#' Resolved rows form the returned tibble in input order. Unresolved
+#' inputs (`ambiguous` / `no_match`) appear only in the sidecar.
 #'
 #' @param name Character vector of place name(s). Length 1 = utility mode;
 #'   length >1 = basket mode.
-#' @param state Either a 2-letter USPS abbreviation, a FIPS integer, or
-#'   `NULL`. Length 1 recycles across all entries in basket mode.
-#' @param type Government type: an integer in `0:3` or one of `"state"`,
-#'   `"county"`, `"city"`, `"township"`, or `NA` (per-row optional in
-#'   basket mode). Passing `4`, `5`, `"special_district"`, or
-#'   `"school_district"` emits an explanatory message and returns an
-#'   empty tibble (v0.1 corpus excludes those types).
-#' @return Tibble from `canonical_fips_xwalk`. In utility mode, sorted by
-#'   `population_acs` descending (`NULL`s last). In basket mode, in input
-#'   order, with `attr(result, "resolution")` set to the sidecar tibble.
+#' @param state 2-letter USPS abbreviation (e.g. `"FL"`), FIPS integer
+#'   (e.g. `12`), or `NULL`. In basket mode, length 1 recycles across
+#'   all entries; otherwise must match `length(name)`.
+#' @param type Government type: integer in `0:3` or one of `"state"`,
+#'   `"county"`, `"city"`, `"township"`, or `NA`/`NULL`. Per-row optional
+#'   in basket mode (recycles from length 1). Excluded types `4`/`5` (or
+#'   `"special_district"` / `"school_district"`) trigger an explanatory
+#'   message and an empty result.
+#' @return A tibble of `canonical_fips_xwalk` rows. In utility mode, all
+#'   matches sorted by `population_acs` desc. In basket mode, resolved
+#'   rows in input order, with `attr(., "resolution")` set to the
+#'   sidecar tibble.
+#' @seealso [cog_basket_resolution()], [cog_basket_unresolved()],
+#'   [cog_spending()], [cog_revenue()].
+#' @examples
+#' \dontrun{
+#' # Utility mode — exploratory regex lookup
+#' cog_gov_search("broward", state = "FL")
+#'
+#' # Basket mode — resolve a known cohort
+#' basket <- cog_gov_search(
+#'   name  = c("BROWARD COUNTY", "SAN DIEGO CITY", "AUSTIN CITY"),
+#'   state = c("FL",             "CA",             "TX")
+#' )
+#' basket
+#'
+#' # Inspect resolution audit
+#' cog_basket_resolution(basket)
+#'
+#' # Pipe into a spending query
+#' library(dplyr)
+#' basket |> cog_spending(years = 2019:2020, category = "Police")
+#'
+#' # Iteratively refine ambiguous matches
+#' partial <- cog_gov_search(
+#'   name  = c("Broward", "San Diego"),  # San Diego is ambiguous
+#'   state = c("FL",      "CA")
+#' )
+#' cog_basket_unresolved(partial)
+#' refined <- cog_gov_search(
+#'   name  = c("Broward", "San Diego"),
+#'   state = c("FL",      "CA"),
+#'   type  = c(NA,        "city")  # disambiguate
+#' )
+#' }
 #' @export
 cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
   if (!is.null(type) && length(type) == 1L && .is_excluded_type(type)) {

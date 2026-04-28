@@ -18,3 +18,12 @@ Convenience wrapper that returns just the rows where `status` is
 refine before piping into a query verb. The `candidates` list-column
 is preserved so the user can drill into ambiguous match sets.
 }
+\examples{
+\dontrun{
+basket <- cog_gov_search(
+  name  = c("Broward", "San Diego", "Notarealplace"),
+  state = c("FL",      "CA",        "NY")
+)
+cog_basket_unresolved(basket)
+}
+}

@@ -86,6 +86,15 @@
 #'   list-column (full-schema match candidates per input row). Default
 #'   `FALSE`.
 #' @return A tibble with the resolution audit trail.
+#' @examples
+#' \dontrun{
+#' basket <- cog_gov_search(
+#'   name  = c("Broward", "San Diego", "Notarealplace"),
+#'   state = c("FL",      "CA",        "NY")
+#' )
+#' cog_basket_resolution(basket)
+#' cog_basket_resolution(basket, expand_candidates = TRUE)
+#' }
 #' @export
 cog_basket_resolution <- function(x, expand_candidates = FALSE) {
   res <- attr(x, "resolution")
@@ -111,6 +120,14 @@ cog_basket_resolution <- function(x, expand_candidates = FALSE) {
 #'
 #' @param x A tibble returned by basket-mode [cog_gov_search()].
 #' @return A tibble (subset of [cog_basket_resolution()]).
+#' @examples
+#' \dontrun{
+#' basket <- cog_gov_search(
+#'   name  = c("Broward", "San Diego", "Notarealplace"),
+#'   state = c("FL",      "CA",        "NY")
+#' )
+#' cog_basket_unresolved(basket)
+#' }
 #' @export
 cog_basket_unresolved <- function(x) {
   res <- cog_basket_resolution(x, expand_candidates = TRUE)

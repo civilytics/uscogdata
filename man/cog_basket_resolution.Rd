@@ -23,3 +23,13 @@ Returns the resolution tibble attached to a basket-mode result of
 the `candidates` list-column is dropped for readable printing; pass
 `expand_candidates = TRUE` to keep it.
 }
+\examples{
+\dontrun{
+basket <- cog_gov_search(
+  name  = c("Broward", "San Diego", "Notarealplace"),
+  state = c("FL",      "CA",        "NY")
+)
+cog_basket_resolution(basket)
+cog_basket_resolution(basket, expand_candidates = TRUE)
+}
+}
