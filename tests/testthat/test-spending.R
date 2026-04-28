@@ -116,3 +116,15 @@ test_that("cog_spending rejects data.frame without canonical_govid column", {
   bad <- tibble::tibble(foo = "bar")
   expect_error(cog_spending(bad, 2020L), "canonical_govid")
 })
+
+test_that("cog_spending accepts a basket-mode cog_gov_search result", {
+  skip_if_no_corpus()
+  basket <- cog_gov_search(
+    name  = c("BROWARD COUNTY", "SAN DIEGO COUNTY"),
+    state = c("FL",             "CA")
+  )
+  expect_equal(nrow(basket), 2L)
+  spending <- cog_spending(basket, years = 2019:2020, category = "Police")
+  expect_s3_class(spending, "tbl_df")
+  expect_setequal(unique(spending$canonical_govid), basket$canonical_govid)
+})
