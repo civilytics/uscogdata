@@ -72,3 +72,47 @@
   ))
   invisible(NULL)
 }
+
+#' Inspect basket-mode resolution sidecar
+#'
+#' Returns the resolution tibble attached to a basket-mode result of
+#' [cog_gov_search()]. One row per input entry; `status` is one of
+#' `"resolved"`, `"largest_pop"`, `"ambiguous"`, `"no_match"`. By default
+#' the `candidates` list-column is dropped for readable printing; pass
+#' `expand_candidates = TRUE` to keep it.
+#'
+#' @param x A tibble returned by basket-mode [cog_gov_search()].
+#' @param expand_candidates Logical. If `TRUE`, keeps the `candidates`
+#'   list-column (full-schema match candidates per input row). Default
+#'   `FALSE`.
+#' @return A tibble with the resolution audit trail.
+#' @export
+cog_basket_resolution <- function(x, expand_candidates = FALSE) {
+  res <- attr(x, "resolution")
+  if (is.null(res)) {
+    cli::cli_abort(c(
+      "`x` has no resolution attribute.",
+      i = "Pass the result of basket-mode `cog_gov_search()` (length(name) > 1).",
+      i = "Single-name (utility) results do not carry a sidecar."
+    ))
+  }
+  if (!isTRUE(expand_candidates)) {
+    res$candidates <- NULL
+  }
+  res
+}
+
+#' Filter a basket resolution to unresolved rows
+#'
+#' Convenience wrapper that returns just the rows where `status` is
+#' `"ambiguous"` or `"no_match"` — the ones the user likely wants to
+#' refine before piping into a query verb. The `candidates` list-column
+#' is preserved so the user can drill into ambiguous match sets.
+#'
+#' @param x A tibble returned by basket-mode [cog_gov_search()].
+#' @return A tibble (subset of [cog_basket_resolution()]).
+#' @export
+cog_basket_unresolved <- function(x) {
+  res <- cog_basket_resolution(x, expand_candidates = TRUE)
+  res[res$status %in% c("ambiguous", "no_match"), , drop = FALSE]
+}
