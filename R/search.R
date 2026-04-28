@@ -168,6 +168,18 @@ cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
 # Internal use only; takes an active DuckDB connection to reuse the session.
 #' @noRd
 .resolve_basket_row <- function(name, state, type, con) {
+  # Short-circuit: empty/whitespace name -> no_match without SQL.
+  if (!nzchar(trimws(name))) {
+    empty <- .empty_xwalk_tibble()
+    return(list(
+      status       = "no_match",
+      match_method = NA_character_,
+      n_candidates = 0L,
+      row          = empty,
+      candidates   = empty
+    ))
+  }
+
   preds <- character(0)
   if (!is.na(state)) {
     st_fips <- .coerce_state_to_fips(state)
@@ -177,34 +189,61 @@ cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
     int_type <- .coerce_type(type)
     preds <- c(preds, sprintf("govs_type = %d", int_type))
   }
-
   base_where <- if (length(preds) == 0L) "" else paste("WHERE", paste(preds, collapse = " AND "))
+  conj <- if (nzchar(base_where)) "AND" else "WHERE"
 
   exact_sql <- paste(
     "SELECT * FROM canonical_fips_xwalk",
     base_where,
-    if (nzchar(base_where)) "AND" else "WHERE",
+    conj,
     sprintf("LOWER(gov_name) = LOWER(%s)", .sql_lit_chr(name))
   )
   exact <- tibble::as_tibble(DBI::dbGetQuery(con, exact_sql))
 
   if (nrow(exact) == 1L) {
     return(list(
-      status        = "resolved",
-      match_method  = "exact",
-      n_candidates  = 1L,
-      row           = exact,
-      candidates    = exact
+      status       = "resolved",
+      match_method = "exact",
+      n_candidates = 1L,
+      row          = exact,
+      candidates   = exact
     ))
   }
+  if (nrow(exact) > 1L) {
+    return(.disambiguate(exact, method = "exact"))
+  }
 
-  # Substring + disambiguation branches added in subsequent tasks.
-  empty <- exact[0, , drop = FALSE]
-  list(
-    status        = "no_match",
-    match_method  = NA_character_,
-    n_candidates  = 0L,
-    row           = empty,
-    candidates    = empty
+  sub_sql <- paste(
+    "SELECT * FROM canonical_fips_xwalk",
+    base_where,
+    conj,
+    sprintf("regexp_matches(gov_name, %s, 'i')", .sql_lit_chr(name))
   )
+  sub <- tibble::as_tibble(DBI::dbGetQuery(con, sub_sql))
+
+  if (nrow(sub) == 0L) {
+    return(list(
+      status       = "no_match",
+      match_method = NA_character_,
+      n_candidates = 0L,
+      row          = sub,
+      candidates   = sub
+    ))
+  }
+  if (nrow(sub) == 1L) {
+    return(list(
+      status       = "resolved",
+      match_method = "substring",
+      n_candidates = 1L,
+      row          = sub,
+      candidates   = sub
+    ))
+  }
+  .disambiguate(sub, method = "substring")
+}
+
+# Stub for Task 5; raises so any accidental hit during Task 4 is loud.
+#' @noRd
+.disambiguate <- function(matches, method) {
+  cli::cli_abort("internal: .disambiguate() not yet implemented")
 }

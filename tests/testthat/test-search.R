@@ -168,3 +168,39 @@ test_that(".resolve_basket_row exact match honors per-row type", {
   expect_equal(out$status, "resolved")
   expect_equal(out$row$canonical_govid, "052037010")
 })
+
+test_that(".resolve_basket_row substring fallback resolves single match", {
+  con <- uscogdata:::.ensure_session()
+  out <- uscogdata:::.resolve_basket_row(
+    name = "Broward", state = "FL", type = NA_character_, con = con
+  )
+  expect_equal(out$status, "resolved")
+  expect_equal(out$match_method, "substring")
+  expect_equal(out$n_candidates, 1L)
+  expect_equal(out$row$canonical_govid, "101006006")
+})
+
+test_that(".resolve_basket_row no_match returns 0-row tibble", {
+  con <- uscogdata:::.ensure_session()
+  out <- uscogdata:::.resolve_basket_row(
+    name = "Notarealplace", state = "NY", type = NA_character_, con = con
+  )
+  expect_equal(out$status, "no_match")
+  expect_true(is.na(out$match_method))
+  expect_equal(out$n_candidates, 0L)
+  expect_equal(nrow(out$row), 0L)
+  expect_equal(nrow(out$candidates), 0L)
+})
+
+test_that(".resolve_basket_row treats empty/whitespace name as no_match", {
+  con <- uscogdata:::.ensure_session()
+  out_empty <- uscogdata:::.resolve_basket_row(
+    name = "", state = "FL", type = NA_character_, con = con
+  )
+  expect_equal(out_empty$status, "no_match")
+
+  out_ws <- uscogdata:::.resolve_basket_row(
+    name = "   ", state = "FL", type = NA_character_, con = con
+  )
+  expect_equal(out_ws$status, "no_match")
+})
