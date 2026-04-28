@@ -7,7 +7,7 @@
 #' name into one or more `canonical_govid` values before calling
 #' [cog_spending()] / [cog_revenue()] / etc.
 #'
-#' @param pattern Character regex matched case-insensitively against
+#' @param name Character regex matched case-insensitively against
 #'   `gov_name`. `NULL` (default) means no name filter.
 #' @param state Either a 2-letter USPS abbreviation (e.g. `"FL"`), a FIPS
 #'   integer (e.g. `12`), or `NULL`.
@@ -18,7 +18,7 @@
 #' @return Tibble from `canonical_fips_xwalk` sorted by `population_acs`
 #'   descending (`NULL`s last).
 #' @export
-cog_gov_search <- function(pattern = NULL, state = NULL, type = NULL) {
+cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
   if (!is.null(type) && .is_excluded_type(type)) {
     cli::cli_inform(c(
       i = "v0.1 covers gov_types 0-3 (state/county/city/township) only.",
@@ -29,13 +29,13 @@ cog_gov_search <- function(pattern = NULL, state = NULL, type = NULL) {
   con <- .ensure_session()
 
   preds <- character(0)
-  if (!is.null(pattern)) {
-    if (!is.character(pattern) || length(pattern) != 1L) {
-      cli::cli_abort("`pattern` must be a length-1 character string.")
+  if (!is.null(name)) {
+    if (!is.character(name) || length(name) != 1L) {
+      cli::cli_abort("`name` must be a length-1 character string.")
     }
     preds <- c(preds,
                sprintf("regexp_matches(gov_name, %s, 'i')",
-                       .sql_lit_chr(pattern)))
+                       .sql_lit_chr(name)))
   }
   if (!is.null(state)) {
     st_fips <- .coerce_state_to_fips(state)

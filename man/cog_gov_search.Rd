@@ -4,10 +4,10 @@
 \alias{cog_gov_search}
 \title{Search for governments by name, state, and/or type}
 \usage{
-cog_gov_search(pattern = NULL, state = NULL, type = NULL)
+cog_gov_search(name = NULL, state = NULL, type = NULL)
 }
 \arguments{
-\item{pattern}{Character regex matched case-insensitively against
+\item{name}{Character regex matched case-insensitively against
 `gov_name`. `NULL` (default) means no name filter.}
 
 \item{state}{Either a 2-letter USPS abbreviation (e.g. `"FL"`), a FIPS
