@@ -133,6 +133,14 @@ cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
 }
 
 #' @noRd
+.escape_regex <- function(x) {
+  # Backslash-escape POSIX regex metacharacters so `name` is treated as a
+  # literal substring in the DuckDB regexp_matches call (substring fallback
+  # only; utility-mode intentionally preserves regex behavior).
+  gsub("([\\^$.|?*+(){}\\[\\]])", "\\\\\\1", x, perl = TRUE)
+}
+
+#' @noRd
 .is_excluded_type <- function(type) {
   excluded <- c("4", "5", "special_district", "school_district")
   as.character(type) %in% excluded
@@ -245,6 +253,19 @@ cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
     ))
   }
 
+  # Short-circuit: excluded type (4/5 / special_district / school_district)
+  # -> no_match without SQL, preserving soft-fail contract.
+  if (!is.na(type) && .is_excluded_type(type)) {
+    empty <- .empty_xwalk_tibble()
+    return(list(
+      status       = "no_match",
+      match_method = NA_character_,
+      n_candidates = 0L,
+      row          = empty,
+      candidates   = empty
+    ))
+  }
+
   preds <- character(0)
   if (!is.na(state)) {
     st_fips <- .coerce_state_to_fips(state)
@@ -282,7 +303,7 @@ cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
     "SELECT * FROM canonical_fips_xwalk",
     base_where,
     conj,
-    sprintf("regexp_matches(gov_name, %s, 'i')", .sql_lit_chr(name))
+    sprintf("regexp_matches(gov_name, %s, 'i')", .sql_lit_chr(.escape_regex(name)))
   )
   sub <- tibble::as_tibble(DBI::dbGetQuery(con, sub_sql))
 

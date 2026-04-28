@@ -375,3 +375,63 @@ test_that("cog_gov_search basket mode message points to the sidecar accessor", {
     regexp = "cog_basket_resolution"
   )
 })
+
+# ---- F1: per-row excluded type soft-fail ----
+
+test_that(".resolve_basket_row treats excluded type as no_match (not abort)", {
+  con <- uscogdata:::.ensure_session()
+  out <- uscogdata:::.resolve_basket_row(
+    name = "Some District", state = "CA", type = "special_district", con = con
+  )
+  expect_equal(out$status, "no_match")
+  expect_true(is.na(out$match_method))
+  expect_equal(out$n_candidates, 0L)
+})
+
+test_that("cog_gov_search basket mode skips per-row excluded type without aborting", {
+  basket <- suppressMessages(cog_gov_search(
+    name  = c("BROWARD COUNTY", "Some District"),
+    state = c("FL",             "FL"),
+    type  = c(NA,                "special_district")
+  ))
+  # Broward should resolve; the special_district row should be no_match.
+  expect_equal(nrow(basket), 1L)
+  expect_equal(basket$canonical_govid, "101006006")
+  res <- attr(basket, "resolution")
+  expect_equal(res$status, c("resolved", "no_match"))
+  # query_type should record what the user passed for the excluded-type row
+  expect_equal(res$query_type, c(NA_character_, "special_district"))
+})
+
+# ---- F2: malformed regex name soft-fail ----
+
+test_that(".resolve_basket_row treats malformed regex name as no_match", {
+  con <- uscogdata:::.ensure_session()
+  # Unbalanced parens would be a regex parse error if not escaped.
+  out <- uscogdata:::.resolve_basket_row(
+    name = "San(Diego", state = "CA", type = NA_character_, con = con
+  )
+  expect_equal(out$status, "no_match")
+})
+
+test_that(".resolve_basket_row escapes regex metacharacters in name", {
+  con <- uscogdata:::.ensure_session()
+  # Confirm that names with various metacharacters don't error.
+  expect_no_error(uscogdata:::.resolve_basket_row(
+    name = "Foo*Bar+Baz", state = "FL", type = NA_character_, con = con
+  ))
+})
+
+# ---- F3: all-no-match basket public surface ----
+
+test_that("cog_gov_search basket all-no-match returns 0-row tibble with full sidecar", {
+  basket <- suppressMessages(cog_gov_search(
+    name  = c("Notarealplace1", "Notarealplace2"),
+    state = c("NY",             "CA")
+  ))
+  expect_equal(nrow(basket), 0L)
+  expect_true("canonical_govid" %in% names(basket))
+  res <- attr(basket, "resolution")
+  expect_equal(nrow(res), 2L)
+  expect_true(all(res$status == "no_match"))
+})

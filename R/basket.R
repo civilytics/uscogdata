@@ -39,9 +39,12 @@
 }
 
 # Convert a type input (integer-like or label) into the canonical label
-# string used in the sidecar query_type column.
+# string used in the sidecar query_type column. Excluded types (4/5 /
+# special_district / school_district) are returned as-is so the sidecar
+# records what the user passed without calling .coerce_type() (which aborts).
 #' @noRd
 .type_to_label <- function(type) {
+  if (.is_excluded_type(type)) return(as.character(type))
   int_type <- .coerce_type(type)
   unname(c("0" = "state", "1" = "county", "2" = "city", "3" = "township")[[as.character(int_type)]])
 }
