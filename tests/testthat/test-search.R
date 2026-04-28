@@ -204,3 +204,42 @@ test_that(".resolve_basket_row treats empty/whitespace name as no_match", {
   )
   expect_equal(out_ws$status, "no_match")
 })
+
+test_that(".resolve_basket_row largest_pop within single type", {
+  # FL Miami substring matches 10 cities (all govs_type = 2), largest pop
+  # is MIAMI CITY at 443665.
+  con <- uscogdata:::.ensure_session()
+  out <- uscogdata:::.resolve_basket_row(
+    name = "Miami", state = "FL", type = NA_character_, con = con
+  )
+  expect_equal(out$status, "largest_pop")
+  expect_equal(out$match_method, "substring")
+  expect_gte(out$n_candidates, 2L)
+  expect_equal(out$row$canonical_govid, "102013013")
+  expect_equal(out$row$gov_name, "MIAMI CITY")
+})
+
+test_that(".resolve_basket_row ambiguous across types", {
+  # SAN DIEGO substring matches both SAN DIEGO COUNTY (type 1) and
+  # SAN DIEGO CITY (type 2) in CA.
+  con <- uscogdata:::.ensure_session()
+  out <- uscogdata:::.resolve_basket_row(
+    name = "San Diego", state = "CA", type = NA_character_, con = con
+  )
+  expect_equal(out$status, "ambiguous")
+  expect_true(is.na(out$match_method))
+  expect_equal(out$n_candidates, 2L)
+  expect_equal(nrow(out$row), 0L)
+  expect_equal(nrow(out$candidates), 2L)
+  expect_setequal(out$candidates$govs_type, c(1L, 2L))
+})
+
+test_that(".resolve_basket_row resolves with type override on ambiguous case", {
+  con <- uscogdata:::.ensure_session()
+  out <- uscogdata:::.resolve_basket_row(
+    name = "San Diego", state = "CA", type = "city", con = con
+  )
+  expect_equal(out$status, "resolved")
+  expect_equal(out$match_method, "substring")
+  expect_equal(out$row$canonical_govid, "052037010")
+})

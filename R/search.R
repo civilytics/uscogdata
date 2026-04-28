@@ -242,8 +242,27 @@ cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
   .disambiguate(sub, method = "substring")
 }
 
-# Stub for Task 5; raises so any accidental hit during Task 4 is loud.
+# Disambiguate a multi-row match set. Either picks the largest-pop row
+# (within single-type) or returns an ambiguous result with no basket row.
 #' @noRd
 .disambiguate <- function(matches, method) {
-  cli::cli_abort("internal: .disambiguate() not yet implemented")
+  types <- unique(matches$govs_type)
+  if (length(types) == 1L) {
+    pick <- matches[order(-matches$population_acs, na.last = TRUE), , drop = FALSE][1L, , drop = FALSE]
+    return(list(
+      status       = "largest_pop",
+      match_method = method,
+      n_candidates = nrow(matches),
+      row          = pick,
+      candidates   = matches
+    ))
+  }
+  empty <- matches[0, , drop = FALSE]
+  list(
+    status       = "ambiguous",
+    match_method = NA_character_,
+    n_candidates = nrow(matches),
+    row          = empty,
+    candidates   = matches
+  )
 }
