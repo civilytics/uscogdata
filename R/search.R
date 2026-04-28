@@ -282,8 +282,6 @@ cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
 
 # Orchestrates basket-mode resolution: validate, per-row resolve,
 # assemble the basket tibble + sidecar, attach the sidecar as an attr.
-# Caller is responsible for emitting any post-resolution summary message
-# (see Task 7 — this stays silent for now).
 #' @noRd
 .resolve_basket <- function(name, state, type, con) {
   args <- .validate_basket_args(name = name, state = state, type = type)
@@ -305,6 +303,7 @@ cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
 
   sidecar <- .build_sidecar(args, resolved)
   attr(basket, "resolution") <- sidecar
+  .basket_summary_message(sidecar)
   basket
 }
 
@@ -347,4 +346,31 @@ cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
 .type_to_label <- function(type) {
   int_type <- .coerce_type(type)
   c("0" = "state", "1" = "county", "2" = "city", "3" = "township")[[as.character(int_type)]]
+}
+
+# Single post-resolution summary message. Silent on clean baskets;
+# emits one cli_inform with two-line body otherwise.
+#' @noRd
+.basket_summary_message <- function(sidecar) {
+  status     <- sidecar$status
+  n_input    <- length(status)
+  n_basket   <- sum(status %in% c("resolved", "largest_pop"))
+  n_amb      <- sum(status == "ambiguous")
+  n_nm       <- sum(status == "no_match")
+  n_lp       <- sum(status == "largest_pop")
+
+  if (n_amb == 0L && n_nm == 0L && n_lp == 0L) return(invisible(NULL))
+
+  parts <- c(
+    if (n_amb > 0L) sprintf("%d ambiguous", n_amb),
+    if (n_nm  > 0L) sprintf("%d with no match", n_nm),
+    if (n_lp  > 0L) sprintf("%d used largest-population fallback", n_lp)
+  )
+
+  cli::cli_inform(c(
+    i = sprintf("Basket resolved %d of %d entries.", n_basket, n_input),
+    i = paste(parts, collapse = ", "),
+    i = "Inspect with `cog_basket_resolution(result)` or filter to problem rows with `cog_basket_unresolved(result)`."
+  ))
+  invisible(NULL)
 }

@@ -340,3 +340,38 @@ test_that("cog_gov_search basket mode validates argument lengths", {
     regexp = "must be length 1 or 3"
   )
 })
+
+# ---- basket mode summary message ----
+
+test_that("cog_gov_search basket mode is silent on clean basket", {
+  skip_if_no_corpus()
+  expect_message(
+    cog_gov_search(
+      name  = c("BROWARD COUNTY", "SAN DIEGO CITY"),
+      state = c("FL",             "CA")
+    ),
+    regexp = NA  # NA = expect no message
+  )
+})
+
+test_that("cog_gov_search basket mode reports breakdown on partial basket", {
+  skip_if_no_corpus()
+  expect_message(
+    cog_gov_search(
+      name  = c("Broward", "San Diego", "Notarealplace"),
+      state = c("FL",      "CA",        "NY")
+    ),
+    regexp = "Basket resolved 1 of 3"
+  )
+})
+
+test_that("cog_gov_search basket mode message points to the sidecar accessor", {
+  skip_if_no_corpus()
+  expect_message(
+    cog_gov_search(
+      name  = c("Broward", "Notarealplace"),
+      state = c("FL",      "NY")
+    ),
+    regexp = "cog_basket_resolution"
+  )
+})
