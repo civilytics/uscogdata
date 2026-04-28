@@ -2,31 +2,44 @@
 
 #' Search for governments by name, state, and/or type
 #'
-#' Returns rows from `canonical_fips_xwalk` matching the supplied filters.
-#' Intended as the entry point users call to resolve a human-readable place
-#' name into one or more `canonical_govid` values before calling
-#' [cog_spending()] / [cog_revenue()] / etc.
+#' Two modes:
 #'
-#' @param name Character regex matched case-insensitively against
-#'   `gov_name`. `NULL` (default) means no name filter.
-#' @param state Either a 2-letter USPS abbreviation (e.g. `"FL"`), a FIPS
-#'   integer (e.g. `12`), or `NULL`.
+#' * **Utility mode** (single `name`): returns all rows from
+#'   `canonical_fips_xwalk` whose `gov_name` matches the regex
+#'   case-insensitively, sorted by `population_acs` descending.
+#' * **Basket mode** (`length(name) > 1`): resolves each input row to a
+#'   single canonical govid via exact-then-substring matching with
+#'   deterministic disambiguation. Returns up to `length(name)` rows in
+#'   input order plus a `"resolution"` sidecar attribute. See
+#'   [cog_basket_resolution()].
+#'
+#' @param name Character vector of place name(s). Length 1 = utility mode;
+#'   length >1 = basket mode.
+#' @param state Either a 2-letter USPS abbreviation, a FIPS integer, or
+#'   `NULL`. Length 1 recycles across all entries in basket mode.
 #' @param type Government type: an integer in `0:3` or one of `"state"`,
-#'   `"county"`, `"city"`, `"township"`. Passing `4`, `5`,
-#'   `"special_district"`, or `"school_district"` emits an explanatory
-#'   message and returns an empty tibble (v0.1 corpus excludes those types).
-#' @return Tibble from `canonical_fips_xwalk` sorted by `population_acs`
-#'   descending (`NULL`s last).
+#'   `"county"`, `"city"`, `"township"`, or `NA` (per-row optional in
+#'   basket mode). Passing `4`, `5`, `"special_district"`, or
+#'   `"school_district"` emits an explanatory message and returns an
+#'   empty tibble (v0.1 corpus excludes those types).
+#' @return Tibble from `canonical_fips_xwalk`. In utility mode, sorted by
+#'   `population_acs` descending (`NULL`s last). In basket mode, in input
+#'   order, with `attr(result, "resolution")` set to the sidecar tibble.
 #' @export
 cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
-  if (!is.null(type) && .is_excluded_type(type)) {
+  if (!is.null(type) && length(type) == 1L && .is_excluded_type(type)) {
     cli::cli_inform(c(
       i = "v0.1 covers gov_types 0-3 (state/county/city/township) only.",
       i = "Types 4 (special districts) and 5 (school districts) are excluded; see vignette('coverage-scope')."
     ))
     return(.empty_xwalk_tibble())
   }
+
   con <- .ensure_session()
+
+  if (length(name) > 1L) {
+    return(.resolve_basket(name = name, state = state, type = type, con = con))
+  }
 
   preds <- character(0)
   if (!is.null(name)) {
@@ -265,4 +278,73 @@ cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
     row          = empty,
     candidates   = matches
   )
+}
+
+# Orchestrates basket-mode resolution: validate, per-row resolve,
+# assemble the basket tibble + sidecar, attach the sidecar as an attr.
+# Caller is responsible for emitting any post-resolution summary message
+# (see Task 7 — this stays silent for now).
+#' @noRd
+.resolve_basket <- function(name, state, type, con) {
+  args <- .validate_basket_args(name = name, state = state, type = type)
+  n <- length(args$name)
+
+  resolved <- vector("list", n)
+  for (i in seq_len(n)) {
+    resolved[[i]] <- .resolve_basket_row(
+      name  = args$name[i],
+      state = args$state[i],
+      type  = args$type[i],
+      con   = con
+    )
+  }
+
+  basket_rows <- lapply(resolved, function(r) r$row)
+  basket <- dplyr::bind_rows(basket_rows[vapply(basket_rows, function(r) nrow(r) > 0L, logical(1))])
+  if (nrow(basket) == 0L) basket <- .empty_xwalk_tibble()
+
+  sidecar <- .build_sidecar(args, resolved)
+  attr(basket, "resolution") <- sidecar
+  basket
+}
+
+# Build the sidecar tibble. One row per input; carries query_*, status,
+# match_method, canonical_govid, gov_name, n_candidates, and a list-col
+# `candidates` of full-schema match-candidate tibbles.
+#' @noRd
+.build_sidecar <- function(args, resolved) {
+  type_label <- unname(vapply(args$type, function(t) {
+    if (is.na(t)) NA_character_ else .type_to_label(t)
+  }, character(1)))
+
+  status <- vapply(resolved, `[[`, character(1), "status")
+  method <- vapply(resolved, `[[`, character(1), "match_method")
+  ncand  <- vapply(resolved, `[[`, integer(1),  "n_candidates")
+  govid  <- vapply(resolved, function(r) {
+    if (nrow(r$row) == 0L) NA_character_ else r$row$canonical_govid[1L]
+  }, character(1))
+  gname  <- vapply(resolved, function(r) {
+    if (nrow(r$row) == 0L) NA_character_ else r$row$gov_name[1L]
+  }, character(1))
+  cands  <- lapply(resolved, `[[`, "candidates")
+
+  tibble::tibble(
+    query_name      = args$name,
+    query_state     = args$state,
+    query_type      = type_label,
+    status          = status,
+    match_method    = method,
+    canonical_govid = govid,
+    gov_name        = gname,
+    n_candidates    = ncand,
+    candidates      = cands
+  )
+}
+
+# Convert a type input (integer-like or label) into the canonical label
+# string used in the sidecar query_type column.
+#' @noRd
+.type_to_label <- function(type) {
+  int_type <- .coerce_type(type)
+  c("0" = "state", "1" = "county", "2" = "city", "3" = "township")[[as.character(int_type)]]
 }

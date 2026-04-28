@@ -243,3 +243,100 @@ test_that(".resolve_basket_row resolves with type override on ambiguous case", {
   expect_equal(out$match_method, "substring")
   expect_equal(out$row$canonical_govid, "052037010")
 })
+
+# ---- basket mode public surface ----
+
+test_that("cog_gov_search basket mode resolves clean inputs in input order", {
+  skip_if_no_corpus()
+  basket <- cog_gov_search(
+    name  = c("BROWARD COUNTY", "SAN DIEGO CITY", "AUSTIN CITY"),
+    state = c("FL",             "CA",             "TX")
+  )
+  expect_s3_class(basket, "tbl_df")
+  expect_equal(nrow(basket), 3L)
+  expect_equal(basket$canonical_govid, c("101006006", "052037010", "442227001"))
+  expect_equal(basket$gov_name, c("BROWARD COUNTY", "SAN DIEGO CITY", "AUSTIN CITY"))
+})
+
+test_that("cog_gov_search basket mode attaches a resolution sidecar", {
+  skip_if_no_corpus()
+  basket <- cog_gov_search(
+    name  = c("Broward", "San Diego"),
+    state = c("FL",      "CA"),
+    type  = c(NA,        "city")
+  )
+  res <- attr(basket, "resolution")
+  expect_s3_class(res, "tbl_df")
+  expect_equal(nrow(res), 2L)
+  expect_equal(res$query_name, c("Broward", "San Diego"))
+  expect_equal(res$query_state, c("FL", "CA"))
+  expect_equal(res$query_type, c(NA_character_, "city"))
+  expect_equal(res$status, c("resolved", "resolved"))
+  expect_equal(res$match_method, c("substring", "substring"))
+  expect_true(is.list(res$candidates))
+})
+
+test_that("cog_gov_search basket mode skips ambiguous and no_match rows", {
+  skip_if_no_corpus()
+  basket <- suppressMessages(cog_gov_search(
+    name  = c("Broward",        "San Diego", "Notarealplace"),
+    state = c("FL",             "CA",        "NY")
+  ))
+  # Broward resolves; San Diego ambiguous; Notarealplace no_match.
+  expect_equal(nrow(basket), 1L)
+  expect_equal(basket$canonical_govid, "101006006")
+  res <- attr(basket, "resolution")
+  expect_equal(nrow(res), 3L)
+  expect_equal(res$status, c("resolved", "ambiguous", "no_match"))
+})
+
+test_that("cog_gov_search basket mode preserves input order", {
+  skip_if_no_corpus()
+  basket <- cog_gov_search(
+    name  = c("AUSTIN CITY", "BROWARD COUNTY", "SAN DIEGO CITY"),
+    state = c("TX",          "FL",             "CA")
+  )
+  expect_equal(basket$gov_name, c("AUSTIN CITY", "BROWARD COUNTY", "SAN DIEGO CITY"))
+})
+
+test_that("cog_gov_search basket mode recycles single state", {
+  skip_if_no_corpus()
+  basket <- cog_gov_search(
+    name  = c("SAN DIEGO CITY", "OAKLAND CITY"),
+    state = "CA"
+  )
+  expect_equal(nrow(basket), 2L)
+  expect_equal(basket$canonical_govid, c("052037010", "052001009"))
+})
+
+test_that("cog_gov_search basket mode within-type largest_pop records candidates", {
+  skip_if_no_corpus()
+  basket <- suppressMessages(cog_gov_search(
+    name  = c("Miami",  "OAKLAND CITY"),
+    state = c("FL",     "CA")
+  ))
+  expect_equal(nrow(basket), 2L)
+  res <- attr(basket, "resolution")
+  miami_row <- res[res$query_name == "Miami", ]
+  expect_equal(miami_row$status, "largest_pop")
+  expect_equal(miami_row$canonical_govid, "102013013")
+  expect_gte(miami_row$n_candidates, 2L)
+  expect_gte(nrow(miami_row$candidates[[1]]), 2L)
+})
+
+test_that("cog_gov_search utility mode (length-1 name) has no sidecar", {
+  skip_if_no_corpus()
+  r <- cog_gov_search("BROWARD")
+  expect_null(attr(r, "resolution"))
+  expect_gte(nrow(r), 1L)
+})
+
+test_that("cog_gov_search basket mode validates argument lengths", {
+  expect_error(
+    cog_gov_search(
+      name  = c("Broward", "San Diego", "Austin"),
+      state = c("FL", "CA")
+    ),
+    regexp = "must be length 1 or 3"
+  )
+})
