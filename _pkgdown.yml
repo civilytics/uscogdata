@@ -3,6 +3,12 @@ template:
   bootstrap: 5
 
 reference:
+  - title: Search & basket
+    desc: Resolve place names into canonical govids.
+    contents:
+      - cog_gov_search
+      - cog_basket_resolution
+      - cog_basket_unresolved
   - title: Session
     contents:
       - has_keyword("internal")
