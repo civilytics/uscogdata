@@ -120,3 +120,41 @@ cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
   WV = "54", WI = "55", WY = "56",
   AS = "60", GU = "66", MP = "69", PR = "72", VI = "78"
 )
+
+# Validate basket-mode inputs. Returns a list with normalized character
+# vectors `name`, `state`, `type`, all of length n = length(name).
+# `state` and `type` of length 1 are recycled; lengths must be 1 or n
+# otherwise. NULL state/type become a vector of NA_character_.
+#' @noRd
+.validate_basket_args <- function(name, state, type) {
+  if (!is.character(name)) {
+    cli::cli_abort("`name` must be a character vector.")
+  }
+  n <- length(name)
+
+  state_norm <- if (is.null(state)) {
+    rep(NA_character_, n)
+  } else if (length(state) == 1L) {
+    rep(as.character(state), n)
+  } else if (length(state) == n) {
+    as.character(state)
+  } else {
+    cli::cli_abort(
+      "`state` must be length 1 or {n} (length of `name`); got {length(state)}."
+    )
+  }
+
+  type_norm <- if (is.null(type)) {
+    rep(NA_character_, n)
+  } else if (length(type) == 1L) {
+    rep(as.character(type), n)
+  } else if (length(type) == n) {
+    as.character(type)
+  } else {
+    cli::cli_abort(
+      "`type` must be length 1 or {n} (length of `name`); got {length(type)}."
+    )
+  }
+
+  list(name = name, state = state_norm, type = type_norm)
+}

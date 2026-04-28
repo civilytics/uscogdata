@@ -72,3 +72,67 @@ test_that("cog_gov_search with no filters returns full registry", {
   r <- cog_gov_search()
   expect_gt(nrow(r), 1000L)
 })
+
+# ---- basket mode internal helpers ----
+
+test_that(".validate_basket_args recycles state from length 1", {
+  out <- uscogdata:::.validate_basket_args(
+    name  = c("Broward", "San Diego", "Austin"),
+    state = "FL",
+    type  = NULL
+  )
+  expect_equal(out$name,  c("Broward", "San Diego", "Austin"))
+  expect_equal(out$state, c("FL", "FL", "FL"))
+  expect_equal(out$type,  c(NA_character_, NA_character_, NA_character_))
+})
+
+test_that(".validate_basket_args recycles type from length 1", {
+  out <- uscogdata:::.validate_basket_args(
+    name  = c("San Diego", "Oakland"),
+    state = "CA",
+    type  = "city"
+  )
+  expect_equal(out$type, c("city", "city"))
+})
+
+test_that(".validate_basket_args accepts per-row state and type", {
+  out <- uscogdata:::.validate_basket_args(
+    name  = c("Broward", "San Diego"),
+    state = c("FL", "CA"),
+    type  = c(NA, "city")
+  )
+  expect_equal(out$state, c("FL", "CA"))
+  expect_equal(out$type,  c(NA_character_, "city"))
+})
+
+test_that(".validate_basket_args rejects length-mismatched state", {
+  expect_error(
+    uscogdata:::.validate_basket_args(
+      name  = c("Broward", "San Diego", "Austin"),
+      state = c("FL", "CA"),
+      type  = NULL
+    ),
+    regexp = "must be length 1 or 3"
+  )
+})
+
+test_that(".validate_basket_args rejects length-mismatched type", {
+  expect_error(
+    uscogdata:::.validate_basket_args(
+      name  = c("Broward", "San Diego"),
+      state = "FL",
+      type  = c("county", "city", "city")
+    ),
+    regexp = "must be length 1 or 2"
+  )
+})
+
+test_that(".validate_basket_args allows NULL state and type", {
+  out <- uscogdata:::.validate_basket_args(
+    name  = c("Broward", "San Diego"),
+    state = NULL,
+    type  = NULL
+  )
+  expect_equal(out$state, c(NA_character_, NA_character_))
+  expect_equal(out$type,  c(NA_character_, NA_character_))
+})
