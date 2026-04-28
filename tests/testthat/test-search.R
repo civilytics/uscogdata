@@ -136,3 +136,35 @@ test_that(".validate_basket_args allows NULL state and type", {
   expect_equal(out$state, c(NA_character_, NA_character_))
   expect_equal(out$type,  c(NA_character_, NA_character_))
 })
+
+test_that(".resolve_basket_row exact match returns one row", {
+  con <- uscogdata:::.ensure_session()
+  out <- uscogdata:::.resolve_basket_row(
+    name = "BROWARD COUNTY", state = "FL", type = NA_character_, con = con
+  )
+  expect_equal(out$status, "resolved")
+  expect_equal(out$match_method, "exact")
+  expect_equal(out$n_candidates, 1L)
+  expect_equal(nrow(out$row), 1L)
+  expect_equal(out$row$canonical_govid, "101006006")
+  expect_equal(out$row$gov_name, "BROWARD COUNTY")
+})
+
+test_that(".resolve_basket_row exact match is case-insensitive", {
+  con <- uscogdata:::.ensure_session()
+  out <- uscogdata:::.resolve_basket_row(
+    name = "broward county", state = "FL", type = NA_character_, con = con
+  )
+  expect_equal(out$status, "resolved")
+  expect_equal(out$match_method, "exact")
+  expect_equal(out$row$canonical_govid, "101006006")
+})
+
+test_that(".resolve_basket_row exact match honors per-row type", {
+  con <- uscogdata:::.ensure_session()
+  out <- uscogdata:::.resolve_basket_row(
+    name = "SAN DIEGO CITY", state = "CA", type = "city", con = con
+  )
+  expect_equal(out$status, "resolved")
+  expect_equal(out$row$canonical_govid, "052037010")
+})

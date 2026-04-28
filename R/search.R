@@ -158,3 +158,53 @@ cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
 
   list(name = name, state = state_norm, type = type_norm)
 }
+
+# Resolve a single basket-mode input row. Returns a list with components:
+#   status        : "resolved" | "largest_pop" | "ambiguous" | "no_match"
+#   match_method  : "exact" | "substring" | NA_character_
+#   n_candidates  : int
+#   row           : tibble (single resolved row, or 0-row tibble for unresolved)
+#   candidates    : tibble (all rows that matched, for sidecar)
+# Internal use only; takes an active DuckDB connection to reuse the session.
+#' @noRd
+.resolve_basket_row <- function(name, state, type, con) {
+  preds <- character(0)
+  if (!is.na(state)) {
+    st_fips <- .coerce_state_to_fips(state)
+    preds <- c(preds, sprintf("fips_state = %s", .sql_lit_chr(st_fips)))
+  }
+  if (!is.na(type)) {
+    int_type <- .coerce_type(type)
+    preds <- c(preds, sprintf("govs_type = %d", int_type))
+  }
+
+  base_where <- if (length(preds) == 0L) "" else paste("WHERE", paste(preds, collapse = " AND "))
+
+  exact_sql <- paste(
+    "SELECT * FROM canonical_fips_xwalk",
+    base_where,
+    if (nzchar(base_where)) "AND" else "WHERE",
+    sprintf("LOWER(gov_name) = LOWER(%s)", .sql_lit_chr(name))
+  )
+  exact <- tibble::as_tibble(DBI::dbGetQuery(con, exact_sql))
+
+  if (nrow(exact) == 1L) {
+    return(list(
+      status        = "resolved",
+      match_method  = "exact",
+      n_candidates  = 1L,
+      row           = exact,
+      candidates    = exact
+    ))
+  }
+
+  # Substring + disambiguation branches added in subsequent tasks.
+  empty <- exact[0, , drop = FALSE]
+  list(
+    status        = "no_match",
+    match_method  = NA_character_,
+    n_candidates  = 0L,
+    row           = empty,
+    candidates    = empty
+  )
+}
