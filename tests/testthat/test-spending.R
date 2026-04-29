@@ -173,3 +173,18 @@ test_that("aggregate fallback + unavailable pop produce concatenated notes", {
   expect_equal(notes[3],
                "Aggregate fallback applied; see cog_explain(); No population denominator available for this gov type")
 })
+
+test_that("provenance records per-year denominator metadata", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- cog_spending("101006006", years = 2019:2020,
+                      category = "Police", per_capita = TRUE)
+    pc <- attr(r, "provenance")$transformations$per_capita
+    expect_true(pc$applied)
+    expect_match(pc$denominator_source, "Census F-33", fixed = FALSE)
+    expect_match(pc$denominator_source, "per-year", fixed = TRUE)
+    expect_equal(pc$pop_source_counts$census_f33, nrow(r))
+    expect_equal(pc$pop_source_counts$unavailable, 0L)
+    expect_equal(length(pc$popyear_range), 2L)
+  })
+})

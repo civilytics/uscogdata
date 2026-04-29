@@ -79,6 +79,7 @@ cog_spending <- function(govid, years, category = NULL,
   prov$scope$govids_found   <- scope$found
   prov$scope$govids_missing <- scope$missing
   attr(result, "provenance") <- prov
+  attr(result, ".popyear_range") <- NULL
   result
 }
 
@@ -147,11 +148,12 @@ cog_spending <- function(govid, years, category = NULL,
   if (nrow(result) == 0L) {
     result$amt_per_capita_nominal <- numeric(0)
     result$pop_source <- character(0)
+    attr(result, ".popyear_range") <- integer(0)
     return(result)
   }
   years_lit <- paste(unique(as.integer(result$year)), collapse = ",")
   sql <- sprintf(
-    "SELECT canonical_govid, year, population
+    "SELECT canonical_govid, year, population, popyear
      FROM gov_population_yearly
      WHERE canonical_govid IN (%s)
        AND year IN (%s)",
@@ -163,7 +165,14 @@ cog_spending <- function(govid, years, category = NULL,
   result$amt_per_capita_nominal <- result$amt_nominal / result$population
   result$pop_source <- ifelse(is.na(result$population),
                               "unavailable", "census_f33")
+  py <- result$popyear[!is.na(result$popyear)]
+  attr(result, ".popyear_range") <- if (length(py) > 0L) {
+    as.integer(c(min(py), max(py)))
+  } else {
+    integer(0)
+  }
   result$population <- NULL
+  result$popyear <- NULL
   result
 }
 

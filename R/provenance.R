@@ -61,9 +61,27 @@
       per_capita = list(
         applied = isTRUE(per_capita),
         denominator_source = if (isTRUE(per_capita)) {
-          "ACS 2018-2022 B01003_001 (population_acs from canonical_fips_xwalk)"
+          "Census F-33 population (per-year, from long.population)"
         } else {
           NA_character_
+        },
+        popyear_range = if (isTRUE(per_capita)) {
+          attr(result, ".popyear_range") %||% integer(0)
+        } else {
+          integer(0)
+        },
+        pop_source_counts = if (isTRUE(per_capita)) {
+          ps <- result[["pop_source"]]
+          if (is.null(ps) || length(ps) == 0L) {
+            list(census_f33 = 0L, unavailable = 0L)
+          } else {
+            list(
+              census_f33  = sum(ps == "census_f33", na.rm = TRUE),
+              unavailable = sum(ps == "unavailable", na.rm = TRUE)
+            )
+          }
+        } else {
+          NULL
         }
       ),
       inflation = list(
