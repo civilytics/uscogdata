@@ -88,3 +88,26 @@ test_that("cog_peer_compare handles zero peers gracefully", {
   expect_true(all(r$role == "target"))
   expect_equal(sum(grepl("^summary_", r$role)), 0L)
 })
+
+test_that("cog_find_peers defaults `year` to most recent observed year for target", {
+  skip_if_no_corpus()
+  peers <- cog_find_peers("101006006")
+  expect_equal(attr(peers, "cohort_year"), 2020L)
+  # Returned column is now `population`, not `population_acs`
+  expect_true("population" %in% names(peers))
+  expect_false("population_acs" %in% names(peers))
+})
+
+test_that("cog_find_peers honors an explicit `year`", {
+  skip_if_no_corpus()
+  peers <- cog_find_peers("101006006", year = 2019L)
+  expect_equal(attr(peers, "cohort_year"), 2019L)
+})
+
+test_that("cog_find_peers errors when target has no observed pop in `year`", {
+  skip_if_no_corpus()
+  expect_error(
+    cog_find_peers("101006006", year = 1999L),
+    "no observed population"
+  )
+})
