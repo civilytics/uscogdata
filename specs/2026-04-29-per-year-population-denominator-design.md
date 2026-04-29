@@ -98,26 +98,28 @@ most one).
 
 ### `cog_geographic_rollup()`
 
-When rolling up spending or revenue with `per_capita = TRUE`:
+The current implementation does **not** sum amounts within a layer — it returns
+one row per `(year, canonical_govid, subtype, category)` tagged with its
+layer, intended for side-by-side "place portrait" comparisons (a city, the
+county containing it, the state containing both). That semantics is preserved.
 
-1. Sum `amt_*` across contributing govs in the same year as today.
-2. Sum `population` across contributing govs in the same year, **including only
-   govs where both the funding variable and population are observed**.
-3. Compute per-capita as `summed_amt / summed_population`.
-4. When any contributing gov has missing population for a year, that gov is
-   excluded from both the numerator and denominator for that year. The
-   provenance records the excluded govids.
+The only behavior change in this work is per-row exclusion when `per_capita = TRUE`:
 
-Documentation states explicitly: *Rollup totals include only governments
+1. After `cog_spending()` returns with the per-row per-year denominator from
+   Task 3, drop rows where `pop_source == "unavailable"` so the result never
+   contains NA per-capita rows.
+2. Record the dropped `canonical_govid`s in `provenance$rollup$excluded_govids`
+   and the kept ones in `provenance$rollup$included_govids`.
+
+Documentation states explicitly: *Per-capita rollups include only governments
 observed in both the finance and population panels for the given year. Special
 districts and school districts (gov types 4 and 5) are therefore excluded from
 per-capita rollups by design.*
 
 Provenance gains:
 
-- `rollup.included_govids` — those whose values were summed
-- `rollup.excluded_govids` — those skipped due to missing pop
-- `rollup.included_pop_total` — denominator used
+- `rollup.included_govids` — `canonical_govid`s present in the result
+- `rollup.excluded_govids` — `canonical_govid`s dropped for missing pop
 
 ### `cog_find_peers()`
 
@@ -186,8 +188,7 @@ For rollup results, additional provenance:
 list(
   rollup = list(
     included_govids = <character>,
-    excluded_govids = <character>,
-    included_pop_total = <int>
+    excluded_govids = <character>
   )
 )
 ```

@@ -11,3 +11,4 @@
 \.gitkeep$
 ^vignettes$
 ^specs$
+^plans$
