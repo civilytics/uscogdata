@@ -128,3 +128,20 @@ test_that("cog_spending accepts a basket-mode cog_gov_search result", {
   expect_s3_class(spending, "tbl_df")
   expect_setequal(unique(spending$canonical_govid), basket$canonical_govid)
 })
+
+test_that("per_capita denominator is the per-year F-33 population", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- cog_spending("101006006", years = 2019:2020,
+                      category = "Police", per_capita = TRUE)
+    r_ops <- r[r$spend_subtype == "operations", ]
+    # Implied denominator from amt_nominal / amt_per_capita_nominal
+    implied_pop <- r_ops$amt_nominal / r_ops$amt_per_capita_nominal
+    names(implied_pop) <- r_ops$year
+    # Use absolute tolerance: within 1 person of per-year F-33 values
+    expect_true(abs(implied_pop[["2019"]] - 1935878) < 1)
+    expect_true(abs(implied_pop[["2020"]] - 1952778) < 1)
+    # And the implied denominator does NOT equal the static ACS value
+    expect_false(all(abs(implied_pop - 1940907) < 1))
+  })
+})
