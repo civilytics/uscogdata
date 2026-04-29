@@ -3,7 +3,7 @@ title: "Population denominators"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Population denominators}
-  %\VignetteEngine{knitr::knitr}
+  %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
