@@ -30,3 +30,18 @@ test_that("cog_explain errors on non-verb input", {
   df <- tibble::tibble(a = 1)
   expect_error(cog_explain(df), "provenance")
 })
+
+test_that("cog_explain prints denominator + popyear_range + counts", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- cog_spending("101006006", years = 2019:2020,
+                      category = "Police", per_capita = TRUE)
+    out <- paste(c(
+      capture.output(cog_explain(r)),
+      capture.output(cog_explain(r), type = "message")
+    ), collapse = "\n")
+    expect_true(grepl("Census F-33", out))
+    expect_true(grepl("popyear", out, ignore.case = TRUE))
+    expect_true(grepl("census_f33", out))
+  })
+})

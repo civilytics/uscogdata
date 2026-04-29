@@ -74,6 +74,16 @@ cog_explain <- function(result, format = c("print", "list")) {
   pc <- prov$transformations$per_capita
   if (isTRUE(pc$applied)) {
     cli::cli_text("Per-capita denominator: {pc$denominator_source}")
+    if (length(pc$popyear_range) == 2L) {
+      cli::cli_text(
+        "  popyear range: {pc$popyear_range[1]}-{pc$popyear_range[2]}"
+      )
+    }
+    if (!is.null(pc$pop_source_counts)) {
+      cli::cli_text(
+        "  pop_source counts: census_f33={pc$pop_source_counts$census_f33}, unavailable={pc$pop_source_counts$unavailable}"
+      )
+    }
   }
   infl <- prov$transformations$inflation
   if (isTRUE(infl$applied)) {
