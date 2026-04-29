@@ -139,18 +139,23 @@ The cohort year is attached as a tibble attribute: `attr(x, "cohort_year")`.
 
 ### `cog_peer_compare()`
 
-Signature: `cog_peer_compare(target_govid, years, ..., cohort_year = NULL)`
+Existing signature unchanged:
+`cog_peer_compare(target_govid, peers, category, years, per_capita = TRUE, adjust_to_year = NULL)`.
+The caller supplies `peers` (either a `cog_find_peers()` result tibble or a
+character vector of `canonical_govid`). The cohort year is implicit in
+whichever year the caller used to call `cog_find_peers()`.
 
-- `cohort_year` is a single integer; defaults to the most recent year in the
-  corpus for the target.
-- Builds a fixed cohort via one call to `cog_find_peers(target_govid,
-  year = cohort_year, ...)`.
-- Calls `cog_spending(c(target, peers), years, ...)` for the user's full
-  `years` range against that fixed cohort.
-- Result tibble includes a constant `cohort_year` column for visibility.
+Behavior changes:
 
-Users who want time-varying cohorts can loop over years themselves and stitch
-results — documented in the vignette with a worked example.
+- When `peers` is a tibble carrying `attr(peers, "cohort_year")`,
+  `cog_peer_compare()` reads it and stamps every result row with a constant
+  `cohort_year` column.
+- When `peers` is a bare character vector, `cohort_year` in the result is `NA`.
+- Provenance gets `cohort_year` (scalar or NA) and the cohort govids list.
+
+Users who want time-varying cohorts call `cog_find_peers()` per year and
+stitch the `cog_peer_compare()` results themselves — documented in the
+vignette with a worked example.
 
 ### Provenance updates
 
