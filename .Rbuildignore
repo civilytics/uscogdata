@@ -12,3 +12,5 @@
 ^vignettes$
 ^specs$
 ^plans$
+^doc$
+^Meta$
