@@ -153,6 +153,12 @@ cog_peer_compare <- function(target_govid, peers, category, years,
   if (!is.character(target_govid) || length(target_govid) != 1L) {
     cli::cli_abort("`target_govid` must be a length-1 character string.")
   }
+  cohort_year <- if (is.data.frame(peers)) {
+    ay <- attr(peers, "cohort_year")
+    if (is.null(ay)) NA_integer_ else as.integer(ay)
+  } else {
+    NA_integer_
+  }
   peer_govids <- if (is.data.frame(peers)) {
     as.character(peers$canonical_govid)
   } else {
@@ -170,11 +176,14 @@ cog_peer_compare <- function(target_govid, peers, category, years,
   out <- dplyr::bind_rows(r, summary_rows)
   rank_val <- .peer_target_rank(r, target_govid, years, value_col)
   out$target_rank <- ifelse(out$role == "target", rank_val, NA_integer_)
+  out$cohort_year <- cohort_year
 
   prov <- attr(r, "provenance") %||% list()
-  prov$verb       <- "cog_peer_compare"
-  prov$call       <- paste(deparse(call), collapse = " ")
-  prov$peer_count <- length(peer_govids)
+  prov$verb        <- "cog_peer_compare"
+  prov$call        <- paste(deparse(call), collapse = " ")
+  prov$peer_count  <- length(peer_govids)
+  prov$cohort_year <- cohort_year
+  prov$cohort_govids <- peer_govids
   prov$target     <- list(
     canonical_govid = target_govid,
     gov_name        = unique(r$gov_name[r$role == "target"])
