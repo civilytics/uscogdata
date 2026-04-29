@@ -3,7 +3,7 @@ test_that("cog_find_peers returns same-type peers in the default pop band", {
   peers <- cog_find_peers("101006006")                # Broward County
   expect_s3_class(peers, "tbl_df")
   expected_cols <- c("canonical_govid", "gov_name", "fips_state",
-                     "population_acs", "pop_ratio", "rank")
+                     "population", "pop_ratio", "rank")
   expect_true(all(expected_cols %in% names(peers)))
   expect_true(all(peers$pop_ratio >= 0.7 & peers$pop_ratio <= 1.3))
   expect_false("101006006" %in% peers$canonical_govid)
@@ -22,8 +22,8 @@ test_that("cog_find_peers absolute pop range works", {
   peers <- cog_find_peers("101006006",
                           pop_range = c(1.5e6, 2.5e6),
                           is_ratio = FALSE, max_peers = 20L)
-  expect_true(all(peers$population_acs >= 1.5e6 &
-                  peers$population_acs <= 2.5e6))
+  expect_true(all(peers$population >= 1.5e6 &
+                  peers$population <= 2.5e6))
 })
 
 test_that("cog_find_peers errors cleanly on unknown govid", {

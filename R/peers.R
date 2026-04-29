@@ -2,31 +2,33 @@
 
 #' Find peer governments by similarity criteria
 #'
-#' Selects peer governments from `canonical_fips_xwalk` by combinations of
-#' government type, state, and population range. Peers are ordered by
-#' `|log(pop_ratio)|` ascending (closest to the target's population first).
+#' Selects peer governments by combinations of government type, state, and
+#' population range at a chosen `year`. Peers are ordered by `|log(pop_ratio)|`
+#' ascending (closest to the target's population first).
 #'
 #' @param target_govid Character scalar — `canonical_govid` of the target.
+#' @param year Integer scalar. Cohort vintage. When `NULL` (default), uses the
+#'   most recent year for which the target has an observed population in
+#'   `gov_population_yearly`.
 #' @param same_type If `TRUE` (default) restrict peers to the target's
 #'   `govs_type`.
 #' @param same_state If `TRUE` restrict peers to the target's `fips_state`.
 #'   Default `FALSE`.
 #' @param pop_range Length-2 numeric vector giving lower/upper bounds.
 #' @param is_ratio If `TRUE` (default) `pop_range` is multiplied by the
-#'   target's `population_acs` to produce absolute bounds. If `FALSE`,
+#'   target's population at `year` to produce absolute bounds. If `FALSE`,
 #'   `pop_range` is interpreted as absolute population counts.
-#' @param pop_year Reserved for future use (selecting ACS vintage). Currently
-#'   the corpus has a single snapshot so this argument has no effect.
 #' @param max_peers Integer cap on the number of peers returned.
 #' @return Tibble with columns `canonical_govid`, `gov_name`, `fips_state`,
-#'   `population_acs`, `pop_ratio`, `rank`.
+#'   `population`, `pop_ratio`, `rank`. The cohort year is attached as
+#'   `attr(x, "cohort_year")`.
 #' @export
 cog_find_peers <- function(target_govid,
+                           year = NULL,
                            same_type = TRUE,
                            same_state = FALSE,
                            pop_range = c(0.7, 1.3),
                            is_ratio = TRUE,
-                           pop_year = NULL,
                            max_peers = 10L) {
   if (!is.character(target_govid) || length(target_govid) != 1L) {
     cli::cli_abort("`target_govid` must be a length-1 character string.")
@@ -35,56 +37,92 @@ cog_find_peers <- function(target_govid,
       pop_range[1] >= pop_range[2]) {
     cli::cli_abort("`pop_range` must be a length-2 numeric with lo < hi.")
   }
+  if (!is.null(year) &&
+      (!(is.numeric(year) || is.integer(year)) || length(year) != 1L)) {
+    cli::cli_abort("`year` must be NULL or a length-1 integer.")
+  }
 
   con <- .ensure_session()
 
-  target_sql <- sprintf(
-    "SELECT canonical_govid, gov_name, govs_type, fips_state, population_acs
+  # Confirm target exists in the xwalk and pull govs_type / fips_state.
+  meta_sql <- sprintf(
+    "SELECT canonical_govid, gov_name, govs_type, fips_state
      FROM canonical_fips_xwalk
      WHERE canonical_govid = %s",
     .sql_lit_chr(target_govid)
   )
-  target <- DBI::dbGetQuery(con, target_sql)
-  if (nrow(target) == 0L) {
+  meta <- DBI::dbGetQuery(con, meta_sql)
+  if (nrow(meta) == 0L) {
     cli::cli_abort(c(
       "govid {target_govid} not found in corpus.",
       i = "v0.1 covers types 0-3 only (state/county/city/township); see vignette('coverage-scope')."
     ))
   }
-  if (is.na(target$population_acs) || target$population_acs <= 0) {
-    cli::cli_abort("Target {target_govid} has missing or non-positive population; cannot build pop_ratio band.")
+
+  cohort_year <- .resolve_cohort_year(con, target_govid, year)
+
+  pop_sql <- sprintf(
+    "SELECT population FROM gov_population_yearly
+     WHERE canonical_govid = %s AND year = %d",
+    .sql_lit_chr(target_govid), as.integer(cohort_year)
+  )
+  target_pop <- DBI::dbGetQuery(con, pop_sql)$population
+  if (length(target_pop) == 0L || is.na(target_pop) || target_pop <= 0) {
+    cli::cli_abort(c(
+      "Target {target_govid} has no observed population in {cohort_year}.",
+      i = "Use a year for which population is observed; see gov_population_yearly."
+    ))
   }
 
   if (isTRUE(is_ratio)) {
-    lo <- target$population_acs * pop_range[1]
-    hi <- target$population_acs * pop_range[2]
+    lo <- target_pop * pop_range[1]
+    hi <- target_pop * pop_range[2]
   } else {
     lo <- pop_range[1]; hi <- pop_range[2]
   }
 
   preds <- c(
-    sprintf("canonical_govid != %s", .sql_lit_chr(target_govid)),
-    sprintf("population_acs BETWEEN %.6f AND %.6f", lo, hi)
+    sprintf("p.canonical_govid != %s", .sql_lit_chr(target_govid)),
+    sprintf("p.year = %d", as.integer(cohort_year)),
+    sprintf("p.population BETWEEN %.6f AND %.6f", lo, hi)
   )
-  if (isTRUE(same_type))  preds <- c(preds, sprintf("govs_type = %d", target$govs_type))
-  if (isTRUE(same_state)) preds <- c(preds, sprintf("fips_state = %s", .sql_lit_chr(target$fips_state)))
+  if (isTRUE(same_type))  preds <- c(preds, sprintf("x.govs_type = %d", meta$govs_type))
+  if (isTRUE(same_state)) preds <- c(preds, sprintf("x.fips_state = %s", .sql_lit_chr(meta$fips_state)))
 
   peers_sql <- sprintf(
-    "SELECT canonical_govid, gov_name, fips_state, population_acs,
-            population_acs / %.6f AS pop_ratio
-     FROM canonical_fips_xwalk
+    "SELECT p.canonical_govid, x.gov_name, x.fips_state, p.population,
+            p.population / %.6f AS pop_ratio
+     FROM gov_population_yearly p
+     JOIN canonical_fips_xwalk x USING (canonical_govid)
      WHERE %s
-     ORDER BY ABS(LN(CAST(population_acs AS DOUBLE) / %.6f))
+     ORDER BY ABS(LN(CAST(p.population AS DOUBLE) / %.6f))
      LIMIT %d",
-    target$population_acs,
+    target_pop,
     paste(preds, collapse = " AND "),
-    target$population_acs,
+    target_pop,
     as.integer(max_peers)
   )
   peers <- tibble::as_tibble(DBI::dbGetQuery(con, peers_sql))
-  if (nrow(peers) > 0L) peers$rank <- seq_len(nrow(peers))
-  else peers$rank <- integer(0)
+  peers$rank <- if (nrow(peers) > 0L) seq_len(nrow(peers)) else integer(0)
+  attr(peers, "cohort_year") <- as.integer(cohort_year)
   peers
+}
+
+#' @noRd
+.resolve_cohort_year <- function(con, target_govid, year) {
+  if (!is.null(year)) return(as.integer(year))
+  sql <- sprintf(
+    "SELECT MAX(year) AS y FROM gov_population_yearly
+     WHERE canonical_govid = %s",
+    .sql_lit_chr(target_govid)
+  )
+  y <- DBI::dbGetQuery(con, sql)$y
+  if (length(y) == 0L || is.na(y)) {
+    cli::cli_abort(
+      "Target {target_govid} has no observed population in any year."
+    )
+  }
+  as.integer(y)
 }
 
 #' Compare a target government against a peer set

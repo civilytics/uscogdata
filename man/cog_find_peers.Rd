@@ -6,16 +6,20 @@
 \usage{
 cog_find_peers(
   target_govid,
+  year = NULL,
   same_type = TRUE,
   same_state = FALSE,
   pop_range = c(0.7, 1.3),
   is_ratio = TRUE,
-  pop_year = NULL,
   max_peers = 10L
 )
 }
 \arguments{
 \item{target_govid}{Character scalar — `canonical_govid` of the target.}
+
+\item{year}{Integer scalar. Cohort vintage. When `NULL` (default), uses the
+most recent year for which the target has an observed population in
+`gov_population_yearly`.}
 
 \item{same_type}{If `TRUE` (default) restrict peers to the target's
 `govs_type`.}
@@ -26,20 +30,18 @@ Default `FALSE`.}
 \item{pop_range}{Length-2 numeric vector giving lower/upper bounds.}
 
 \item{is_ratio}{If `TRUE` (default) `pop_range` is multiplied by the
-target's `population_acs` to produce absolute bounds. If `FALSE`,
+target's population at `year` to produce absolute bounds. If `FALSE`,
 `pop_range` is interpreted as absolute population counts.}
-
-\item{pop_year}{Reserved for future use (selecting ACS vintage). Currently
-the corpus has a single snapshot so this argument has no effect.}
 
 \item{max_peers}{Integer cap on the number of peers returned.}
 }
 \value{
 Tibble with columns `canonical_govid`, `gov_name`, `fips_state`,
-  `population_acs`, `pop_ratio`, `rank`.
+  `population`, `pop_ratio`, `rank`. The cohort year is attached as
+  `attr(x, "cohort_year")`.
 }
 \description{
-Selects peer governments from `canonical_fips_xwalk` by combinations of
-government type, state, and population range. Peers are ordered by
-`|log(pop_ratio)|` ascending (closest to the target's population first).
+Selects peer governments by combinations of government type, state, and
+population range at a chosen `year`. Peers are ordered by `|log(pop_ratio)|`
+ascending (closest to the target's population first).
 }
