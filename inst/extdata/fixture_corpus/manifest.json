@@ -1,8 +1,8 @@
 {
   "schema_version": 3,
-  "built_at": "2026-04-27T16:43:46Z",
-  "pipeline_commit": "899af37",
-  "fixture_note": "Two-year (2019-2020) fixture for uscogdata tests. Full corpus available via USCOGDATA_URL.",
+  "built_at": "2026-04-29T18:57:18Z",
+  "pipeline_commit": "bd3e744",
+  "fixture_note": "Two-year (2019-2020) fixture for uscogdata tests. Full corpus available via USCOGDATA_URL. Regenerated with Layer 1 (canonical_govid resolver gate) + Layer 2 (PID-era extended xwalk).",
   "data_vintage": {
     "census_source_downloaded": "unknown",
     "cpi_vintage": "FRED CPIAUCSL",
@@ -56,22 +56,22 @@
       {
         "year": 2019,
         "path": "data/long/year=2019/part-0.parquet",
-        "sha256": "e1c9f426c6d7d3c51d06b3a652473b987b304836619c213f019cee4887714daa",
+        "sha256": "d93affbbf9c46bd193fa5e07d89dfa9b08ad4f6fc2442fe7a27e6e4ef28f8bd9",
         "row_count": 318139,
-        "size_bytes": 1424231
+        "size_bytes": 1425125
       },
       {
         "year": 2020,
         "path": "data/long/year=2020/part-0.parquet",
-        "sha256": "9b795853a848e8c955c80261b96b79630fc77394dcfb1a1ca288e2cd634053a3",
+        "sha256": "c9224833bd914cc85efb2ec62f83f75c34dfa469d4398f5cb1789fd028c03389",
         "row_count": 317500,
-        "size_bytes": 1427150
+        "size_bytes": 1428049
       }
     ],
     "metadata": [
       {
         "path": "data/canonical_fips_xwalk.parquet",
-        "sha256": "86e53e04a35f6f90bb74bb1a273e053392afa782d6f518e3e3da9c976d47f7af",
+        "sha256": "4bbdf0415b0ae1a24927869bb9e8e75eca5d7bcceebdf8c26346c7cbf8472d34",
         "description": "canonical_fips_xwalk.parquet"
       },
       {
