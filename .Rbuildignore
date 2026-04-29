@@ -10,3 +10,4 @@
 ^\.gitignore$
 \.gitkeep$
 ^vignettes$
+^specs$
