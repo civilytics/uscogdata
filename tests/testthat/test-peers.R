@@ -114,12 +114,17 @@ test_that("cog_find_peers errors when target has no observed pop in `year`", {
 
 test_that("cog_peer_compare stamps cohort_year from peers attribute", {
   skip_if_no_corpus()
-  peers <- cog_find_peers("101006006", year = 2019L, max_peers = 4L)
+  peers <- cog_find_peers("101006006", year = 2019L, max_peers = 4L,
+                          pop_range = c(0.5, 1.5))
   r <- cog_peer_compare("101006006", peers, "Police", years = 2020L)
   expect_true("cohort_year" %in% names(r))
   expect_true(all(r$cohort_year == 2019L))
   prov <- attr(r, "provenance")
   expect_equal(prov$cohort_year, 2019L)
+  expect_equal(length(prov$cohort_govids), nrow(peers))
+  # pop_range and is_ratio propagate from cog_find_peers attrs
+  expect_equal(prov$pop_range, c(0.5, 1.5))
+  expect_true(prov$is_ratio)
 })
 
 test_that("cog_peer_compare cohort_year is NA for bare character peers", {

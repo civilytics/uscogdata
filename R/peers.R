@@ -105,6 +105,8 @@ cog_find_peers <- function(target_govid,
   peers <- tibble::as_tibble(DBI::dbGetQuery(con, peers_sql))
   peers$rank <- if (nrow(peers) > 0L) seq_len(nrow(peers)) else integer(0)
   attr(peers, "cohort_year") <- as.integer(cohort_year)
+  attr(peers, "pop_range")   <- as.numeric(pop_range)
+  attr(peers, "is_ratio")    <- isTRUE(is_ratio)
   peers
 }
 
@@ -162,6 +164,8 @@ cog_peer_compare <- function(target_govid, peers, category, years,
   } else {
     NA_integer_
   }
+  pop_range <- if (is.data.frame(peers)) attr(peers, "pop_range") else NULL
+  is_ratio  <- if (is.data.frame(peers)) attr(peers, "is_ratio")  else NULL
   peer_govids <- if (is.data.frame(peers)) {
     as.character(peers$canonical_govid)
   } else {
@@ -187,6 +191,8 @@ cog_peer_compare <- function(target_govid, peers, category, years,
   prov$peer_count  <- length(peer_govids)
   prov$cohort_year <- cohort_year
   prov$cohort_govids <- peer_govids
+  prov$pop_range   <- pop_range
+  prov$is_ratio    <- is_ratio
   prov$target     <- list(
     canonical_govid = target_govid,
     gov_name        = unique(r$gov_name[r$role == "target"])

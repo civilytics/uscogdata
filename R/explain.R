@@ -75,9 +75,9 @@ cog_explain <- function(result, format = c("print", "list")) {
   if (isTRUE(pc$applied)) {
     cli::cli_text("Per-capita denominator: {pc$denominator_source}")
     if (length(pc$popyear_range) == 2L) {
-      cli::cli_text(
-        "  popyear range: {pc$popyear_range[1]}-{pc$popyear_range[2]}"
-      )
+      lo <- .expand_popyear(pc$popyear_range[1])
+      hi <- .expand_popyear(pc$popyear_range[2])
+      cli::cli_text("  popyear range: {lo}-{hi}")
     }
     if (!is.null(pc$pop_source_counts)) {
       cli::cli_text(
@@ -107,4 +107,16 @@ cog_explain <- function(result, format = c("print", "list")) {
   )
 
   invisible(NULL)
+}
+
+# Expand a 2-digit Census popyear (e.g. 19) to a 4-digit calendar year (2019).
+# F-33 metadata stores popyear as 2 digits; pivot at 70 to handle a future
+# corpus that ever spans pre-1970 vintages, though current scope is 2000+.
+#' @noRd
+.expand_popyear <- function(yy) {
+  yy <- as.integer(yy)
+  if (length(yy) == 0L || is.na(yy)) return(NA_integer_)
+  if (yy >= 100L) return(yy)        # already 4-digit
+  if (yy < 70L)  return(2000L + yy)
+  1900L + yy
 }

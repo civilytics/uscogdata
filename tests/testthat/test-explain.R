@@ -43,5 +43,8 @@ test_that("cog_explain prints denominator + popyear_range + counts", {
     expect_true(grepl("Census F-33", out))
     expect_true(grepl("popyear", out, ignore.case = TRUE))
     expect_true(grepl("census_f33", out))
+    # popyear_range should render as 4-digit calendar years, not raw 2-digit
+    expect_true(grepl("2019-2020", out))
+    expect_false(grepl("popyear range: 19-20", out, fixed = TRUE))
   })
 })
