@@ -31,9 +31,12 @@ population.}
 \value{
 Tibble matching [cog_spending()]'s columns, plus a `role`
   column taking values `"target"`, `"peer"`, `"summary_p25"`,
-  `"summary_p50"`, or `"summary_p75"`, and `target_rank` (target's rank
-  among target+peers at `max(years)`, NA for other rows). Provenance
-  attribute reports `verb = "cog_peer_compare"` and `peer_count`.
+  `"summary_p50"`, or `"summary_p75"`, `target_rank` (target's rank
+  among target+peers at `max(years)`, NA for other rows), and
+  `cohort_year` (the year used to build the peer cohort, read from
+  `attr(peers, "cohort_year")`; `NA` when `peers` was a bare character
+  vector). Provenance reports `verb = "cog_peer_compare"`, `peer_count`,
+  `cohort_year`, and `cohort_govids`.
 }
 \description{
 Pulls spending for the target plus a peer set (either a
