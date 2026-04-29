@@ -148,3 +148,28 @@ test_that("per_capita denominator is the per-year F-33 population", {
     expect_false(all(abs(implied_pop - 1940907) < 1))
   })
 })
+
+test_that("pop_source = 'census_f33' does not produce unavailable-pop note", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- cog_spending("101006006", years = 2019L,
+                      category = "Police", per_capita = TRUE)
+    expect_true(all(r$pop_source == "census_f33"))
+    expect_true(all(is.na(r$notes) | r$notes == "" |
+                    !grepl("No population denominator", r$notes)))
+  })
+})
+
+test_that("aggregate fallback + unavailable pop produce concatenated notes", {
+  # Unit-level test of .notes_column with a synthetic data frame so we don't
+  # depend on having a type-4/5 gov in the fixture.
+  result <- tibble::tibble(
+    aggregate_fallback = c(FALSE, TRUE,  TRUE),
+    pop_source         = c("census_f33", "census_f33", "unavailable")
+  )
+  notes <- uscogdata:::.notes_column(result)
+  expect_equal(notes[1], "")
+  expect_equal(notes[2], "Aggregate fallback applied; see cog_explain()")
+  expect_equal(notes[3],
+               "Aggregate fallback applied; see cog_explain(); No population denominator available for this gov type")
+})

@@ -185,10 +185,28 @@ cog_spending <- function(govid, years, category = NULL,
 
 #' @noRd
 .notes_column <- function(result) {
-  if (nrow(result) == 0L) return(character(0))
-  ifelse(
-    isTRUE(result$aggregate_fallback) | result$aggregate_fallback %in% TRUE,
+  n <- nrow(result)
+  if (n == 0L) return(character(0))
+  parts <- vector("list", 2L)
+  agg <- result[["aggregate_fallback"]]
+  parts[[1]] <- ifelse(
+    !is.null(agg) & isTRUE(any(agg, na.rm = TRUE)) & agg %in% TRUE,
     "Aggregate fallback applied; see cog_explain()",
-    ""
+    NA_character_
   )
+  ps <- result[["pop_source"]]
+  parts[[2]] <- if (!is.null(ps)) {
+    ifelse(ps == "unavailable",
+           "No population denominator available for this gov type",
+           NA_character_)
+  } else {
+    rep(NA_character_, n)
+  }
+  out <- character(n)
+  for (i in seq_len(n)) {
+    pieces <- vapply(parts, `[[`, character(1), i)
+    pieces <- pieces[!is.na(pieces)]
+    out[i] <- if (length(pieces) == 0L) "" else paste(pieces, collapse = "; ")
+  }
+  out
 }
