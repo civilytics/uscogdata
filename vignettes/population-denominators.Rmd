@@ -1,0 +1,62 @@
+---
+title: "Population denominators"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Population denominators}
+  %\VignetteEngine{knitr::knitr}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(eval = FALSE, collapse = TRUE, comment = "#>")
+```
+
+# Why per-year population matters
+
+Per-capita finance numbers divide each year's spending or revenue by a population denominator. The choice of denominator is a research decision, not an implementation detail: a 24-year corpus paired with a single 5-year ACS estimate produces biased per-capita values whose magnitude scales with each government's population change.
+
+`uscogdata` defaults to the **Census F-33 population value Census itself uses to compute its published per-capita tables.** That value is recorded on every COG row as `population`, with `popyear` indicating the vintage. For a city that grew from 200,000 to 300,000 between 2000 and 2023, this default reproduces the per-capita value Census published. A static ACS denominator would have understated 2000 per-capita by ~33%.
+
+# The four population sources
+
+| Source | What it is | Default in uscogdata? |
+|---|---|---|
+| Census F-33 `population` | Population value Census used on each COG row to compute its published per-capita tables. Almost always a Population Estimates Program (PEP) estimate; sometimes lagged a year for fiscal-year alignment, recorded in `popyear`. | **Yes — default for `cog_spending(per_capita = TRUE)` etc.** |
+| PEP (raw) | Census Bureau's official annual intercensal estimates, distinct from F-33 because F-33 sometimes uses a lagged vintage. | No (not in corpus) |
+| ACS 5-year | American Community Survey 5-year rolling average. Different methodology, has margin of error, only available 2005-2009 onward. | Used by `cog_find_peers()` historically; replaced in 0.1 by per-year F-33. Still available in `canonical_fips_xwalk.population_acs` for non-time-series uses. |
+| Decennial count | Actual count, every 10 years. | No (not in corpus) |
+
+The F-33 denominator is preferred because it's the same value Census uses internally — so `uscogdata` per-capita numbers reconcile with Census's own published tables.
+
+# Coverage
+
+F-33 `population` is observed for gov types 0–3 (state, county, city, township). Gov types 4 (special districts) and 5 (school districts) have `population` masked to NA in the F-33 schema. uscogdata returns:
+
+- `pop_source = "census_f33"` and a numeric `amt_per_capita_*` for types 0–3.
+- `pop_source = "unavailable"` and `NA` per-capita for types 4–5, with a corresponding entry in `notes`.
+
+`cog_geographic_rollup(per_capita = TRUE)` excludes unavailable-pop rows from the result; the dropped govids are listed in `provenance\$rollup\$excluded_govids`.
+
+# The popyear quirk
+
+Census sometimes uses a population estimate from one year prior to the fiscal year being reported (e.g., FY2018 paired with a 2017 PEP estimate) so the denominator is available before the fiscal year closes. `popyear` records which vintage was paired; `cog_spending()` returns the popyear range in `provenance\$transformations\$per_capita\$popyear_range` rather than as a per-row column.
+
+# Time-varying peer cohorts
+
+`cog_find_peers(target, year = Y)` builds a cohort matched on each candidate's population at year `Y`. The cohort is fixed once chosen; `cog_peer_compare()` then runs that cohort across whatever `years` you ask for. To run a moving-window comparison, build cohorts year-by-year and stitch the results:
+
+```r
+years <- 2010:2023
+out <- purrr::map_dfr(years, function(y) {
+  peers <- cog_find_peers("231082082", year = y, max_peers = 10L)
+  cog_peer_compare("231082082", peers,
+                   category = "Police", years = y,
+                   per_capita = TRUE)
+})
+```
+
+Each row in `out` has `cohort_year == year`, so a faceted plot shows cohort drift directly.
+
+# Future direction
+
+`pop_source` is a column on the result, not a fixed value, so adding a new denominator (PEP from tidycensus, decennial counts, ACS time-series) is a join change rather than an API change. A future release may add `cog_spending(..., pop_source = "pep")` for users who need a single externally-audited series.
