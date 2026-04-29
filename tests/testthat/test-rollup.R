@@ -98,3 +98,41 @@ test_that("cog_geographic_rollup rejects invalid inputs", {
     "state|county|city"
   )
 })
+
+test_that("cog_geographic_rollup per-capita uses summed per-year populations", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- cog_geographic_rollup(
+      govids   = list(state  = "010000000",
+                      county = "101006006"),
+      category = "Police",
+      years    = 2019:2020,
+      per_capita = TRUE
+    )
+    state_ops <- r[r$layer == "state" & r$spend_subtype == "operations", ]
+    county_ops <- r[r$layer == "county" & r$spend_subtype == "operations", ]
+    state_implied <- state_ops$amt_nominal / state_ops$amt_per_capita_nominal
+    county_implied <- county_ops$amt_nominal /
+      county_ops$amt_per_capita_nominal
+    # Per-year, per-layer denominator is the layer's own per-year population
+    expect_equal(state_implied[state_ops$year == 2019], 4874747, tolerance = 1)
+    expect_equal(state_implied[state_ops$year == 2020], 4903185, tolerance = 1)
+    expect_equal(county_implied[county_ops$year == 2019], 1935878, tolerance = 1)
+  })
+})
+
+test_that("cog_geographic_rollup records included/excluded govids in provenance", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- cog_geographic_rollup(
+      govids   = list(county = "101006006"),
+      category = "Police",
+      years    = 2019:2020,
+      per_capita = TRUE
+    )
+    prov <- attr(r, "provenance")
+    expect_true("rollup" %in% names(prov))
+    expect_true("101006006" %in% prov$rollup$included_govids)
+    expect_true(is.character(prov$rollup$excluded_govids))
+  })
+})
