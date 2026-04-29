@@ -57,3 +57,30 @@ test_that("spending_annotated carries category + xwalk columns", {
     expect_true(nm %in% names(row), info = paste("missing column:", nm))
   }
 })
+
+test_that("gov_population_yearly exposes one row per (year, canonical_govid)", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    con <- uscogdata:::.ensure_session()
+    df <- DBI::dbGetQuery(
+      con,
+      "SELECT year, canonical_govid, population, popyear
+       FROM gov_population_yearly
+       WHERE canonical_govid = '101006006'
+       ORDER BY year"
+    )
+    expect_setequal(df$year, c(2019L, 2020L))
+    expect_equal(nrow(df), 2L)
+    expect_true(all(!is.na(df$population)))
+    expect_equal(df$population[df$year == 2019L], 1935878L)
+    expect_equal(df$population[df$year == 2020L], 1952778L)
+    # Uniqueness on (year, canonical_govid) across the whole view.
+    dup <- DBI::dbGetQuery(
+      con,
+      "SELECT year, canonical_govid, COUNT(*) AS n
+       FROM gov_population_yearly
+       GROUP BY year, canonical_govid HAVING n > 1"
+    )
+    expect_equal(nrow(dup), 0L)
+  })
+})
