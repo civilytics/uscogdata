@@ -22,17 +22,19 @@ to [cog_spending()]).}
 
 \item{years}{Integer vector of years.}
 
-\item{per_capita}{If `TRUE`, per-capita uses each layer's own population
-from `canonical_fips_xwalk.population_acs`.}
+\item{per_capita}{If `TRUE`, per-capita uses each gov's own per-year
+population from `gov_population_yearly`. Govs with missing population
+are excluded from the result.}
 
 \item{adjust_to_year}{Integer base year for CPI-U conversion, or `NULL`.}
 }
 \value{
 Tibble with columns `year`, `layer`, `canonical_govid`, `gov_name`,
   `spend_subtype`, `category`, `amt_nominal`, optional `amt_real` /
-  `amt_per_capita_nominal` / `amt_per_capita_real`, `codes_included`,
-  `aggregate_fallback`, `scope_note`, `notes`. Carries a `provenance`
-  attribute with `verb = "cog_geographic_rollup"` and `layers`.
+  `amt_per_capita_nominal` / `amt_per_capita_real`, optional `pop_source`,
+  `codes_included`, `aggregate_fallback`, `scope_note`, `notes`. Carries a
+  `provenance` attribute with `verb = "cog_geographic_rollup"`, `layers`,
+  and `rollup$included_govids` / `rollup$excluded_govids`.
 }
 \description{
 Wraps [cog_spending()], tags each row with its layer, and attaches a
@@ -40,4 +42,12 @@ human-readable `scope_note` documenting geographic-scope caveats (e.g.
 "county totals include areas outside the listed city"). Useful for
 "place portraits" that compare a city to the surrounding county and
 containing state on one set of axes.
+}
+\details{
+When `per_capita = TRUE`, rows whose government has no observed
+population in that year (`pop_source == "unavailable"`) are dropped from
+the result. The dropped govids are recorded in
+`provenance$rollup$excluded_govids`. This excludes special districts
+(gov type 4) and school districts (gov type 5) from per-capita rollups
+by design — see `vignette('population-denominators')`.
 }
