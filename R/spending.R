@@ -189,11 +189,13 @@ cog_spending <- function(govid, years, category = NULL,
   if (n == 0L) return(character(0))
   parts <- vector("list", 2L)
   agg <- result[["aggregate_fallback"]]
-  parts[[1]] <- ifelse(
-    !is.null(agg) & isTRUE(any(agg, na.rm = TRUE)) & agg %in% TRUE,
-    "Aggregate fallback applied; see cog_explain()",
-    NA_character_
-  )
+  parts[[1]] <- if (!is.null(agg)) {
+    ifelse(agg %in% TRUE,
+           "Aggregate fallback applied; see cog_explain()",
+           NA_character_)
+  } else {
+    rep(NA_character_, n)
+  }
   ps <- result[["pop_source"]]
   parts[[2]] <- if (!is.null(ps)) {
     ifelse(ps == "unavailable",
