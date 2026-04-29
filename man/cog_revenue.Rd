@@ -21,8 +21,11 @@ cog_revenue(
 `summary_categories.category`), or `NULL` for all categories.}
 
 \item{per_capita}{If `TRUE`, adds `amt_per_capita_nominal` (and
-`amt_per_capita_real` when `adjust_to_year` is set) using
-`population_acs` from the canonical xwalk.}
+`amt_per_capita_real` when `adjust_to_year` is set) using the per-year
+Census F-33 population from `gov_population_yearly`. Result also gains
+a `pop_source` column with values `"census_f33"` or `"unavailable"`
+(the latter for gov types 4/5 and any row whose population is missing
+in that year).}
 
 \item{adjust_to_year}{Integer base year for CPI-U real-dollar conversion,
 or `NULL` for nominal only.}
@@ -31,7 +34,7 @@ or `NULL` for nominal only.}
 Tibble with columns `year`, `canonical_govid`, `gov_name`,
   `revenue_subtype`, `category`, `amt_nominal`, optional `amt_real`,
   optional `amt_per_capita_nominal`, optional `amt_per_capita_real`,
-  `codes_included`, `aggregate_fallback`, `notes`.
+  optional `pop_source`, `codes_included`, `aggregate_fallback`, `notes`.
 }
 \description{
 Mirror of [cog_spending()] for revenue categories. One row per

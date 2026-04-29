@@ -11,7 +11,7 @@
 #' @return Tibble with columns `year`, `canonical_govid`, `gov_name`,
 #'   `revenue_subtype`, `category`, `amt_nominal`, optional `amt_real`,
 #'   optional `amt_per_capita_nominal`, optional `amt_per_capita_real`,
-#'   `codes_included`, `aggregate_fallback`, `notes`.
+#'   optional `pop_source`, `codes_included`, `aggregate_fallback`, `notes`.
 #' @export
 cog_revenue <- function(govid, years, category = NULL,
                         per_capita = FALSE, adjust_to_year = NULL) {
