@@ -138,10 +138,13 @@ test_that("per_capita denominator is the per-year F-33 population", {
     # Implied denominator from amt_nominal / amt_per_capita_nominal
     implied_pop <- r_ops$amt_nominal / r_ops$amt_per_capita_nominal
     names(implied_pop) <- r_ops$year
-    # Use absolute tolerance: within 1 person of per-year F-33 values
+    # Use absolute tolerance: within 1 person of per-year F-33 values.
+    # Hardcoded values are Broward County's per-year Census F-33 population
+    # from the bundled fixture (regenerated 2026-04-29 against cog_pipeline
+    # aad34c6 + bd3e744). 1,940,907 is the static ACS 2018-2022 5-year value
+    # the legacy implementation would use; we assert it is NOT what we get.
     expect_true(abs(implied_pop[["2019"]] - 1935878) < 1)
     expect_true(abs(implied_pop[["2020"]] - 1952778) < 1)
-    # And the implied denominator does NOT equal the static ACS value
     expect_false(all(abs(implied_pop - 1940907) < 1))
   })
 })
