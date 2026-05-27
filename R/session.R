@@ -5,6 +5,7 @@
 #' @noRd
 cog_open <- function(url = .resolve_url(),
                      cache_dir = .resolve_cache_dir()) {
+  .check_url_configured(url)
   if (!dir.exists(cache_dir)) dir.create(cache_dir, recursive = TRUE)
 
   con <- DBI::dbConnect(duckdb::duckdb())

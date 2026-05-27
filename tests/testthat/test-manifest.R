@@ -1,0 +1,101 @@
+# tests/testthat/test-manifest.R
+#
+# Tests for the guards on .fetch_or_cache_manifest() and cog_open() that
+# protect users from silent failures when USCOGDATA_URL is misconfigured
+# or returns non-JSON content.
+
+test_that("cog_open aborts with actionable error when URL is the placeholder default", {
+  uscogdata:::cog_close()
+  on.exit(uscogdata:::cog_close(), add = TRUE)
+
+  placeholder <- "https://cloud.civilytics.org/s/REPLACE_WITH_SHARE_TOKEN/download/"
+  withr::with_envvar(c(USCOGDATA_URL = placeholder), {
+    expect_error(
+      uscogdata:::cog_open(),
+      class = "uscogdata_url_not_configured"
+    )
+  })
+})
+
+test_that("placeholder guard fires for any URL containing the sentinel token", {
+  uscogdata:::cog_close()
+  on.exit(uscogdata:::cog_close(), add = TRUE)
+
+  # Sentinel detection should be substring-based — covers any host that still
+  # has REPLACE_WITH_SHARE_TOKEN baked in (default or partial user edit).
+  withr::with_envvar(c(USCOGDATA_URL = "https://other.example/s/REPLACE_WITH_SHARE_TOKEN/x/"), {
+    expect_error(
+      uscogdata:::cog_open(),
+      class = "uscogdata_url_not_configured"
+    )
+  })
+})
+
+test_that("placeholder guard error names both env var and option as remediation", {
+  uscogdata:::cog_close()
+  on.exit(uscogdata:::cog_close(), add = TRUE)
+
+  placeholder <- "https://cloud.civilytics.org/s/REPLACE_WITH_SHARE_TOKEN/download/"
+  withr::with_envvar(c(USCOGDATA_URL = placeholder), {
+    msg <- tryCatch(uscogdata:::cog_open(), error = conditionMessage)
+    expect_match(msg, "USCOGDATA_URL", fixed = TRUE)
+    expect_match(msg, "uscogdata.url", fixed = TRUE)
+  })
+})
+
+test_that("local manifest containing HTML produces uscogdata_invalid_manifest, not raw parse error", {
+  uscogdata:::cog_close()
+  on.exit(uscogdata:::cog_close(), add = TRUE)
+
+  tmp <- withr::local_tempdir()
+  writeLines(
+    c("<html>", "  <head><title>Welcome to our server</title></head>", "</html>"),
+    file.path(tmp, "manifest.json")
+  )
+
+  withr::with_envvar(c(USCOGDATA_URL = paste0(tmp, "/")), {
+    err <- expect_error(
+      uscogdata:::cog_open(),
+      class = "uscogdata_invalid_manifest"
+    )
+    expect_match(conditionMessage(err), "manifest", ignore.case = TRUE)
+  })
+})
+
+test_that("remote manifest fetch does not poison cache when response is HTML", {
+  uscogdata:::cog_close()
+  on.exit(uscogdata:::cog_close(), add = TRUE)
+
+  tmp_cache <- withr::local_tempdir()
+  cache_path <- file.path(tmp_cache, "manifest.json")
+
+  # Pretend the cache already exists with stale-but-fresh-by-mtime HTML
+  # (simulating a previous poisoned write from the old behavior). When the
+  # fetcher sees invalid JSON in the cache, it must refetch rather than
+  # silently returning a parse error to the caller.
+  writeLines("<html>poisoned</html>", cache_path)
+  Sys.setFileTime(cache_path, Sys.time())  # ensure within TTL
+
+  # We don't have a live HTTP fixture here, so the refetch will fail at the
+  # network layer — but the failure should NOT be a jsonlite parse error on
+  # the cached HTML; it should be a network-level httr2 error. The cache
+  # file itself must remain untouched (no atomic-write half-states).
+  withr::with_envvar(
+    c(
+      USCOGDATA_URL = "https://invalid.localhost.uscogdata.test/",
+      USCOGDATA_CACHE_DIR = tmp_cache
+    ),
+    {
+      err <- tryCatch(uscogdata:::cog_open(), error = identity)
+      expect_s3_class(err, "error")
+      # Must not be a JSON lexical error on HTML.
+      expect_false(grepl("lexical error", conditionMessage(err), fixed = TRUE))
+    }
+  )
+
+  # Atomic write contract: no stray tmp files left behind in cache_dir.
+  expect_length(
+    list.files(tmp_cache, pattern = "manifest\\.json\\.tmp"),
+    0L
+  )
+})

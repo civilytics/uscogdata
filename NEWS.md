@@ -1,5 +1,27 @@
 # uscogdata 0.1.0 (development)
 
+## Clearer errors when `USCOGDATA_URL` is unconfigured or returns non-JSON
+
+* `cog_open()` now aborts with the `uscogdata_url_not_configured` error
+  class when the resolved corpus URL still contains the placeholder
+  `REPLACE_WITH_SHARE_TOKEN` sentinel (or is empty). The message lists both
+  remediation paths (`Sys.setenv(USCOGDATA_URL = ...)` and
+  `options(uscogdata.url = ...)`) and points at the bundled fixture for
+  offline testing. Previously the package proceeded to fetch the placeholder
+  URL, cached the resulting HTML welcome page, and failed downstream with a
+  cryptic `jsonlite` lexical-error.
+* `.fetch_or_cache_manifest()` now parses the HTTP response body before
+  persisting it. Non-JSON responses (login pages, 404 HTML) raise
+  `uscogdata_invalid_manifest` with the URL, Content-Type, and underlying
+  parse error — and never write to the on-disk cache.
+* Manifest cache writes are now atomic (write to `manifest.json.tmp.<pid>`
+  in `cache_dir`, then `file.rename` over the target), so an interrupted
+  fetch cannot replace a previously-good cache.
+* Existing caches with non-JSON content (poisoned by the prior code path)
+  are silently refetched instead of returning a parse error to the caller.
+* Local `USCOGDATA_URL` paths whose `manifest.json` is not valid JSON now
+  surface the same `uscogdata_invalid_manifest` class with file context.
+
 ## Per-capita denominators now use per-year Census F-33 population
 
 * `cog_spending()` and `cog_revenue()` previously divided all years' amounts
