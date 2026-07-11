@@ -48,8 +48,8 @@ Census sometimes uses a population estimate from one year prior to the fiscal ye
 ```r
 years <- 2010:2023
 out <- purrr::map_dfr(years, function(y) {
-  peers <- cog_find_peers("231082082", year = y, max_peers = 10L)
-  cog_peer_compare("231082082", peers,
+  peers <- cog_find_peers("261163166615", year = y, max_peers = 10L)
+  cog_peer_compare("261163166615", peers,
                    category = "Police", years = y,
                    per_capita = TRUE)
 })

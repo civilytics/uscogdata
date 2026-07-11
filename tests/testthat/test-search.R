@@ -146,7 +146,7 @@ test_that(".resolve_basket_row exact match returns one row", {
   expect_equal(out$match_method, "exact")
   expect_equal(out$n_candidates, 1L)
   expect_equal(nrow(out$row), 1L)
-  expect_equal(out$row$canonical_govid, "101006006")
+  expect_equal(out$row$canonical_govid, "121011212191")
   expect_equal(out$row$gov_name, "BROWARD COUNTY")
 })
 
@@ -157,7 +157,7 @@ test_that(".resolve_basket_row exact match is case-insensitive", {
   )
   expect_equal(out$status, "resolved")
   expect_equal(out$match_method, "exact")
-  expect_equal(out$row$canonical_govid, "101006006")
+  expect_equal(out$row$canonical_govid, "121011212191")
 })
 
 test_that(".resolve_basket_row exact match honors per-row type", {
@@ -166,7 +166,7 @@ test_that(".resolve_basket_row exact match honors per-row type", {
     name = "SAN DIEGO CITY", state = "CA", type = "city", con = con
   )
   expect_equal(out$status, "resolved")
-  expect_equal(out$row$canonical_govid, "052037010")
+  expect_equal(out$row$canonical_govid, "062073207598")
 })
 
 test_that(".resolve_basket_row substring fallback resolves single match", {
@@ -177,7 +177,7 @@ test_that(".resolve_basket_row substring fallback resolves single match", {
   expect_equal(out$status, "resolved")
   expect_equal(out$match_method, "substring")
   expect_equal(out$n_candidates, 1L)
-  expect_equal(out$row$canonical_govid, "101006006")
+  expect_equal(out$row$canonical_govid, "121011212191")
 })
 
 test_that(".resolve_basket_row no_match returns 0-row tibble", {
@@ -207,15 +207,19 @@ test_that(".resolve_basket_row treats empty/whitespace name as no_match", {
 
 test_that(".resolve_basket_row largest_pop within single type", {
   # FL Miami substring matches 10 cities (all govs_type = 2), largest pop
-  # is MIAMI CITY at 443665.
+  # is MIAMI CITY at 443665. Under Phase P canonical naming, MIAMI-DADE
+  # COUNTY (govs_type = 1) also contains "Miami", so `type = "city"` pins
+  # the match set to a single type (as the query docs promise it will for
+  # per-row `type`), keeping this test's original intent: multiple
+  # same-type name matches resolve to the largest-population row.
   con <- uscogdata:::.ensure_session()
   out <- uscogdata:::.resolve_basket_row(
-    name = "Miami", state = "FL", type = NA_character_, con = con
+    name = "Miami", state = "FL", type = "city", con = con
   )
   expect_equal(out$status, "largest_pop")
   expect_equal(out$match_method, "substring")
   expect_gte(out$n_candidates, 2L)
-  expect_equal(out$row$canonical_govid, "102013013")
+  expect_equal(out$row$canonical_govid, "122086194757")
   expect_equal(out$row$gov_name, "MIAMI CITY")
 })
 
@@ -241,7 +245,7 @@ test_that(".resolve_basket_row resolves with type override on ambiguous case", {
   )
   expect_equal(out$status, "resolved")
   expect_equal(out$match_method, "substring")
-  expect_equal(out$row$canonical_govid, "052037010")
+  expect_equal(out$row$canonical_govid, "062073207598")
 })
 
 # ---- basket mode public surface ----
@@ -254,7 +258,7 @@ test_that("cog_gov_search basket mode resolves clean inputs in input order", {
   )
   expect_s3_class(basket, "tbl_df")
   expect_equal(nrow(basket), 3L)
-  expect_equal(basket$canonical_govid, c("101006006", "052037010", "442227001"))
+  expect_equal(basket$canonical_govid, c("121011212191", "062073207598", "482453176394"))
   expect_equal(basket$gov_name, c("BROWARD COUNTY", "SAN DIEGO CITY", "AUSTIN CITY"))
 })
 
@@ -284,7 +288,7 @@ test_that("cog_gov_search basket mode skips ambiguous and no_match rows", {
   ))
   # Broward resolves; San Diego ambiguous; Notarealplace no_match.
   expect_equal(nrow(basket), 1L)
-  expect_equal(basket$canonical_govid, "101006006")
+  expect_equal(basket$canonical_govid, "121011212191")
   res <- attr(basket, "resolution")
   expect_equal(nrow(res), 3L)
   expect_equal(res$status, c("resolved", "ambiguous", "no_match"))
@@ -306,20 +310,24 @@ test_that("cog_gov_search basket mode recycles single state", {
     state = "CA"
   )
   expect_equal(nrow(basket), 2L)
-  expect_equal(basket$canonical_govid, c("052037010", "052001009"))
+  expect_equal(basket$canonical_govid, c("062073207598", "062001123093"))
 })
 
 test_that("cog_gov_search basket mode within-type largest_pop records candidates", {
   skip_if_no_corpus()
+  # `type = "city"` for the Miami row pins the match set to govs_type = 2;
+  # under Phase P canonical naming MIAMI-DADE COUNTY also contains "Miami"
+  # and would otherwise make this an ambiguous (cross-type) match.
   basket <- suppressMessages(cog_gov_search(
     name  = c("Miami",  "OAKLAND CITY"),
-    state = c("FL",     "CA")
+    state = c("FL",     "CA"),
+    type  = c("city",   NA)
   ))
   expect_equal(nrow(basket), 2L)
   res <- attr(basket, "resolution")
   miami_row <- res[res$query_name == "Miami", ]
   expect_equal(miami_row$status, "largest_pop")
-  expect_equal(miami_row$canonical_govid, "102013013")
+  expect_equal(miami_row$canonical_govid, "122086194757")
   expect_gte(miami_row$n_candidates, 2L)
   expect_gte(nrow(miami_row$candidates[[1]]), 2L)
 })
@@ -396,7 +404,7 @@ test_that("cog_gov_search basket mode skips per-row excluded type without aborti
   ))
   # Broward should resolve; the special_district row should be no_match.
   expect_equal(nrow(basket), 1L)
-  expect_equal(basket$canonical_govid, "101006006")
+  expect_equal(basket$canonical_govid, "121011212191")
   res <- attr(basket, "resolution")
   expect_equal(res$status, c("resolved", "no_match"))
   # query_type should record what the user passed for the excluded-type row

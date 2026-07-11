@@ -1,25 +1,25 @@
 test_that("cog_find_peers returns same-type peers in the default pop band", {
   skip_if_no_corpus()
-  peers <- cog_find_peers("101006006")                # Broward County
+  peers <- cog_find_peers("121011212191")                # Broward County
   expect_s3_class(peers, "tbl_df")
   expected_cols <- c("canonical_govid", "gov_name", "fips_state",
                      "population", "pop_ratio", "rank")
   expect_true(all(expected_cols %in% names(peers)))
   expect_true(all(peers$pop_ratio >= 0.7 & peers$pop_ratio <= 1.3))
-  expect_false("101006006" %in% peers$canonical_govid)
+  expect_false("121011212191" %in% peers$canonical_govid)
   expect_equal(peers$rank, seq_len(nrow(peers)))
 })
 
 test_that("cog_find_peers respects same_state restriction", {
   skip_if_no_corpus()
-  peers <- cog_find_peers("101006006", same_state = TRUE,
+  peers <- cog_find_peers("121011212191", same_state = TRUE,
                           pop_range = c(0.1, 10))
   expect_true(all(peers$fips_state == "12"))
 })
 
 test_that("cog_find_peers absolute pop range works", {
   skip_if_no_corpus()
-  peers <- cog_find_peers("101006006",
+  peers <- cog_find_peers("121011212191",
                           pop_range = c(1.5e6, 2.5e6),
                           is_ratio = FALSE, max_peers = 20L)
   expect_true(all(peers$population >= 1.5e6 &
@@ -33,8 +33,8 @@ test_that("cog_find_peers errors cleanly on unknown govid", {
 
 test_that("cog_peer_compare accepts a cog_find_peers result directly", {
   skip_if_no_corpus()
-  peers <- cog_find_peers("101006006", max_peers = 4L)
-  r <- cog_peer_compare("101006006", peers, "Police", years = 2020L)
+  peers <- cog_find_peers("121011212191", max_peers = 4L)
+  r <- cog_peer_compare("121011212191", peers, "Police", years = 2020L)
   expect_s3_class(r, "tbl_df")
   expect_true("role" %in% names(r))
   expect_setequal(
@@ -47,8 +47,8 @@ test_that("cog_peer_compare accepts a cog_find_peers result directly", {
 test_that("cog_peer_compare accepts a character vector of govids", {
   skip_if_no_corpus()
   r <- cog_peer_compare(
-    "101006006",
-    peers = c("441015015", "441220220"),     # Bexar, Tarrant
+    "121011212191",
+    peers = c("481029175853", "481439135072"),     # Bexar, Tarrant
     category = "Police", years = 2020L
   )
   expect_true("peer" %in% r$role)
@@ -58,8 +58,8 @@ test_that("cog_peer_compare accepts a character vector of govids", {
 test_that("cog_peer_compare summary rows use real per-capita when requested", {
   skip_if_no_corpus()
   r <- cog_peer_compare(
-    "101006006",
-    peers = c("441015015", "441220220", "231082082"),
+    "121011212191",
+    peers = c("481029175853", "481439135072", "261163166615"),
     category = "Police", years = 2019:2020,
     per_capita = TRUE, adjust_to_year = 2022L
   )
@@ -72,8 +72,8 @@ test_that("cog_peer_compare summary rows use real per-capita when requested", {
 
 test_that("cog_peer_compare provenance reports the outer verb + peer count", {
   skip_if_no_corpus()
-  r <- cog_peer_compare("101006006",
-                        peers = c("441015015", "441220220"),
+  r <- cog_peer_compare("121011212191",
+                        peers = c("481029175853", "481439135072"),
                         category = "Police", years = 2020L)
   prov <- attr(r, "provenance")
   expect_equal(prov$verb, "cog_peer_compare")
@@ -82,7 +82,7 @@ test_that("cog_peer_compare provenance reports the outer verb + peer count", {
 
 test_that("cog_peer_compare handles zero peers gracefully", {
   skip_if_no_corpus()
-  r <- cog_peer_compare("101006006",
+  r <- cog_peer_compare("121011212191",
                         peers = character(0),
                         category = "Police", years = 2020L)
   expect_true(all(r$role == "target"))
@@ -91,7 +91,7 @@ test_that("cog_peer_compare handles zero peers gracefully", {
 
 test_that("cog_find_peers defaults `year` to most recent observed year for target", {
   skip_if_no_corpus()
-  peers <- cog_find_peers("101006006")
+  peers <- cog_find_peers("121011212191")
   expect_equal(attr(peers, "cohort_year"), 2020L)
   # Returned column is now `population`, not `population_acs`
   expect_true("population" %in% names(peers))
@@ -100,23 +100,23 @@ test_that("cog_find_peers defaults `year` to most recent observed year for targe
 
 test_that("cog_find_peers honors an explicit `year`", {
   skip_if_no_corpus()
-  peers <- cog_find_peers("101006006", year = 2019L)
+  peers <- cog_find_peers("121011212191", year = 2019L)
   expect_equal(attr(peers, "cohort_year"), 2019L)
 })
 
 test_that("cog_find_peers errors when target has no observed pop in `year`", {
   skip_if_no_corpus()
   expect_error(
-    cog_find_peers("101006006", year = 1999L),
+    cog_find_peers("121011212191", year = 1999L),
     "no observed population"
   )
 })
 
 test_that("cog_peer_compare stamps cohort_year from peers attribute", {
   skip_if_no_corpus()
-  peers <- cog_find_peers("101006006", year = 2019L, max_peers = 4L,
+  peers <- cog_find_peers("121011212191", year = 2019L, max_peers = 4L,
                           pop_range = c(0.5, 1.5))
-  r <- cog_peer_compare("101006006", peers, "Police", years = 2020L)
+  r <- cog_peer_compare("121011212191", peers, "Police", years = 2020L)
   expect_true("cohort_year" %in% names(r))
   expect_true(all(r$cohort_year == 2019L))
   prov <- attr(r, "provenance")
@@ -130,8 +130,8 @@ test_that("cog_peer_compare stamps cohort_year from peers attribute", {
 test_that("cog_peer_compare cohort_year is NA for bare character peers", {
   skip_if_no_corpus()
   r <- cog_peer_compare(
-    "101006006",
-    peers = c("441015015", "441220220"),
+    "121011212191",
+    peers = c("481029175853", "481439135072"),
     category = "Police", years = 2020L
   )
   expect_true(all(is.na(r$cohort_year)))

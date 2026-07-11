@@ -2,9 +2,9 @@ test_that("cog_geographic_rollup aggregates state + county + city layers", {
   skip_if_no_corpus()
   r <- cog_geographic_rollup(
     govids = list(
-      state  = "100000000",               # Florida state govt
-      county = "101006006",               # Broward County
-      city   = "102006004"                # Fort Lauderdale City
+      state  = "120000226351",               # Florida state govt
+      county = "121011212191",               # Broward County
+      city   = "122011161585"                # Fort Lauderdale City
     ),
     category = "Police",
     years = 2019:2020
@@ -23,7 +23,7 @@ test_that("cog_geographic_rollup aggregates state + county + city layers", {
 test_that("cog_geographic_rollup respects per_capita + adjust_to_year", {
   skip_if_no_corpus()
   r <- cog_geographic_rollup(
-    govids = list(county = "101006006", city = "102006004"),
+    govids = list(county = "121011212191", city = "122011161585"),
     category = "Police",
     years = 2020L,
     per_capita = TRUE,
@@ -43,8 +43,8 @@ test_that("cog_geographic_rollup respects per_capita + adjust_to_year", {
 test_that("cog_geographic_rollup scope_notes describe each layer", {
   skip_if_no_corpus()
   r <- cog_geographic_rollup(
-    govids = list(state = "100000000", county = "101006006",
-                  city = "102006004"),
+    govids = list(state = "120000226351", county = "121011212191",
+                  city = "122011161585"),
     category = "Police", years = 2020L
   )
   state_notes <- unique(r$scope_note[r$layer == "state"])
@@ -58,7 +58,7 @@ test_that("cog_geographic_rollup scope_notes describe each layer", {
 test_that("cog_geographic_rollup single-layer call works", {
   skip_if_no_corpus()
   r <- cog_geographic_rollup(
-    govids = list(county = c("101006006")),
+    govids = list(county = c("121011212191")),
     category = "Corrections",
     years = 2020L
   )
@@ -69,7 +69,7 @@ test_that("cog_geographic_rollup single-layer call works", {
 test_that("cog_geographic_rollup provenance reports the outer verb", {
   skip_if_no_corpus()
   r <- cog_geographic_rollup(
-    govids = list(state = "100000000", county = "101006006"),
+    govids = list(state = "120000226351", county = "121011212191"),
     category = "Police", years = 2020L
   )
   prov <- attr(r, "provenance")
@@ -80,7 +80,7 @@ test_that("cog_geographic_rollup provenance reports the outer verb", {
 
 test_that("cog_geographic_rollup accepts data.frames per layer", {
   skip_if_no_corpus()
-  fl_state  <- cog_gov_search("^FLORIDA STATE GOVT$", type = "state")
+  fl_state  <- cog_gov_search("^FLORIDA$", type = "state")
   broward   <- cog_gov_search("^BROWARD COUNTY$", state = "FL", type = "county")
   r <- cog_geographic_rollup(
     govids = list(state = fl_state, county = broward),
@@ -92,9 +92,9 @@ test_that("cog_geographic_rollup accepts data.frames per layer", {
 
 test_that("cog_geographic_rollup rejects invalid inputs", {
   expect_error(cog_geographic_rollup(list(), "Police", 2020L), "length")
-  expect_error(cog_geographic_rollup(c("101006006"), "Police", 2020L), "list")
+  expect_error(cog_geographic_rollup(c("121011212191"), "Police", 2020L), "list")
   expect_error(
-    cog_geographic_rollup(list(planet = "100000000"), "Police", 2020L),
+    cog_geographic_rollup(list(planet = "120000226351"), "Police", 2020L),
     "state|county|city"
   )
 })
@@ -103,8 +103,8 @@ test_that("cog_geographic_rollup per-capita uses summed per-year populations", {
   skip_if_no_corpus()
   with_fixture_corpus({
     r <- cog_geographic_rollup(
-      govids   = list(state  = "010000000",
-                      county = "101006006"),
+      govids   = list(state  = "010000226085",
+                      county = "121011212191"),
       category = "Police",
       years    = 2019:2020,
       per_capita = TRUE
@@ -125,14 +125,14 @@ test_that("cog_geographic_rollup records included/excluded govids in provenance"
   skip_if_no_corpus()
   with_fixture_corpus({
     r <- cog_geographic_rollup(
-      govids   = list(county = "101006006"),
+      govids   = list(county = "121011212191"),
       category = "Police",
       years    = 2019:2020,
       per_capita = TRUE
     )
     prov <- attr(r, "provenance")
     expect_true("rollup" %in% names(prov))
-    expect_true("101006006" %in% prov$rollup$included_govids)
+    expect_true("121011212191" %in% prov$rollup$included_govids)
     expect_true(is.character(prov$rollup$excluded_govids))
   })
 })

@@ -61,7 +61,7 @@ test_that("cog_mirror reads back via a fresh session against the mirror", {
   cog_close()
   options(uscogdata.url = paste0(normalizePath(tmp), "/"))
 
-  r <- cog_spending("101006006", 2020L, "Corrections")
+  r <- cog_spending("121011212191", 2020L, "Corrections")
   expect_gt(nrow(r), 0L)
-  expect_equal(unique(r$canonical_govid), "101006006")
+  expect_equal(unique(r$canonical_govid), "121011212191")
 })
