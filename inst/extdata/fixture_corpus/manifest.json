@@ -1,54 +1,21 @@
 {
-  "schema_version": 3,
-  "built_at": "2026-04-29T18:57:18Z",
-  "pipeline_commit": "bd3e744",
-  "fixture_note": "Two-year (2019-2020) fixture for uscogdata tests. Full corpus available via USCOGDATA_URL. Regenerated with Layer 1 (canonical_govid resolver gate) + Layer 2 (PID-era extended xwalk).",
+  "schema_version": 4,
+  "built_at": "2026-07-11T13:24:01Z",
+  "pipeline_commit": "1a00925",
+  "fixture_note": "Two-year (2019-2020) fixture for uscogdata tests. Full corpus available via USCOGDATA_URL. Regenerated for Phase P (schema_version 4, uniformly 12-char canonical_govid) with the full canonical_fips_xwalk master and the new canonical_alias lookup table via data-raw/regenerate_fixture_corpus.R.",
   "data_vintage": {
     "census_source_downloaded": "unknown",
     "cpi_vintage": "FRED CPIAUCSL",
     "acs_vintage": "ACS 2018-2022 5-year"
   },
   "scope": {
-    "gov_types_included": [
-      0,
-      1,
-      2,
-      3
-    ],
-    "gov_types_excluded": [
-      4,
-      5
-    ],
+    "gov_types_included": [0, 1, 2, 3],
+    "gov_types_excluded": [4, 5],
     "scope_note": "v0.1 covers state, county, city/municipality, and township governments. Special districts (type 4) and school districts (type 5) are excluded pending validation in a future cycle."
   },
   "schema": {
     "long_column_count": 24,
-    "long_columns": [
-      "fips_state",
-      "type",
-      "fips_county",
-      "govid",
-      "gov_blank",
-      "gov_name",
-      "county_name",
-      "fips_state_code",
-      "fips_county_code",
-      "fips_place_code",
-      "population",
-      "popyear",
-      "enrollment",
-      "enrollyear",
-      "function_code",
-      "sch_level_code",
-      "fiscal_year_end",
-      "srvy_year",
-      "item_code",
-      "amt",
-      "srv_data",
-      "impute_flag",
-      "is_aggregate",
-      "canonical_govid"
-    ],
+    "long_columns": ["fips_state", "type", "fips_county", "govid", "gov_blank", "gov_name", "county_name", "fips_state_code", "fips_county_code", "fips_place_code", "population", "popyear", "enrollment", "enrollyear", "function_code", "sch_level_code", "fiscal_year_end", "srvy_year", "item_code", "amt", "srv_data", "impute_flag", "is_aggregate", "canonical_govid"],
     "data_dictionary": "docs/data_dictionary.md"
   },
   "files": {
@@ -56,27 +23,32 @@
       {
         "year": 2019,
         "path": "data/long/year=2019/part-0.parquet",
-        "sha256": "d93affbbf9c46bd193fa5e07d89dfa9b08ad4f6fc2442fe7a27e6e4ef28f8bd9",
+        "sha256": "c0a2bf0758af129d5dfddb6ff6665cc435ddee87fd6879e788fb56ed53ab22b8",
         "row_count": 318139,
-        "size_bytes": 1425125
+        "size_bytes": 1441404
       },
       {
         "year": 2020,
         "path": "data/long/year=2020/part-0.parquet",
-        "sha256": "c9224833bd914cc85efb2ec62f83f75c34dfa469d4398f5cb1789fd028c03389",
+        "sha256": "92570b9d55ec3425d034db37838f91c3b8359d0454d3d98730a6016b62e4bb48",
         "row_count": 317500,
-        "size_bytes": 1428049
+        "size_bytes": 1444011
       }
     ],
     "metadata": [
       {
+        "path": "data/canonical_alias.parquet",
+        "sha256": "db784d4ec9e5abb4b033405627d8bdd6f8d8ff96b3033a5b2587b4b59113ec9c",
+        "description": "canonical_alias.parquet"
+      },
+      {
         "path": "data/canonical_fips_xwalk.parquet",
-        "sha256": "4bbdf0415b0ae1a24927869bb9e8e75eca5d7bcceebdf8c26346c7cbf8472d34",
+        "sha256": "c0b1295e779b601f2782de40ab143556324e74d30d214fc10997c2244c109389",
         "description": "canonical_fips_xwalk.parquet"
       },
       {
         "path": "data/summary_categories.parquet",
-        "sha256": "60045e22bc2723318fa2cb73f8e5038250dc54d24b3447c6750dfe29035335b8",
+        "sha256": "dd59e7f58a022679ad43511c8c8e938b8dd4be81196bbeeee21e67bdcca2295b",
         "description": "summary_categories.parquet"
       }
     ]

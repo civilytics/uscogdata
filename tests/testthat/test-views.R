@@ -66,15 +66,16 @@ test_that("gov_population_yearly exposes one row per (year, canonical_govid)", {
       con,
       "SELECT year, canonical_govid, population, popyear
        FROM gov_population_yearly
-       WHERE canonical_govid = '101006006'
+       WHERE canonical_govid = '121011212191'
        ORDER BY year"
     )
     expect_setequal(df$year, c(2019L, 2020L))
     expect_equal(nrow(df), 2L)
     expect_true(all(!is.na(df$population)))
-    # Hardcoded values are from the bundled fixture (regenerated 2026-04-29
-    # against cog_pipeline aad34c6 + bd3e744). Update if the fixture is
-    # rebuilt against a different source vintage.
+    # Hardcoded values are from the bundled fixture (regenerated 2026-07-11
+    # against cog_pipeline publish tree, pipeline_commit 1a00925, Phase P
+    # schema_version 4). Update if the fixture is rebuilt against a
+    # different source vintage.
     expect_equal(df$population[df$year == 2019L], 1935878L)
     expect_equal(df$population[df$year == 2020L], 1952778L)
     # Uniqueness on (year, canonical_govid) across the whole view.
