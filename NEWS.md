@@ -1,5 +1,25 @@
 # uscogdata 0.1.0 (development)
 
+## Breaking: corpus schema_version 4 (Phase P canonical ids)
+
+* The package now requires corpus `schema_version = 4` (`MinCorpusSchema` /
+  `MaxCorpusSchema` in `DESCRIPTION` are both `4`); older corpora built
+  against schema 3 are rejected by `cog_open()` with a clear version-mismatch
+  error. `canonical_govid` is now uniformly 12 characters across every
+  vintage the corpus covers (previously a mix of 9-char legacy ids and
+  12-char FIPS ids depending on source year) — **every hardcoded
+  `canonical_govid` literal from a pre-Phase-P corpus is now invalid** and
+  must be re-resolved via `cog_gov_search()` or the new `canonical_alias`
+  lookup table. `canonical_fips_xwalk` gains four columns
+  (`legacy_govs_id`, `census_geoid`, `id_source`; `confidence` is renamed to
+  `pop_confidence`) and a companion `canonical_alias` table ships in the
+  corpus for mapping legacy/alternate ids onto the current canonical
+  namespace. The bundled fixture corpus (`inst/extdata/fixture_corpus/`) has
+  been regenerated against the Phase P publish tree, now ships the full
+  `canonical_fips_xwalk` and `canonical_alias` master tables alongside the
+  2019-2020 long partitions, and is reproducible via
+  `data-raw/regenerate_fixture_corpus.R`.
+
 ## Clearer errors when `USCOGDATA_URL` is unconfigured or returns non-JSON
 
 * `cog_open()` now aborts with the `uscogdata_url_not_configured` error

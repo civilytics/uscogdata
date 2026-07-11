@@ -126,9 +126,10 @@ cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
     canonical_govid = character(0), gov_name = character(0),
     govs_type = integer(0), type_label = character(0),
     fips_state = character(0), fips_county = character(0),
-    fips_place = character(0), first_year = integer(0),
-    last_year = integer(0), population_acs = integer(0),
-    confidence = character(0)
+    fips_place = character(0), legacy_govs_id = character(0),
+    first_year = integer(0), last_year = integer(0),
+    census_geoid = character(0), population_acs = integer(0),
+    pop_confidence = character(0), id_source = character(0)
   )
 }
 
