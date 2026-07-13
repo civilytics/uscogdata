@@ -1,7 +1,7 @@
 {
   "schema_version": 4,
-  "built_at": "2026-07-11T13:24:01Z",
-  "pipeline_commit": "1a00925",
+  "built_at": "2026-07-13T23:35:09Z",
+  "pipeline_commit": "a082b26",
   "fixture_note": "Two-year (2019-2020) fixture for uscogdata tests. Full corpus available via USCOGDATA_URL. Regenerated for Phase P (schema_version 4, uniformly 12-char canonical_govid) with the full canonical_fips_xwalk master and the new canonical_alias lookup table via data-raw/regenerate_fixture_corpus.R.",
   "data_vintage": {
     "census_source_downloaded": "unknown",
@@ -38,12 +38,12 @@
     "metadata": [
       {
         "path": "data/canonical_alias.parquet",
-        "sha256": "db784d4ec9e5abb4b033405627d8bdd6f8d8ff96b3033a5b2587b4b59113ec9c",
+        "sha256": "feb8d01a640fb16c9a4b4ad66726b50b8fe8a1ce2a771bed8c1190fec51d5c8d",
         "description": "canonical_alias.parquet"
       },
       {
         "path": "data/canonical_fips_xwalk.parquet",
-        "sha256": "c0b1295e779b601f2782de40ab143556324e74d30d214fc10997c2244c109389",
+        "sha256": "1ae47981531c7389f69eff3f7656045428564bfbe8032200eb9c039d32739a7e",
         "description": "canonical_fips_xwalk.parquet"
       },
       {
