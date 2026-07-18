@@ -146,3 +146,18 @@
 }
 
 `%||%` <- function(a, b) if (is.null(a) || (length(a) == 1 && is.na(a))) b else a
+
+#' Return the parsed corpus manifest for the active session.
+#'
+#' Opens a session (connecting to the configured corpus) if none is active,
+#' then returns the manifest exactly as parsed from `manifest.json`. Useful
+#' for consumers that need the published year range (`years` block, schema
+#' v5+) or the partition list without issuing a data query.
+#'
+#' @return Named list: `schema_version`, `built_at`, `pipeline_commit`,
+#'   `data_vintage`, `scope`, `years` (schema v5+), `schema`, `files`.
+#' @export
+cog_manifest <- function() {
+  .ensure_session()
+  .uscogdata_env$manifest
+}

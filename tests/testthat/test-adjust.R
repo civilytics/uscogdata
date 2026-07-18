@@ -41,3 +41,10 @@ test_that(".inflate preserves NA amounts", {
   expect_true(is.na(result[2]))
   expect_false(any(is.na(result[c(1, 3)])))
 })
+
+test_that("bundled CPI covers the full 1967+ corpus era through this year", {
+  cpi <- .cpi_table()
+  expect_lte(min(cpi$year), 1967L)
+  expect_gte(max(cpi$year), as.integer(format(Sys.Date(), "%Y")))
+  expect_false(any(is.na(cpi$cpi)))
+})

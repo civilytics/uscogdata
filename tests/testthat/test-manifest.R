@@ -99,3 +99,14 @@ test_that("remote manifest fetch does not poison cache when response is HTML", {
     0L
   )
 })
+
+test_that("cog_manifest returns the active session's parsed manifest", {
+  with_fixture_corpus({
+    m <- cog_manifest()
+    expect_type(m, "list")
+    expect_true(m$schema_version >= 4L)
+    yrs <- vapply(m$files$long_partitions, function(p) as.integer(p$year),
+                  integer(1))
+    expect_setequal(yrs, c(2019L, 2020L))
+  })
+})
