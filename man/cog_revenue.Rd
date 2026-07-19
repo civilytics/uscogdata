@@ -40,14 +40,21 @@ reproduces the pre-Phase-R2 behavior (published item codes, no
 folding). On a corpus with `schema_version < 5` (no harmonization
 tables), `basis` silently resolves to `"raw"` when left at its default
 and the resolution is recorded in the provenance; explicitly passing
-`basis = "harmonized"` on such a corpus aborts.}
+`basis = "harmonized"` on such a corpus aborts. Ignored when `recipe`
+is set (see below).}
 
 \item{recipe}{Optional harmonization recipe id (see [cog_recipes()]) for
 multi-code cross-vintage series that a 1:1 harmonized_code mapping
 can't express (e.g. a wide-era aggregate that only splits into leaf
 codes in the modern era). Mutually exclusive with `category`. The
 result's subtype column reads `"recipe"` and `category` reads the
-recipe's label. Requires `schema_version >= 5`.}
+recipe's label. Requires `schema_version >= 5`. A recipe query bypasses
+`basis` entirely (it joins `long` directly rather than going through
+the `*_annotated`/`*_annotated_harmonized` views), so the `basis`
+argument is ignored and the result's provenance reports
+`basis = "recipe"` with an inert `harmonization` block (`applied =
+FALSE`, pointing at the `recipe` block instead) rather than a
+possibly-misleading `"harmonized"`/`"raw"` value.}
 }
 \value{
 Tibble with columns `year`, `canonical_govid`, `gov_name`,

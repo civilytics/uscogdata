@@ -69,7 +69,7 @@ test_that("recipe result carries a recipe provenance block with component rows",
   r <- cog_spending("121011212191", years = c(2011L, 2012L),
                     recipe = "corrections_combined")
   prov <- attr(r, "provenance")
-  expect_equal(prov$basis, "harmonized")
+  expect_equal(prov$basis, "recipe")
   expect_equal(prov$category, "Corrections (functions 04+05 combined)")
   expect_type(prov$recipe, "list")
   expect_equal(prov$recipe$recipe_id, "corrections_combined")
@@ -80,6 +80,34 @@ test_that("recipe result carries a recipe provenance block with component rows",
   # A recipe query resolves its own coverage; it should never also carry
   # suggestions for itself.
   expect_length(prov$suggestions, 0L)
+})
+
+test_that("recipe results report an unambiguous basis/harmonization, ignoring basis=", {
+  skip_if_no_corpus()
+  # A recipe query bypasses spending_annotated(_harmonized) entirely --
+  # .run_recipe() joins `long` directly -- so `basis` must never read
+  # "harmonized"/"raw" (which would describe a code path this query never
+  # took) regardless of what the caller passed for `basis`. Task 12
+  # consumes provenance verbatim, so this needs to be unambiguous.
+  r_default <- cog_spending("121011212191", years = c(2011L, 2012L),
+                            recipe = "corrections_combined")
+  r_raw <- cog_spending("121011212191", years = c(2011L, 2012L),
+                        recipe = "corrections_combined", basis = "raw")
+  r_harm <- cog_spending("121011212191", years = c(2011L, 2012L),
+                         recipe = "corrections_combined", basis = "harmonized")
+
+  for (r in list(r_default, r_raw, r_harm)) {
+    prov <- attr(r, "provenance")
+    expect_equal(prov$basis, "recipe")
+    expect_true(is.na(prov$basis_note))
+    expect_false(prov$harmonization$applied)
+    expect_equal(prov$harmonization$na_rows_excluded, 0L)
+    expect_match(prov$harmonization$note, "recipe", ignore.case = TRUE)
+  }
+
+  # basis= truly has zero effect on a recipe query's actual numbers.
+  expect_equal(r_raw$amt_nominal, r_harm$amt_nominal)
+  expect_equal(r_default$amt_nominal, r_raw$amt_nominal)
 })
 
 test_that("recipe = 't19_selective_sales_wide' sums the local T11/T14 legs when present", {
