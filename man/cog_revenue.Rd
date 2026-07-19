@@ -9,7 +9,8 @@ cog_revenue(
   years,
   category = NULL,
   per_capita = FALSE,
-  adjust_to_year = NULL
+  adjust_to_year = NULL,
+  basis = c("harmonized", "raw")
 )
 }
 \arguments{
@@ -29,6 +30,16 @@ in that year).}
 
 \item{adjust_to_year}{Integer base year for CPI-U real-dollar conversion,
 or `NULL` for nominal only.}
+
+\item{basis}{`"harmonized"` (default) sums item codes through the
+cross-vintage harmonization mapping (folding series-break-affected
+codes onto a comparable target and excluding aggregate / discontinued
+rows -- see the `harmonization` block in `cog_explain()`); `"raw"`
+reproduces the pre-Phase-R2 behavior (published item codes, no
+folding). On a corpus with `schema_version < 5` (no harmonization
+tables), `basis` silently resolves to `"raw"` when left at its default
+and the resolution is recorded in the provenance; explicitly passing
+`basis = "harmonized"` on such a corpus aborts.}
 }
 \value{
 Tibble with columns `year`, `canonical_govid`, `gov_name`,

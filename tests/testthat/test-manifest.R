@@ -107,6 +107,44 @@ test_that("cog_manifest returns the active session's parsed manifest", {
     expect_true(m$schema_version >= 4L)
     yrs <- vapply(m$files$long_partitions, function(p) as.integer(p$year),
                   integer(1))
-    expect_setequal(yrs, c(2019L, 2020L))
+    expect_setequal(yrs, c(2011L, 2012L, 2019L, 2020L))
+  })
+})
+
+test_that(".validate_schema accepts schema_version 4 and 5, rejects others", {
+  expect_silent(uscogdata:::.validate_schema(list(schema_version = 4L)))
+  expect_silent(uscogdata:::.validate_schema(list(schema_version = 5L)))
+  expect_error(
+    uscogdata:::.validate_schema(list(schema_version = 3L)),
+    "schema_version"
+  )
+  expect_error(
+    uscogdata:::.validate_schema(list(schema_version = 6L)),
+    "schema_version"
+  )
+})
+
+test_that("cog_open succeeds against a doctored schema_version 4 corpus (dual-accept)", {
+  skip_if_no_corpus()
+  with_doctored_schema_version(4L, {
+    con <- cog_open()
+    expect_true(DBI::dbIsValid(con))
+    expect_equal(as.integer(cog_manifest()$schema_version), 4L)
+
+    # Core (pre-Phase-R2) views must still register on a v4 corpus.
+    views <- DBI::dbGetQuery(con,
+      "SELECT table_name FROM information_schema.tables
+       WHERE table_schema = 'main' AND table_type = 'VIEW'"
+    )$table_name
+    expect_true(all(c("spending_annotated", "revenue_annotated") %in% views))
+
+    # Schema-v5-only harmonization views must NOT register on a v4 corpus:
+    # their parquet sources don't exist there and DuckDB's read_parquet()
+    # errors eagerly at CREATE VIEW time for a missing file/glob, so
+    # .register_views() gates these on manifest$schema_version >= 5.
+    expect_false(any(c(
+      "spending_long_harmonized", "spending_annotated_harmonized",
+      "harmonization_recipes", "harmonization_map", "series_breaks_pq"
+    ) %in% views))
   })
 })

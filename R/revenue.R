@@ -14,16 +14,19 @@
 #'   optional `pop_source`, `codes_included`, `aggregate_fallback`, `notes`.
 #' @export
 cog_revenue <- function(govid, years, category = NULL,
-                        per_capita = FALSE, adjust_to_year = NULL) {
+                        per_capita = FALSE, adjust_to_year = NULL,
+                        basis = c("harmonized", "raw")) {
   .verb_spendrev(
     verb           = "cog_revenue",
-    view           = "revenue_annotated",
+    view_base      = "revenue_annotated",
     subtype_col    = "revenue_subtype",
+    flow_prefixes  = c("T", "A", "U", "B", "C", "D"),
     call           = match.call(),
     govid          = govid,
     years          = years,
     category       = category,
     per_capita     = per_capita,
-    adjust_to_year = adjust_to_year
+    adjust_to_year = adjust_to_year,
+    basis          = basis
   )
 }

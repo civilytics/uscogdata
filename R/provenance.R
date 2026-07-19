@@ -4,7 +4,9 @@
 #' @noRd
 .build_provenance <- function(verb, call, govid, years, category,
                               per_capita, adjust_to_year, result, sql,
-                              subtype_col) {
+                              subtype_col, basis = NA_character_,
+                              basis_note = NA_character_,
+                              harmonization = NULL) {
   manifest <- .uscogdata_env$manifest
 
   codes <- result[["codes_included"]]
@@ -38,6 +40,12 @@
     ),
     years = as.integer(years),
     category = category,
+    basis = basis,
+    basis_note = basis_note,
+    harmonization = harmonization %||% list(
+      applied = FALSE, na_rows_excluded = 0L, na_amount_excluded = 0,
+      note = NA_character_
+    ),
     scope = list(
       gov_types_included = as.integer(unlist(manifest$scope$gov_types_included)),
       gov_types_excluded = as.integer(unlist(manifest$scope$gov_types_excluded)),

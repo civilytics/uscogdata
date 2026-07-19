@@ -36,3 +36,20 @@ test_that("cog_revenue result has provenance attribute", {
 test_that("cog_revenue rejects invalid inputs", {
   expect_error(cog_revenue(list(), 2020L), "character|data frame")
 })
+
+test_that("cog_revenue basis = 'harmonized' (default) matches 'raw' in this fixture window", {
+  skip_if_no_corpus()
+  r_raw  <- cog_revenue("121011212191", 2019:2020, basis = "raw")
+  r_harm <- cog_revenue("121011212191", 2019:2020, basis = "harmonized")
+  expect_equal(attr(r_raw, "provenance")$basis, "raw")
+  expect_equal(attr(r_harm, "provenance")$basis, "harmonized")
+  expect_equal(sum(r_raw$amt_nominal), sum(r_harm$amt_nominal))
+})
+
+test_that("cog_revenue provenance carries the harmonization block", {
+  skip_if_no_corpus()
+  r <- cog_revenue("121011212191", 2020L)
+  h <- attr(r, "provenance")$harmonization
+  expect_true(h$applied)
+  expect_true(h$na_rows_excluded >= 0L)
+})

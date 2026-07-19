@@ -20,6 +20,15 @@
 #'   in that year).
 #' @param adjust_to_year Integer base year for CPI-U real-dollar conversion,
 #'   or `NULL` for nominal only.
+#' @param basis `"harmonized"` (default) sums item codes through the
+#'   cross-vintage harmonization mapping (folding series-break-affected
+#'   codes onto a comparable target and excluding aggregate / discontinued
+#'   rows -- see the `harmonization` block in `cog_explain()`); `"raw"`
+#'   reproduces the pre-Phase-R2 behavior (published item codes, no
+#'   folding). On a corpus with `schema_version < 5` (no harmonization
+#'   tables), `basis` silently resolves to `"raw"` when left at its default
+#'   and the resolution is recorded in the provenance; explicitly passing
+#'   `basis = "harmonized"` on such a corpus aborts.
 #' @return Tibble with columns `year`, `canonical_govid`, `gov_name`,
 #'   `spend_subtype`, `category`, `amt_nominal`, optional `amt_real`,
 #'   optional `amt_per_capita_nominal`, optional `amt_per_capita_real`,
@@ -27,24 +36,31 @@
 #'   Carries a `provenance` attribute matching `inst/schemas/provenance-v1.json`.
 #' @export
 cog_spending <- function(govid, years, category = NULL,
-                         per_capita = FALSE, adjust_to_year = NULL) {
+                         per_capita = FALSE, adjust_to_year = NULL,
+                         basis = c("harmonized", "raw")) {
   .verb_spendrev(
     verb          = "cog_spending",
-    view          = "spending_annotated",
+    view_base     = "spending_annotated",
     subtype_col   = "spend_subtype",
+    flow_prefixes = c("E", "F", "G", "K"),
     call          = match.call(),
     govid         = govid,
     years         = years,
     category      = category,
     per_capita    = per_capita,
-    adjust_to_year = adjust_to_year
+    adjust_to_year = adjust_to_year,
+    basis         = basis
   )
 }
 
 #' @noRd
-.verb_spendrev <- function(verb, view, subtype_col, call,
+.verb_spendrev <- function(verb, view_base, subtype_col, flow_prefixes, call,
                            govid, years, category,
-                           per_capita, adjust_to_year) {
+                           per_capita, adjust_to_year,
+                           basis = c("harmonized", "raw")) {
+  basis_explicit <- length(basis) == 1L
+  basis <- match.arg(basis, c("harmonized", "raw"))
+
   govid <- .coerce_govid_input(govid, arg = "govid")
   .validate_verb_inputs(govid, years, category, per_capita, adjust_to_year)
 
@@ -52,8 +68,12 @@ cog_spending <- function(govid, years, category = NULL,
   if (!is.null(adjust_to_year)) adjust_to_year <- as.integer(adjust_to_year)
 
   con <- .ensure_session()
+  manifest <- .uscogdata_env$manifest
   scope <- .check_govids_in_scope(govid)
 
+  resolved <- .resolve_basis(basis, basis_explicit, manifest)
+
+  view <- .select_view(view_base, resolved$basis)
   sql <- .build_verb_sql(view, subtype_col, govid, years, category)
   result <- tibble::as_tibble(DBI::dbGetQuery(con, sql))
 
@@ -63,6 +83,10 @@ cog_spending <- function(govid, years, category = NULL,
   }
 
   result$notes <- .notes_column(result)
+
+  harmonization <- .build_harmonization_block(
+    con, govid, years, resolved, flow_prefixes
+  )
 
   prov <- .build_provenance(
     verb           = verb,
@@ -74,7 +98,10 @@ cog_spending <- function(govid, years, category = NULL,
     adjust_to_year = adjust_to_year,
     result         = result,
     sql            = sql,
-    subtype_col    = subtype_col
+    subtype_col    = subtype_col,
+    basis          = resolved$basis,
+    basis_note     = resolved$note,
+    harmonization  = harmonization
   )
   prov$scope$govids_found   <- scope$found
   prov$scope$govids_missing <- scope$missing
@@ -105,6 +132,11 @@ cog_spending <- function(govid, years, category = NULL,
     }
   }
   invisible(TRUE)
+}
+
+#' @noRd
+.select_view <- function(view_base, basis) {
+  if (identical(basis, "harmonized")) paste0(view_base, "_harmonized") else view_base
 }
 
 #' @noRd
