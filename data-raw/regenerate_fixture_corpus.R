@@ -3,12 +3,20 @@
 # Regenerate inst/extdata/fixture_corpus/ from a cog_pipeline publish tree.
 #
 # What this does:
-#   1. Copies the year=2019 and year=2020 long partitions as-is (byte-for-
-#      byte) from <publish_cache>/data/long/ into the fixture.
+#   1. Copies each requested year's long partition as-is (byte-for-byte)
+#      from <publish_cache>/data/long/ into the fixture. Default years are
+#      c(2011L, 2012L, 2019L, 2020L): 2011/2012 straddle the wide-aggregate
+#      -> modern-leaf format boundary (the harmonization/recipe seam), and
+#      2019/2020 are the pre-existing per-capita/CPI regression anchors.
+#      Each partition is a full year (all states/govs) as published, so
+#      Broward County FL and every other previously-pinned government stay
+#      covered without any per-gov slicing logic.
 #   2. Copies the full canonical_fips_xwalk.parquet, canonical_alias.parquet,
-#      and summary_categories.parquet metadata tables as-is (these are small
-#      cross-vintage registries, not partitioned by year, so the fixture
-#      ships the complete tables rather than a year-scoped subset).
+#      summary_categories.parquet, harmonization_map.parquet,
+#      harmonization_recipes.parquet, and series_breaks.parquet metadata
+#      tables as-is (these are small cross-vintage registries, not
+#      partitioned by year, so the fixture ships the complete tables rather
+#      than a year-scoped subset).
 #   3. Resyncs the four reference docs (data_dictionary.md,
 #      reader-specification.md, README.md, series_breaks.md) from the
 #      publish tree's docs/.
@@ -35,7 +43,7 @@ regenerate_fixture_corpus <- function(
       "..", "cog_pipeline", "_targets", "publish_cache"
     ),
     fixture_dir = file.path("inst", "extdata", "fixture_corpus"),
-    fixture_years = c(2019L, 2020L)) {
+    fixture_years = c(2011L, 2012L, 2019L, 2020L)) {
   stopifnot(
     requireNamespace("digest", quietly = TRUE),
     requireNamespace("jsonlite", quietly = TRUE),
@@ -92,14 +100,18 @@ regenerate_fixture_corpus <- function(
   invisible(NULL)
 }
 
-# Copy the full (not year-scoped) canonical_fips_xwalk, canonical_alias, and
-# summary_categories parquet tables.
+# Copy the full (not year-scoped) canonical_fips_xwalk, canonical_alias,
+# summary_categories, and (schema v5+) harmonization_map/
+# harmonization_recipes/series_breaks parquet tables.
 #' @noRd
 .copy_metadata_parquets <- function(publish_cache_dir, fixture_dir) {
   files <- c(
     "canonical_fips_xwalk.parquet",
     "canonical_alias.parquet",
-    "summary_categories.parquet"
+    "summary_categories.parquet",
+    "harmonization_map.parquet",
+    "harmonization_recipes.parquet",
+    "series_breaks.parquet"
   )
   for (f in files) {
     src <- file.path(publish_cache_dir, "data", f)
@@ -170,7 +182,10 @@ regenerate_fixture_corpus <- function(
   metadata_files <- c(
     "canonical_alias.parquet",
     "canonical_fips_xwalk.parquet",
-    "summary_categories.parquet"
+    "summary_categories.parquet",
+    "harmonization_map.parquet",
+    "harmonization_recipes.parquet",
+    "series_breaks.parquet"
   )
   metadata <- lapply(metadata_files, function(f) {
     rel <- file.path("data", f)
@@ -187,11 +202,15 @@ regenerate_fixture_corpus <- function(
     built_at       = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
     pipeline_commit = source_manifest$pipeline_commit,
     fixture_note = paste(
-      "Two-year (2019-2020) fixture for uscogdata tests. Full corpus",
-      "available via USCOGDATA_URL. Regenerated for Phase P",
-      "(schema_version 4, uniformly 12-char canonical_govid) with the full",
-      "canonical_fips_xwalk master and the new canonical_alias lookup",
-      "table via data-raw/regenerate_fixture_corpus.R."
+      "Four-year (2011, 2012, 2019, 2020) fixture for uscogdata tests. Full",
+      "corpus available via USCOGDATA_URL. Regenerated for Phase R2",
+      "(schema_version 5, harmonization_map/harmonization_recipes/",
+      "series_breaks parquet tables added). 2011/2012 straddle the",
+      "wide-aggregate -> modern-leaf format boundary exercised by basis=",
+      "\"harmonized\" and recipe= queries; 2019/2020 retain the prior",
+      "per-capita/CPI regression anchors. Full canonical_fips_xwalk master",
+      "and canonical_alias lookup table included via",
+      "data-raw/regenerate_fixture_corpus.R."
     ),
     data_vintage    = source_manifest$data_vintage,
     scope           = source_manifest$scope,

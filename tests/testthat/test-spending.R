@@ -189,3 +189,129 @@ test_that("provenance records per-year denominator metadata", {
     expect_equal(length(pc$popyear_range), 2L)
   })
 })
+
+# --- basis = "harmonized" / "raw" (Phase R2, schema v5) --------------------
+
+test_that("basis = 'raw' reproduces the pre-harmonization Broward Police totals", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- cog_spending("121011212191", years = 2019:2020, category = "Police",
+                      basis = "raw")
+    # Regression pin captured against the schema v5 fixture (2026-07-18,
+    # pipeline_commit ece9b32) before basis = "harmonized" existed as a
+    # concept; these are the same totals the pre-Phase-R2 default query
+    # returned (spending_annotated is untouched by the harmonized views).
+    ops <- r$amt_nominal[r$year == 2019L & r$spend_subtype == "operations"]
+    cap <- r$amt_nominal[r$year == 2020L & r$spend_subtype == "capital"]
+    expect_equal(ops, 483560000)
+    expect_equal(cap, 26693000)
+    expect_equal(attr(r, "provenance")$basis, "raw")
+  })
+})
+
+test_that("basis = 'harmonized' (default) matches 'raw' when no harmonization rule applies", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    # Every `method = "collapse"` mapping in the curated harmonization_map
+    # ends by FY2004 for codes inside the spending/revenue flow-type
+    # prefixes (E/F/G/K, T/A/U/B/C/D); the one collapse extending to FY2011
+    # (L38/M38 -> L36/M36) is intergovernmental-transfer (L/M prefix) codes
+    # that were never part of spending_long/revenue_long to begin with. So
+    # for the fixture's 2011-2020 window, basis = "harmonized" is a
+    # data-verified no-op vs "raw" for in-scope codes -- this is the
+    # positive-control counterpart to the synthetic REPLACE-mechanism test
+    # in test-views.R, which proves the fold itself works when data exists.
+    r_raw  <- cog_spending("121011212191", c(2011L, 2012L, 2019L, 2020L),
+                           "Police", basis = "raw")
+    r_harm <- cog_spending("121011212191", c(2011L, 2012L, 2019L, 2020L),
+                           "Police", basis = "harmonized")
+    expect_equal(attr(r_harm, "provenance")$basis, "harmonized")
+    expect_equal(
+      r_harm$amt_nominal[order(r_harm$year, r_harm$spend_subtype)],
+      r_raw$amt_nominal[order(r_raw$year, r_raw$spend_subtype)]
+    )
+  })
+})
+
+test_that("basis defaults to 'harmonized' when not passed", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- cog_spending("121011212191", 2020L, "Police")
+    expect_equal(attr(r, "provenance")$basis, "harmonized")
+  })
+})
+
+test_that("provenance carries basis + harmonization block with na_rows_excluded", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- cog_spending("121011212191", 2011:2012, "Corrections")
+    prov <- attr(r, "provenance")
+    expect_equal(prov$basis, "harmonized")
+    expect_true(prov$harmonization$applied)
+    expect_true(prov$harmonization$na_rows_excluded >= 0L)
+    expect_true(prov$harmonization$na_amount_excluded >= 0)
+    # Data-verified for this fixture: none of the discontinued_na rulings
+    # (S74, Z61, X04, X06, the debt-detail family, L24) fall inside the
+    # E/F/G/K spending prefixes, so the exclusion count is exactly zero for
+    # every year in the bundled window -- see
+    # docs/phase_r_harmonization_review.md § 1.3/1.4.
+    expect_equal(prov$harmonization$na_rows_excluded, 0L)
+    expect_equal(prov$harmonization$na_amount_excluded, 0)
+  })
+})
+
+test_that("basis = 'raw' never populates the harmonization exclusion block", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- cog_spending("121011212191", 2020L, "Corrections", basis = "raw")
+    h <- attr(r, "provenance")$harmonization
+    expect_false(h$applied)
+    expect_equal(h$na_rows_excluded, 0L)
+  })
+})
+
+test_that("v4 corpus: basis silently resolves to raw (default) with a provenance note", {
+  skip_if_no_corpus()
+  with_doctored_schema_version(4L, {
+    r <- cog_spending("121011212191", 2019L, "Police")
+    prov <- attr(r, "provenance")
+    expect_equal(prov$basis, "raw")
+    expect_match(prov$basis_note, "raw", fixed = TRUE)
+    expect_match(prov$basis_note, "schema_version", fixed = TRUE)
+    expect_false(prov$harmonization$applied)
+  })
+})
+
+test_that("v4 corpus: explicit basis = 'harmonized' aborts", {
+  skip_if_no_corpus()
+  with_doctored_schema_version(4L, {
+    expect_error(
+      cog_spending("121011212191", 2019L, "Police", basis = "harmonized"),
+      class = "uscogdata_basis_unsupported"
+    )
+  })
+})
+
+test_that("provenance$series_break_refs is a populated-when-applicable character vector", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- cog_spending("121011212191", 2020L, "Corrections")
+    refs <- attr(r, "provenance")$series_break_refs
+    expect_type(refs, "character")
+    # No catalogued series_breaks_pq row falls inside this fixture's
+    # 2011/2012/2019/2020 window for the codes this query touches (E04/G04)
+    # -- data-verified; the mechanism itself is what's under test here, via
+    # a query-shaped unit test in test-views.R since the fixture has no
+    # positive case to pin against.
+    expect_equal(refs, character(0))
+  })
+})
+
+test_that("v4 corpus: explicit basis = 'raw' still works", {
+  skip_if_no_corpus()
+  with_doctored_schema_version(4L, {
+    r <- cog_spending("121011212191", 2019L, "Police", basis = "raw")
+    expect_equal(attr(r, "provenance")$basis, "raw")
+    expect_gt(nrow(r), 0L)
+  })
+})

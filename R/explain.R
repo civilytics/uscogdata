@@ -51,6 +51,15 @@ cog_explain <- function(result, format = c("print", "list")) {
     cli::cli_text("Category: (all)")
   }
 
+  if (!is.null(prov$basis)) {
+    note <- if (!is.null(prov$basis_note) && !is.na(prov$basis_note)) {
+      sprintf(" (%s)", prov$basis_note)
+    } else {
+      ""
+    }
+    cli::cli_text("Basis: {prov$basis}{note}")
+  }
+
   cli::cli_h2("Codes observed")
   codes <- prov$codes_summed$observed
   if (length(codes) == 0L) {
@@ -64,6 +73,39 @@ cog_explain <- function(result, format = c("print", "list")) {
     cli::cli_alert_warning(
       "Aggregate fallback used for years: {paste(prov$aggregate_fallback$years, collapse = ', ')}"
     )
+  }
+
+  h <- prov$harmonization
+  if (!is.null(h) && isTRUE(h$applied)) {
+    cli::cli_h2("Harmonization")
+    cli::cli_text(
+      "Excluded {h$na_rows_excluded} row(s) with no harmonized_code (${format(h$na_amount_excluded, big.mark = ',')})"
+    )
+  }
+
+  rc <- prov$recipe
+  if (!is.null(rc)) {
+    cli::cli_h2("Recipe")
+    cli::cli_text("{rc$recipe_id}: {rc$label}")
+    comp_lines <- vapply(rc$components, function(x) {
+      sprintf("%s (%s, %s-%s, weight=%s)", x$component_code, x$gov_type_scope,
+              x$year_min, x$year_max, x$weight)
+    }, character(1))
+    cli::cli_ul(comp_lines)
+  }
+
+  if (length(prov$suggestions) > 0L) {
+    cli::cli_h2("Suggestions")
+    sugg_lines <- vapply(prov$suggestions, function(s) {
+      sprintf("%s -- %s (years %s-%s): %s", s$recipe_id, s$label,
+              s$available_years[1], s$available_years[2], s$hint)
+    }, character(1))
+    cli::cli_ul(sugg_lines)
+  }
+
+  if (length(prov$series_break_refs) > 0L) {
+    cli::cli_h2("Series breaks")
+    cli::cli_ul(.series_break_story_lines(prov$series_break_refs))
   }
 
   cli::cli_h2("Transformations")
@@ -107,6 +149,28 @@ cog_explain <- function(result, format = c("print", "list")) {
   )
 
   invisible(NULL)
+}
+
+# One "break-story" line per referenced break_id: "SB109 (2005): <join_advice>".
+# Re-queries series_breaks_pq for the detail (break_year, join_advice) that
+# provenance$series_break_refs deliberately doesn't carry (the schema keeps
+# that field to a plain id array). Falls back to bare ids if no session is
+# available (e.g. explaining a result after cog_close()) rather than
+# erroring cog_explain() over a cosmetic detail.
+#' @noRd
+.series_break_story_lines <- function(break_ids) {
+  con <- tryCatch(.ensure_session(), error = function(e) NULL)
+  if (is.null(con) || !DBI::dbIsValid(con)) return(break_ids)
+  detail <- tryCatch(
+    DBI::dbGetQuery(con, sprintf(
+      "SELECT break_id, break_year, join_advice FROM series_breaks_pq
+       WHERE break_id IN (%s) ORDER BY break_id",
+      .sql_lit_chr(break_ids)
+    )),
+    error = function(e) NULL
+  )
+  if (is.null(detail) || nrow(detail) == 0L) return(break_ids)
+  sprintf("%s (%s): %s", detail$break_id, detail$break_year, detail$join_advice)
 }
 
 # Expand a 2-digit Census popyear (e.g. 19) to a 4-digit calendar year (2019).

@@ -128,11 +128,11 @@
 }
 
 #' @noRd
-.validate_schema <- function(manifest, expected_version) {
-  if (manifest$schema_version != expected_version) {
+.validate_schema <- function(manifest, supported = c(4L, 5L)) {
+  if (!manifest$schema_version %in% supported) {
     cli::cli_abort(c(
       "Corpus schema version mismatch.",
-      x = "Package expects schema_version = {expected_version}; corpus has {manifest$schema_version}.",
+      x = "Package supports schema_version in {paste(supported, collapse = ', ')}; corpus has {manifest$schema_version}.",
       i = "Update uscogdata (install.packages or pak::pkg_install) or re-publish corpus."
     ))
   }

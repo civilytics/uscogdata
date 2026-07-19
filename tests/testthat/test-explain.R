@@ -31,6 +31,45 @@ test_that("cog_explain errors on non-verb input", {
   expect_error(cog_explain(df), "provenance")
 })
 
+test_that("cog_explain prints basis + harmonization block", {
+  skip_if_no_corpus()
+  r <- cog_spending("121011212191", 2020L, "Corrections")
+  txt <- paste(c(
+    capture.output(cog_explain(r)),
+    capture.output(cog_explain(r), type = "message")
+  ), collapse = "\n")
+  expect_true(grepl("Basis: harmonized", txt))
+  expect_true(grepl("Harmonization", txt))
+  expect_true(grepl("Excluded 0 row", txt))
+})
+
+test_that("cog_explain prints a Recipe section for recipe = results", {
+  skip_if_no_corpus()
+  r <- cog_spending("121011212191", c(2011L, 2012L), recipe = "corrections_combined")
+  txt <- paste(c(
+    capture.output(cog_explain(r)),
+    capture.output(cog_explain(r), type = "message")
+  ), collapse = "\n")
+  expect_true(grepl("Recipe", txt))
+  expect_true(grepl("corrections_combined", txt))
+  expect_true(grepl("E04", txt))
+  expect_true(grepl("E05", txt))
+})
+
+test_that("cog_explain prints a Suggestions section when the provenance has one", {
+  skip_if_no_corpus()
+  r <- suppressMessages(
+    cog_spending("121011212191", c(2011L, 2012L), category = "Corrections")
+  )
+  txt <- paste(c(
+    capture.output(cog_explain(r)),
+    capture.output(cog_explain(r), type = "message")
+  ), collapse = "\n")
+  expect_true(grepl("Suggestions", txt))
+  expect_true(grepl("corrections_combined", txt))
+  expect_true(grepl("re-run with recipe", txt))
+})
+
 test_that("cog_explain prints denominator + popyear_range + counts", {
   skip_if_no_corpus()
   with_fixture_corpus({

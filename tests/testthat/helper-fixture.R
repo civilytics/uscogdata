@@ -26,3 +26,34 @@ with_fixture_corpus <- function(code) {
   }, add = TRUE)
   force(code)
 }
+
+# Copy the bundled fixture to a temp dir with manifest.json's schema_version
+# patched to `version`, then run `code` against it with a clean session
+# (mirrors with_fixture_corpus()). Used to exercise the v4/v5 dual-accept
+# path without a second physical fixture tree: a real v4 corpus has no
+# harmonization_map/harmonization_recipes/series_breaks parquet files, but
+# .register_views() only *reads* those when schema_version >= 5 (see
+# R/views.R), so a doctored copy of the (v5) bundled fixture with the
+# manifest's schema_version knocked down to 4 is a faithful stand-in.
+with_doctored_schema_version <- function(version, code) {
+  src <- fixture_corpus_path()
+  tmp <- withr::local_tempdir(.local_envir = parent.frame())
+  file.copy(list.files(src, full.names = TRUE), tmp, recursive = TRUE)
+
+  manifest_path <- file.path(tmp, "manifest.json")
+  m <- jsonlite::fromJSON(manifest_path, simplifyVector = FALSE)
+  m$schema_version <- as.integer(version)
+  writeLines(
+    jsonlite::toJSON(m, auto_unbox = TRUE, pretty = TRUE, null = "null"),
+    manifest_path
+  )
+
+  old_url <- Sys.getenv("USCOGDATA_URL", unset = NA)
+  uscogdata:::cog_close()
+  Sys.setenv(USCOGDATA_URL = paste0(tmp, "/"))
+  on.exit({
+    uscogdata:::cog_close()
+    if (is.na(old_url)) Sys.unsetenv("USCOGDATA_URL") else Sys.setenv(USCOGDATA_URL = old_url)
+  }, add = TRUE)
+  force(code)
+}
