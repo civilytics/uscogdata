@@ -15,7 +15,7 @@
 #' @export
 cog_revenue <- function(govid, years, category = NULL,
                         per_capita = FALSE, adjust_to_year = NULL,
-                        basis = c("harmonized", "raw")) {
+                        basis = c("harmonized", "raw"), recipe = NULL) {
   .verb_spendrev(
     verb           = "cog_revenue",
     view_base      = "revenue_annotated",
@@ -27,6 +27,7 @@ cog_revenue <- function(govid, years, category = NULL,
     category       = category,
     per_capita     = per_capita,
     adjust_to_year = adjust_to_year,
-    basis          = basis
+    basis          = basis,
+    recipe         = recipe
   )
 }

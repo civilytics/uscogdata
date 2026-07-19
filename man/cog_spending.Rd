@@ -10,7 +10,8 @@ cog_spending(
   category = NULL,
   per_capita = FALSE,
   adjust_to_year = NULL,
-  basis = c("harmonized", "raw")
+  basis = c("harmonized", "raw"),
+  recipe = NULL
 )
 }
 \arguments{
@@ -40,6 +41,13 @@ folding). On a corpus with `schema_version < 5` (no harmonization
 tables), `basis` silently resolves to `"raw"` when left at its default
 and the resolution is recorded in the provenance; explicitly passing
 `basis = "harmonized"` on such a corpus aborts.}
+
+\item{recipe}{Optional harmonization recipe id (see [cog_recipes()]) for
+multi-code cross-vintage series that a 1:1 harmonized_code mapping
+can't express (e.g. a wide-era aggregate that only splits into leaf
+codes in the modern era). Mutually exclusive with `category`. The
+result's subtype column reads `"recipe"` and `category` reads the
+recipe's label. Requires `schema_version >= 5`.}
 }
 \value{
 Tibble with columns `year`, `canonical_govid`, `gov_name`,

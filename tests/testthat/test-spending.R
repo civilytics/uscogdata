@@ -292,6 +292,21 @@ test_that("v4 corpus: explicit basis = 'harmonized' aborts", {
   })
 })
 
+test_that("provenance$series_break_refs is a populated-when-applicable character vector", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- cog_spending("121011212191", 2020L, "Corrections")
+    refs <- attr(r, "provenance")$series_break_refs
+    expect_type(refs, "character")
+    # No catalogued series_breaks_pq row falls inside this fixture's
+    # 2011/2012/2019/2020 window for the codes this query touches (E04/G04)
+    # -- data-verified; the mechanism itself is what's under test here, via
+    # a query-shaped unit test in test-views.R since the fixture has no
+    # positive case to pin against.
+    expect_equal(refs, character(0))
+  })
+})
+
 test_that("v4 corpus: explicit basis = 'raw' still works", {
   skip_if_no_corpus()
   with_doctored_schema_version(4L, {

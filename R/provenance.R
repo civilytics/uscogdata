@@ -6,7 +6,8 @@
                               per_capita, adjust_to_year, result, sql,
                               subtype_col, basis = NA_character_,
                               basis_note = NA_character_,
-                              harmonization = NULL) {
+                              harmonization = NULL, recipe = NULL,
+                              suggestions = list()) {
   manifest <- .uscogdata_env$manifest
 
   codes <- result[["codes_included"]]
@@ -31,6 +32,14 @@
     unique(result$gov_name)
   }
 
+  schema_version <- suppressWarnings(as.integer(manifest$schema_version %||% 0L))
+  con <- .uscogdata_env$con
+  break_refs <- if (!is.null(con) && DBI::dbIsValid(con)) {
+    .build_series_break_refs(con, codes_observed, years, schema_version)
+  } else {
+    character(0)
+  }
+
   list(
     verb = verb,
     call = paste(deparse(call), collapse = " "),
@@ -46,6 +55,8 @@
       applied = FALSE, na_rows_excluded = 0L, na_amount_excluded = 0,
       note = NA_character_
     ),
+    recipe = recipe,
+    suggestions = suggestions,
     scope = list(
       gov_types_included = as.integer(unlist(manifest$scope$gov_types_included)),
       gov_types_excluded = as.integer(unlist(manifest$scope$gov_types_excluded)),
@@ -98,7 +109,7 @@
         index = if (is.null(adjust_to_year)) NA_character_ else "CPI-U (BLS CPIAUCSL annual average, bundled)"
       )
     ),
-    series_break_refs = character(0),
+    series_break_refs = break_refs,
     manifest = list(
       schema_version = as.integer(manifest$schema_version),
       pipeline_commit = manifest$pipeline_commit %||% NA_character_,

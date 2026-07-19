@@ -29,6 +29,12 @@
 #'   tables), `basis` silently resolves to `"raw"` when left at its default
 #'   and the resolution is recorded in the provenance; explicitly passing
 #'   `basis = "harmonized"` on such a corpus aborts.
+#' @param recipe Optional harmonization recipe id (see [cog_recipes()]) for
+#'   multi-code cross-vintage series that a 1:1 harmonized_code mapping
+#'   can't express (e.g. a wide-era aggregate that only splits into leaf
+#'   codes in the modern era). Mutually exclusive with `category`. The
+#'   result's subtype column reads `"recipe"` and `category` reads the
+#'   recipe's label. Requires `schema_version >= 5`.
 #' @return Tibble with columns `year`, `canonical_govid`, `gov_name`,
 #'   `spend_subtype`, `category`, `amt_nominal`, optional `amt_real`,
 #'   optional `amt_per_capita_nominal`, optional `amt_per_capita_real`,
@@ -37,7 +43,7 @@
 #' @export
 cog_spending <- function(govid, years, category = NULL,
                          per_capita = FALSE, adjust_to_year = NULL,
-                         basis = c("harmonized", "raw")) {
+                         basis = c("harmonized", "raw"), recipe = NULL) {
   .verb_spendrev(
     verb          = "cog_spending",
     view_base     = "spending_annotated",
@@ -49,7 +55,8 @@ cog_spending <- function(govid, years, category = NULL,
     category      = category,
     per_capita    = per_capita,
     adjust_to_year = adjust_to_year,
-    basis         = basis
+    basis         = basis,
+    recipe        = recipe
   )
 }
 
@@ -57,12 +64,13 @@ cog_spending <- function(govid, years, category = NULL,
 .verb_spendrev <- function(verb, view_base, subtype_col, flow_prefixes, call,
                            govid, years, category,
                            per_capita, adjust_to_year,
-                           basis = c("harmonized", "raw")) {
+                           basis = c("harmonized", "raw"), recipe = NULL) {
   basis_explicit <- length(basis) == 1L
   basis <- match.arg(basis, c("harmonized", "raw"))
 
   govid <- .coerce_govid_input(govid, arg = "govid")
-  .validate_verb_inputs(govid, years, category, per_capita, adjust_to_year)
+  .validate_verb_inputs(govid, years, category, per_capita, adjust_to_year,
+                        recipe)
 
   years   <- as.integer(years)
   if (!is.null(adjust_to_year)) adjust_to_year <- as.integer(adjust_to_year)
@@ -73,9 +81,26 @@ cog_spending <- function(govid, years, category = NULL,
 
   resolved <- .resolve_basis(basis, basis_explicit, manifest)
 
-  view <- .select_view(view_base, resolved$basis)
-  sql <- .build_verb_sql(view, subtype_col, govid, years, category)
-  result <- tibble::as_tibble(DBI::dbGetQuery(con, sql))
+  recipe_block <- NULL
+  category_for_prov <- category
+  if (!is.null(recipe)) {
+    .require_schema_v5(con, manifest, "recipe =")
+    .validate_recipe_id(con, recipe)
+    comps <- .recipe_components(con, recipe)
+    recipe_label <- comps$label[[1]]
+    result <- .run_recipe(con, recipe, govid, years)
+    sql <- attr(result, "sql_query")
+    result <- .shape_recipe_result(result, subtype_col, recipe_label)
+    recipe_block <- list(
+      recipe_id = recipe, label = recipe_label,
+      components = .df_to_row_list(comps)
+    )
+    category_for_prov <- recipe_label
+  } else {
+    view <- .select_view(view_base, resolved$basis)
+    sql <- .build_verb_sql(view, subtype_col, govid, years, category)
+    result <- tibble::as_tibble(DBI::dbGetQuery(con, sql))
+  }
 
   if (per_capita) result <- .attach_per_capita(result, con, govid)
   if (!is.null(adjust_to_year)) {
@@ -88,12 +113,18 @@ cog_spending <- function(govid, years, category = NULL,
     con, govid, years, resolved, flow_prefixes
   )
 
+  suggestions <- if (is.null(recipe)) {
+    .build_suggestions(con, govid, years, category, result, resolved$basis)
+  } else {
+    list()
+  }
+
   prov <- .build_provenance(
     verb           = verb,
     call           = call,
     govid          = govid,
     years          = years,
-    category       = category,
+    category       = category_for_prov,
     per_capita     = per_capita,
     adjust_to_year = adjust_to_year,
     result         = result,
@@ -101,18 +132,23 @@ cog_spending <- function(govid, years, category = NULL,
     subtype_col    = subtype_col,
     basis          = resolved$basis,
     basis_note     = resolved$note,
-    harmonization  = harmonization
+    harmonization  = harmonization,
+    recipe         = recipe_block,
+    suggestions    = suggestions
   )
   prov$scope$govids_found   <- scope$found
   prov$scope$govids_missing <- scope$missing
   attr(result, "provenance") <- prov
   attr(result, ".popyear_range") <- NULL
+
+  if (length(suggestions) > 0L) .inform_suggestions(suggestions)
+
   result
 }
 
 #' @noRd
 .validate_verb_inputs <- function(govid, years, category,
-                                  per_capita, adjust_to_year) {
+                                  per_capita, adjust_to_year, recipe = NULL) {
   if (!is.character(govid) || length(govid) == 0L) {
     cli::cli_abort("`govid` must be a non-empty character vector.")
   }
@@ -129,6 +165,17 @@ cog_spending <- function(govid, years, category = NULL,
     if (!(is.integer(adjust_to_year) || is.numeric(adjust_to_year)) ||
         length(adjust_to_year) != 1L) {
       cli::cli_abort("`adjust_to_year` must be NULL or a length-1 integer.")
+    }
+  }
+  if (!is.null(recipe)) {
+    if (!is.character(recipe) || length(recipe) != 1L) {
+      cli::cli_abort("`recipe` must be NULL or a length-1 character string.")
+    }
+    if (!is.null(category)) {
+      cli::cli_abort(c(
+        "`recipe` and `category` are mutually exclusive.",
+        i = "Pass one or the other, not both."
+      ), class = "uscogdata_recipe_category_conflict")
     }
   }
   invisible(TRUE)
