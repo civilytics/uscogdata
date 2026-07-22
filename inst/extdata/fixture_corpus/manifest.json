@@ -1,11 +1,24 @@
 {
-  "schema_version": 5,
-  "built_at": "2026-07-19T03:08:41Z",
-  "pipeline_commit": "ece9b32",
+  "schema_version": 6,
+  "built_at": "2026-07-22T17:12:32Z",
+  "pipeline_commit": "62bc1b6",
   "fixture_note": "Four-year (2011, 2012, 2019, 2020) fixture for uscogdata tests. Full corpus available via USCOGDATA_URL. Regenerated for Phase R2 (schema_version 5, harmonization_map/harmonization_recipes/ series_breaks parquet tables added). 2011/2012 straddle the wide-aggregate -> modern-leaf format boundary exercised by basis= \"harmonized\" and recipe= queries; 2019/2020 retain the prior per-capita/CPI regression anchors. Full canonical_fips_xwalk master and canonical_alias lookup table included via data-raw/regenerate_fixture_corpus.R.",
   "data_vintage": {
-    "census_source_downloaded": "unknown",
-    "cpi_vintage": "FRED CPIAUCSL",
+    "source_vintages": {
+      "2012": "10162019",
+      "2013": "10162019",
+      "2014": "10162019",
+      "2015": "10162019",
+      "2016": "10162019",
+      "2017": "06102021",
+      "2018": "06102021",
+      "2019": "06102021",
+      "2020": "06122023",
+      "2021": "06122023",
+      "2022": "06052025",
+      "2023": "06052025"
+    },
+    "registry_rows": 148,
     "acs_vintage": "ACS 2018-2022 5-year"
   },
   "scope": {
@@ -14,8 +27,8 @@
     "scope_note": "v0.1 covers state, county, city/municipality, and township governments. Special districts (type 4) and school districts (type 5) are excluded pending validation in a future cycle."
   },
   "schema": {
-    "long_column_count": 26,
-    "long_columns": ["fips_state", "type", "fips_county", "govid", "gov_blank", "gov_name", "county_name", "fips_state_code", "fips_county_code", "fips_place_code", "population", "popyear", "enrollment", "enrollyear", "function_code", "sch_level_code", "fiscal_year_end", "srvy_year", "item_code", "amt", "srv_data", "impute_flag", "is_aggregate", "canonical_govid", "harmonized_code", "survey_weight"],
+    "long_column_count": 28,
+    "long_columns": ["fips_state", "type", "fips_county", "govid", "gov_blank", "gov_name", "county_name", "fips_state_asof", "fips_county_asof", "cog_legacy_state", "cog_legacy_county", "fips_place_code", "population", "popyear", "enrollment", "enrollyear", "function_code", "sch_level_code", "fiscal_year_end", "srvy_year", "item_code", "amt", "srv_data", "impute_flag", "is_aggregate", "canonical_govid", "harmonized_code", "survey_weight"],
     "data_dictionary": "docs/data_dictionary.md"
   },
   "files": {
@@ -23,41 +36,41 @@
       {
         "year": 2011,
         "path": "data/long/year=2011/part-0.parquet",
-        "sha256": "76c2153ef0a94c3551a24751aa08225fc937fafb579f10fd0750848d781dc471",
+        "sha256": "485a1639bfe2aec90fbbb596e410f18c5881b3f496ba6b0a9f742525c3c1f0af",
         "row_count": 3037606,
-        "size_bytes": 4985667
+        "size_bytes": 4650038
       },
       {
         "year": 2012,
         "path": "data/long/year=2012/part-0.parquet",
-        "sha256": "a9bb10d04887490376a4b030a03a4ca1e0f1f9fbca5f7d99ea7ca7434c42b2bc",
+        "sha256": "b82ac82d5e35f844b26c887445601f3748438c52c998ba4e403b025941a6f170",
         "row_count": 1163338,
-        "size_bytes": 5900191
+        "size_bytes": 5929917
       },
       {
         "year": 2019,
         "path": "data/long/year=2019/part-0.parquet",
-        "sha256": "475481fcfbb030f96cae457cbda824512a2da6f97f4c6d12a75130979e4331f9",
+        "sha256": "5cbd4726dcc7d0dab5c2a05a64702e979533ae119ed0587073cd31c089e0d737",
         "row_count": 318139,
-        "size_bytes": 1717345
+        "size_bytes": 1719548
       },
       {
         "year": 2020,
         "path": "data/long/year=2020/part-0.parquet",
-        "sha256": "7cdf3eb1a73c34e6a3d22befdf7ccdd0b44b1e6b1cf4491159a38a5a24a1b005",
+        "sha256": "ee548fec80bf1beda844fe03916ac145f10dd34c45968407cc330ec260935f00",
         "row_count": 317500,
-        "size_bytes": 1720794
+        "size_bytes": 1722918
       }
     ],
     "metadata": [
       {
         "path": "data/canonical_alias.parquet",
-        "sha256": "fa27ce4b59e286ace05fbcb9f59a910b8e483fd6c58ddf01875a210b966809cb",
+        "sha256": "3f617051c23a99bea322889857f7106df0c92954564afeec181df7083ee6698e",
         "description": "canonical_alias.parquet"
       },
       {
         "path": "data/canonical_fips_xwalk.parquet",
-        "sha256": "b6e2c4cb748141f6f2e324d6704c13830d2a68ad57bbb73d04ac54b881d1285b",
+        "sha256": "f98742f941269dacf8f7de5c273aa4dd4e75017a5bb70c054da35852a95a8d46",
         "description": "canonical_fips_xwalk.parquet"
       },
       {
@@ -67,7 +80,7 @@
       },
       {
         "path": "data/harmonization_map.parquet",
-        "sha256": "52b4f3f94e65231aa869445946df7a0cfebf8fef1940f800e08287b53d09ab42",
+        "sha256": "4cf32d0f817079ba4f28dc0ce65450d3247ebbf08d94c0c26c0d02af597bf812",
         "description": "harmonization_map.parquet"
       },
       {
@@ -77,7 +90,7 @@
       },
       {
         "path": "data/series_breaks.parquet",
-        "sha256": "049bd7365dae14e357f6e57765dc5a069440bab46facce237d7ba2ec94b0b113",
+        "sha256": "b0b6794b6887a4f300079adfa10029c2a77109faa4952fbff1c5a270793cc02b",
         "description": "series_breaks.parquet"
       }
     ]

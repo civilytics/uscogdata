@@ -111,15 +111,20 @@ test_that("cog_manifest returns the active session's parsed manifest", {
   })
 })
 
-test_that(".validate_schema accepts schema_version 4 and 5, rejects others", {
+test_that(".validate_schema accepts schema_version 4, 5 and 6, rejects others", {
   expect_silent(uscogdata:::.validate_schema(list(schema_version = 4L)))
   expect_silent(uscogdata:::.validate_schema(list(schema_version = 5L)))
+  # v6 = FIPS geography harmonization (2026-07-22): _code -> _asof rename +
+  # cog_legacy_* columns (26 -> 28 cols). This package references none of the
+  # renamed columns and its geography comes from the xwalk, so v6 is accepted
+  # without behavioural change -- see .validate_schema()'s note.
+  expect_silent(uscogdata:::.validate_schema(list(schema_version = 6L)))
   expect_error(
     uscogdata:::.validate_schema(list(schema_version = 3L)),
     "schema_version"
   )
   expect_error(
-    uscogdata:::.validate_schema(list(schema_version = 6L)),
+    uscogdata:::.validate_schema(list(schema_version = 7L)),
     "schema_version"
   )
 })
