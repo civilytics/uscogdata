@@ -250,12 +250,17 @@ test_that("provenance carries basis + harmonization block with na_rows_excluded"
     expect_true(prov$harmonization$applied)
     expect_true(prov$harmonization$na_rows_excluded >= 0L)
     expect_true(prov$harmonization$na_amount_excluded >= 0)
-    # Data-verified for this fixture: none of the discontinued_na rulings
-    # (S74, Z61, X04, X06, the debt-detail family, L24) fall inside the
-    # E/F/G/K spending prefixes, so the exclusion count is exactly zero for
-    # every year in the bundled window -- see
-    # docs/phase_r_harmonization_review.md § 1.3/1.4.
-    expect_equal(prov$harmonization$na_rows_excluded, 0L)
+    # Data-verified for the v6 fixture (corpus 2026-07-22). The Task 18 map
+    # extension added E/F/G-prefix discontinued_na rulings the earlier pin's
+    # comment predated: E21/F21/G21 (Education NEC local, SB184-186,
+    # "trivial; explicit-NA, full wide-era window"). Broward's 2011 legacy
+    # partition zero-pads exactly those three codes, so this query now
+    # excludes 3 NA-harmonized rows -- all with amt = 0, hence the excluded
+    # AMOUNT stays exactly zero. (The other discontinued_na rulings -- S74,
+    # Z61, X04, X06, the debt-detail family, L24 -- remain outside the
+    # E/F/G/K prefixes.) See docs/phase_r_harmonization_review.md § 1.3/1.4
+    # and cog_pipeline data/harmonization_map.csv E21/F21/G21 rows.
+    expect_equal(prov$harmonization$na_rows_excluded, 3L)
     expect_equal(prov$harmonization$na_amount_excluded, 0)
   })
 })

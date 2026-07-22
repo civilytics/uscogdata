@@ -128,7 +128,17 @@
 }
 
 #' @noRd
-.validate_schema <- function(manifest, supported = c(4L, 5L)) {
+#' Schema v6 (FIPS geography harmonization, 2026-07-22) is accepted alongside
+#' 4/5. v6 renamed the long table's fips_state_code/fips_county_code to
+#' fips_state_asof/fips_county_asof and added cog_legacy_state/
+#' cog_legacy_county (26 -> 28 cols); this package references NONE of those
+#' columns, so no code change was needed. NOTE the SILENT semantic change for
+#' any consumer of the raw long table: long fips_state/fips_county are now
+#' PRESENT/harmonized geography (current county identity carried back to every
+#' year, matching canonical_fips_xwalk) rather than as-of-year; as-of-year
+#' moved to the *_asof columns. This package's own geography always came from
+#' the xwalk (already present-based), so behaviour is unchanged.
+.validate_schema <- function(manifest, supported = c(4L, 5L, 6L)) {
   if (!manifest$schema_version %in% supported) {
     cli::cli_abort(c(
       "Corpus schema version mismatch.",
