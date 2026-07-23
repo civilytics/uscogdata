@@ -1,7 +1,7 @@
 {
   "schema_version": 6,
-  "built_at": "2026-07-22T17:12:32Z",
-  "pipeline_commit": "62bc1b6",
+  "built_at": "2026-07-23T16:14:30Z",
+  "pipeline_commit": "4f992a0",
   "fixture_note": "Four-year (2011, 2012, 2019, 2020) fixture for uscogdata tests. Full corpus available via USCOGDATA_URL. Regenerated for Phase R2 (schema_version 5, harmonization_map/harmonization_recipes/ series_breaks parquet tables added). 2011/2012 straddle the wide-aggregate -> modern-leaf format boundary exercised by basis= \"harmonized\" and recipe= queries; 2019/2020 retain the prior per-capita/CPI regression anchors. Full canonical_fips_xwalk master and canonical_alias lookup table included via data-raw/regenerate_fixture_corpus.R.",
   "data_vintage": {
     "source_vintages": {
@@ -36,9 +36,9 @@
       {
         "year": 2011,
         "path": "data/long/year=2011/part-0.parquet",
-        "sha256": "485a1639bfe2aec90fbbb596e410f18c5881b3f496ba6b0a9f742525c3c1f0af",
-        "row_count": 3037606,
-        "size_bytes": 4650038
+        "sha256": "84302ab364dc9fc3b3fbbc3c3f8b826e3508b4d73ff7c42d094d3863cd1e37b5",
+        "row_count": 2864212,
+        "size_bytes": 3845911
       },
       {
         "year": 2012,
