@@ -21,7 +21,30 @@
   .uscogdata_defaults[[key]]
 }
 
-.resolve_url <- function() .cfg("url")
+#' Resolve the corpus URL, guaranteeing the trailing slash the package assumes.
+#'
+#' Every consumer builds locations by CONCATENATION -- `paste0(url,
+#' "manifest.json")` in manifest.R, `paste0(url, e$path)` in mirror.R, and the
+#' parquet glob in views.R -- and mirror.R:104 documents the invariant outright
+#' ('url ends in "/"'). Nothing enforced it, so a URL entered without the slash
+#' failed silently and misleadingly:
+#'
+#'   HTTPS -> ".../downloadmanifest.json"; the host answers with an HTML 404
+#'            page, which lands in the JSON parser as the lexical error
+#'            reported in issue #3 -- pointing the user at "login page / wrong
+#'            share" when the real cause was one missing character.
+#'   local -> ".../corpusdata/long/**/*.parquet" and a DuckDB "No files found".
+#'
+#' Normalizing here fixes every consumer at once, rather than each call site
+#' re-deriving the same invariant. An empty setting is passed through
+#' untouched so manifest.R's "not configured" guard still fires instead of the
+#' value degrading into a bare "/" filesystem root.
+#' @noRd
+.resolve_url <- function() {
+  url <- .cfg("url")
+  if (is.null(url) || !nzchar(url) || grepl("/$", url)) return(url)
+  paste0(url, "/")
+}
 
 .resolve_cache_dir <- function() {
   v <- .cfg("cache_dir")

@@ -26,3 +26,41 @@ test_that(".resolve_cache_dir falls back to R_user_dir", {
     })
   })
 })
+
+# ---------------------------------------------------------------------------
+# Trailing-slash normalization (uscogdata #3 follow-up).
+#
+# EVERY consumer builds paths by concatenation: paste0(url, "manifest.json")
+# (manifest.R), paste0(url, e$path) (mirror.R), and the parquet glob in
+# views.R. mirror.R:104 even comments 'url ends in "/"' -- an assumption the
+# package documents and relies on but never enforced.
+#
+# A URL missing its trailing slash therefore fails SILENTLY and confusingly:
+#   HTTPS -> ".../downloadmanifest.json" -> the host answers with an HTML 404
+#            page -> the jsonlite lexical error that issue #3 reported;
+#   local -> ".../corpusdata/long/**/*.parquet" -> DuckDB "No files found".
+# Neither message points at the real cause. Normalize once, at resolution.
+# ---------------------------------------------------------------------------
+
+test_that(".resolve_url appends a missing trailing slash", {
+  withr::local_envvar(USCOGDATA_URL = "https://example.org/s/TOKEN/download")
+  expect_equal(.resolve_url(), "https://example.org/s/TOKEN/download/")
+})
+
+test_that(".resolve_url leaves an existing trailing slash alone", {
+  withr::local_envvar(USCOGDATA_URL = "https://example.org/s/TOKEN/download/")
+  expect_equal(.resolve_url(), "https://example.org/s/TOKEN/download/")
+})
+
+test_that(".resolve_url normalizes a local path without a trailing slash", {
+  withr::local_envvar(USCOGDATA_URL = "/tmp/corpus")
+  expect_equal(.resolve_url(), "/tmp/corpus/")
+})
+
+test_that(".resolve_url does not invent a slash for an empty setting", {
+  # An unset/empty URL must stay empty so the "not configured" guard in
+  # manifest.R still fires, rather than degrading into a bare "/" root.
+  withr::local_envvar(USCOGDATA_URL = "")
+  withr::local_options(uscogdata.url = "")
+  expect_equal(.resolve_url(), "")
+})
