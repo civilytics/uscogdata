@@ -219,11 +219,28 @@ test_that("the refusal message names the fix and the reason", {
   msg <- paste(conditionMessage(err), collapse = " ")
   expect_match(msg, "direct")
   expect_match(msg, "double-count|double count")
+  expect_match(msg, "cog_geographic_rollup")
+
+  # Test that cog_peer_compare's message names its own function
+  err2 <- tryCatch(
+    cog_peer_compare(target_govid = "010000226085", peers = "010000226085",
+                     category = "Police", years = 2019,
+                     expenditure_concept = "total"),
+    condition = function(e) e
+  )
+  msg2 <- paste(conditionMessage(err2), collapse = " ")
+  expect_match(msg2, "direct")
+  expect_match(msg2, "double-count|double count")
+  expect_match(msg2, "cog_peer_compare")
 })
 
 test_that("both cross-government verbs still accept the direct default", {
   expect_no_error(
     cog_geographic_rollup(govids = list(state = "010000226085"),
                           category = "Police", years = 2019)
+  )
+  expect_no_error(
+    cog_peer_compare(target_govid = "010000226085", peers = "010000226085",
+                     category = "Police", years = 2019)
   )
 })
