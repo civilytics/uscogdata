@@ -220,6 +220,14 @@ cog_spending <- function(govid, years, category = NULL,
     suggestions <- .build_suggestions(con, govid, years, category, result, resolved$basis)
   }
 
+  # Determine expenditure_concept_note: only non-empty for "total", explains
+  # how the IG leg was assembled from legacy-era aggregates.
+  expenditure_concept_note_for_prov <- if (identical(expenditure_concept, "total")) {
+    "Total = Direct + intergovernmental (M to local govts + L to state govts). Legacy-era IG is assembled from aggregate-flagged rows, which are year-disjoint from their modern leaf components; the L-- family total is excluded."
+  } else {
+    NA_character_
+  }
+
   prov <- .build_provenance(
     verb           = verb,
     call           = call,
@@ -233,6 +241,8 @@ cog_spending <- function(govid, years, category = NULL,
     subtype_col    = subtype_col,
     basis          = basis_for_prov,
     basis_note     = basis_note_for_prov,
+    expenditure_concept = expenditure_concept,
+    expenditure_concept_note = expenditure_concept_note_for_prov,
     harmonization  = harmonization,
     recipe         = recipe_block,
     suggestions    = suggestions

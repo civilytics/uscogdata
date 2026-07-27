@@ -244,3 +244,23 @@ test_that("both cross-government verbs still accept the direct default", {
                      category = "Police", years = 2019)
   )
 })
+
+test_that("provenance always records the expenditure concept", {
+  d <- cog_spending("010000226085", years = 2019, category = "Police")
+  t <- cog_spending("010000226085", years = 2019, category = "Police",
+                    expenditure_concept = "total")
+  expect_equal(attr(d, "provenance")$expenditure_concept, "direct")
+  expect_equal(attr(t, "provenance")$expenditure_concept, "total")
+  # The note explains the non-obvious part: how legacy IG was assembled.
+  expect_true(nzchar(attr(t, "provenance")$expenditure_concept_note))
+  expect_true(is.na(attr(d, "provenance")$expenditure_concept_note) ||
+              !nzchar(attr(d, "provenance")$expenditure_concept_note))
+})
+
+test_that("the provenance schema documents expenditure_concept", {
+  sch <- jsonlite::fromJSON(
+    system.file("schemas", "provenance-v1.json", package = "uscogdata"),
+    simplifyVector = FALSE
+  )
+  expect_true("expenditure_concept" %in% names(sch$properties))
+})

@@ -12,6 +12,15 @@
     "category":       { "type": ["string", "array", "null"] },
     "basis":          { "type": ["string", "null"] },
     "basis_note":     { "type": ["string", "null"] },
+    "expenditure_concept": {
+      "type": "string",
+      "enum": ["direct", "total"],
+      "description": "Which spending concept produced this result. 'direct' is the government's own E/F/G spending; 'total' adds its intergovernmental payments (M to local governments, L to state governments). Only 'direct' is valid for results combined across governments."
+    },
+    "expenditure_concept_note": {
+      "type": ["string", "null"],
+      "description": "How the intergovernmental leg was assembled; null for 'direct'."
+    },
     "harmonization":  { "type": "object" },
     "recipe":         { "type": ["object", "null"] },
     "suggestions":    { "type": "array" },
