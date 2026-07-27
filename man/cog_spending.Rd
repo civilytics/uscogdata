@@ -11,7 +11,8 @@ cog_spending(
   per_capita = FALSE,
   adjust_to_year = NULL,
   basis = c("harmonized", "raw"),
-  recipe = NULL
+  recipe = NULL,
+  expenditure_concept = c("direct", "total")
 )
 }
 \arguments{
@@ -55,6 +56,15 @@ argument is ignored and the result's provenance reports
 `basis = "recipe"` with an inert `harmonization` block (`applied =
 FALSE`, pointing at the `recipe` block instead) rather than a
 possibly-misleading `"harmonized"`/`"raw"` value.}
+
+\item{expenditure_concept}{`"direct"` (default) returns only the
+government's own direct spending (item codes `E`/`F`/`G`), unchanged
+from prior releases. `"total"` additionally UNIONs in the
+intergovernmental leg -- payments to local governments (`M` codes) and
+to the state government (`L` codes, excluding the `L--` family-total
+rollup) -- so results gain rows with `spend_subtype ==
+"intergovernmental"`. Mutually exclusive with `recipe` (a recipe
+already defines its own component codes).}
 }
 \value{
 Tibble with columns `year`, `canonical_govid`, `gov_name`,

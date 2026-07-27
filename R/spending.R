@@ -42,6 +42,14 @@
 #'   `basis = "recipe"` with an inert `harmonization` block (`applied =
 #'   FALSE`, pointing at the `recipe` block instead) rather than a
 #'   possibly-misleading `"harmonized"`/`"raw"` value.
+#' @param expenditure_concept `"direct"` (default) returns only the
+#'   government's own direct spending (item codes `E`/`F`/`G`), unchanged
+#'   from prior releases. `"total"` additionally UNIONs in the
+#'   intergovernmental leg -- payments to local governments (`M` codes) and
+#'   to the state government (`L` codes, excluding the `L--` family-total
+#'   rollup) -- so results gain rows with `spend_subtype ==
+#'   "intergovernmental"`. Mutually exclusive with `recipe` (a recipe
+#'   already defines its own component codes).
 #' @return Tibble with columns `year`, `canonical_govid`, `gov_name`,
 #'   `spend_subtype`, `category`, `amt_nominal`, optional `amt_real`,
 #'   optional `amt_per_capita_nominal`, optional `amt_per_capita_real`,
@@ -50,7 +58,8 @@
 #' @export
 cog_spending <- function(govid, years, category = NULL,
                          per_capita = FALSE, adjust_to_year = NULL,
-                         basis = c("harmonized", "raw"), recipe = NULL) {
+                         basis = c("harmonized", "raw"), recipe = NULL,
+                         expenditure_concept = c("direct", "total")) {
   .verb_spendrev(
     verb          = "cog_spending",
     view_base     = "spending_annotated",
@@ -63,7 +72,8 @@ cog_spending <- function(govid, years, category = NULL,
     per_capita    = per_capita,
     adjust_to_year = adjust_to_year,
     basis         = basis,
-    recipe        = recipe
+    recipe        = recipe,
+    expenditure_concept = expenditure_concept
   )
 }
 
@@ -71,13 +81,35 @@ cog_spending <- function(govid, years, category = NULL,
 .verb_spendrev <- function(verb, view_base, subtype_col, flow_prefixes, call,
                            govid, years, category,
                            per_capita, adjust_to_year,
-                           basis = c("harmonized", "raw"), recipe = NULL) {
+                           basis = c("harmonized", "raw"), recipe = NULL,
+                           expenditure_concept = c("direct", "total")) {
   basis_explicit <- length(basis) == 1L
   basis <- match.arg(basis, c("harmonized", "raw"))
+  # match.arg() itself throws a base `simpleError`, not an rlang-classed
+  # condition; wrap it so an invalid expenditure_concept aborts consistently
+  # with the rest of this package's validation (cli::cli_abort -> rlang_error).
+  expenditure_concept <- tryCatch(
+    match.arg(expenditure_concept, c("direct", "total")),
+    error = function(e) {
+      cli::cli_abort(
+        "`expenditure_concept` must be one of {.val direct} or {.val total}.",
+        class = "uscogdata_invalid_expenditure_concept",
+        parent = e
+      )
+    }
+  )
 
   govid <- .coerce_govid_input(govid, arg = "govid")
   .validate_verb_inputs(govid, years, category, per_capita, adjust_to_year,
                         recipe)
+
+  if (!is.null(recipe) && identical(expenditure_concept, "total")) {
+    cli::cli_abort(c(
+      "`recipe` and `expenditure_concept = \"total\"` are mutually exclusive.",
+      i = "A recipe defines its own component codes; pass one or the other.",
+      i = "For a recipe's intergovernmental counterpart, use the matching IG recipe (e.g. `corrections_ig_local_combined`)."
+    ), class = "uscogdata_recipe_concept_conflict")
+  }
 
   years   <- as.integer(years)
   if (!is.null(adjust_to_year)) adjust_to_year <- as.integer(adjust_to_year)
@@ -105,7 +137,12 @@ cog_spending <- function(govid, years, category = NULL,
     category_for_prov <- recipe_label
   } else {
     view <- .select_view(view_base, resolved$basis)
-    sql <- .build_verb_sql(view, subtype_col, govid, years, category)
+    ig_view <- if (identical(expenditure_concept, "total")) {
+      .select_ig_view(resolved$basis)
+    } else {
+      NULL
+    }
+    sql <- .build_verb_sql(view, subtype_col, govid, years, category, ig_view)
     result <- tibble::as_tibble(DBI::dbGetQuery(con, sql))
   }
 
@@ -212,19 +249,35 @@ cog_spending <- function(govid, years, category = NULL,
 }
 
 #' @noRd
+.select_ig_view <- function(basis) {
+  if (identical(basis, "harmonized")) "ig_annotated_harmonized" else "ig_annotated"
+}
+
+#' @noRd
 .sql_lit_chr <- function(x) {
   safe <- gsub("'", "''", x, fixed = TRUE)
   paste0("'", safe, "'", collapse = ",")
 }
 
 #' @noRd
-.build_verb_sql <- function(view, subtype_col, govid, years, category) {
+.build_verb_sql <- function(view, subtype_col, govid, years, category,
+                            ig_view = NULL) {
   govid_lit <- .sql_lit_chr(govid)
   years_lit <- paste(as.integer(years), collapse = ",")
   category_pred <- if (is.null(category)) {
     ""
   } else {
     sprintf("AND category IN (%s)", .sql_lit_chr(category))
+  }
+
+  # expenditure_concept = "total" adds the intergovernmental leg. UNION ALL,
+  # never UNION: the two legs are disjoint by item_code prefix (E/F/G vs M/L),
+  # so de-duplication would be pure cost, and a silent row-drop if two
+  # governments ever reported identical values.
+  source_expr <- if (is.null(ig_view)) {
+    view
+  } else {
+    sprintf("(SELECT * FROM %s UNION ALL SELECT * FROM %s)", view, ig_view)
   }
 
   sprintf(
@@ -243,7 +296,7 @@ cog_spending <- function(govid, years, category = NULL,
        %5$s
      GROUP BY year, canonical_govid, gov_name, xwalk_gov_name, %1$s, category
      ORDER BY year, canonical_govid, %1$s, category",
-    subtype_col, view, govid_lit, years_lit, category_pred
+    subtype_col, source_expr, govid_lit, years_lit, category_pred
   )
 }
 

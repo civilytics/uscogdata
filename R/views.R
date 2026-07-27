@@ -13,11 +13,13 @@
 .harmonization_view_files <- c(
   "22-spending_long_harmonized.sql",
   "23-revenue_long_harmonized.sql",
+  "25-ig_long_harmonized.sql",
   "33-harmonization_map.sql",
   "34-harmonization_recipes.sql",
   "35-series_breaks_pq.sql",
   "42-spending_annotated_harmonized.sql",
-  "43-revenue_annotated_harmonized.sql"
+  "43-revenue_annotated_harmonized.sql",
+  "45-ig_annotated_harmonized.sql"
 )
 
 #' Register DuckDB views from inst/sql/ SQL files
