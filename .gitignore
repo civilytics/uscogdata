@@ -9,3 +9,6 @@ docs/
 /Meta/
 .DS_Store
 /.quarto/
+
+# SDD working artifacts (ledger, briefs, review packages) — plans/ stays tracked
+.superpowers/sdd/
