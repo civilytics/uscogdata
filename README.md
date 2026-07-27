@@ -47,9 +47,10 @@ explanation with worked examples.
 ### Testing
 
 The package ships a bundled fixture corpus at `inst/extdata/fixture_corpus/` —
-a 3.6 MB two-year slice (2019 + 2020) of the full corpus covering all 50
-states. `tests/testthat/setup.R` automatically points `USCOGDATA_URL` at this
-fixture, so the full test suite runs offline with no network dependency:
+a 15 MB four-year slice (2011, 2012, 2019, 2020) of the full corpus covering
+all 50 states. `tests/testthat/setup.R` automatically points `USCOGDATA_URL`
+at this fixture, so the full test suite runs offline with no network
+dependency:
 
 ```r
 devtools::test()   # uses bundled fixture, no credentials required

@@ -155,14 +155,15 @@ silently overstating every multi-layer figure it produces.
 # How big is the risk in practice
 
 Intergovernmental transfers aren't evenly distributed by government type.
-Measured on the full published corpus, intergovernmental spending as a
+Measured against the bundled fixture corpus (all 50 states, each of its
+four years -- 2011, 2012, 2019, 2020), intergovernmental spending as a
 share of a government's own Direct spending is:
 
 | Government type | Intergovernmental / Direct |
 |---|---|
 | State  | 17.2% |
-| County | 1.8%  |
-| City   | 0.8%  |
+| County | 3.4%-5.1% (varies by year) |
+| City   | 2.6%-3.1% (varies by year) |
 
 So the Direct/Total choice matters overwhelmingly for **state** governments
 -- a state's Total genuinely differs from its Direct by a meaningful margin,
@@ -174,17 +175,22 @@ for Alabama in FY2019, and 11.6% nationally.
 
 # Why Total = Direct + M + L, not Direct + M
 
-It's tempting to assume `total` only needs to add `M` (payments to local
-governments). But not all of the money a county or city receives arrives
-directly from its state as an `M` payment -- some flows through as `L`
-(payments *to* the state government), which the state government then
-redistributes as `M`. On the published corpus, `L` is 0 for state
-governments (a state has no "payments to the state government" leg of its
-own) but is 91.6% the size of `M` for counties and 188.3% the size of `M`
-for cities -- so a `total` that omitted `L` would silently undercount Total
-specifically for local governments. `cog_spending(expenditure_concept =
-"total")` includes both legs (excluding the `L--` family-total rollup row,
-which would double-count its own components).
+It's tempting to assume `total` only needs to add `M`. But `M` and `L` are
+both money the queried government itself pays **out** -- they're not two
+different accounts of a receiving government's revenue. `M` is what it
+pays to other **local** governments (e.g. a county paying a city for a
+shared paving contract); `L` is what it pays **up** to its **state**
+government (e.g. a county's contribution to a state-administered program).
+A local government's Total genuinely includes both legs, because both are
+its own spending, just routed to a different kind of recipient. On the
+bundled fixture corpus (all 50 states, 2011/2012/2019/2020), `L` is 0 for
+state governments (a state has no "payments to the state government" leg of
+its own) but is 43%-51% the size of `M` for counties (varies by year) and
+188.3% the size of `M` for cities -- so a `total` that omitted `L` would
+silently undercount Total specifically for local governments.
+`cog_spending(expenditure_concept = "total")` includes both legs (excluding
+the `L--` family-total rollup row, which would double-count its own
+components).
 
 # Composition rules
 
