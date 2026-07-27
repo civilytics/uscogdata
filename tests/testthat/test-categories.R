@@ -15,7 +15,18 @@ test_that("cog_categories(type = 'spending') returns only expenditure rows", {
   skip_if_no_corpus()
   r <- cog_categories(type = "spending")
   expect_true(all(r$category_type == "expenditure"))
-  expect_true(all(r$subtype %in% c("operations", "capital")))
+  expect_true(all(r$subtype %in% c("operations", "capital", "intergovernmental")))
+})
+
+test_that("cog_categories surfaces the intergovernmental spending subtype", {
+  skip_if_no_corpus()
+  r <- cog_categories(type = "spending")
+  expect_true("intergovernmental" %in% r$subtype)
+  # IG rows reuse the existing functional categories -- they add a subtype,
+  # not new category values.
+  ig_cats     <- sort(unique(r$category[r$subtype == "intergovernmental"]))
+  direct_cats <- sort(unique(r$category[r$subtype != "intergovernmental"]))
+  expect_true(all(ig_cats %in% c(direct_cats, "Other Education")))
 })
 
 test_that("cog_categories(type = 'revenue') returns only revenue rows", {
