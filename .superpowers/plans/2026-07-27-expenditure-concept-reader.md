@@ -157,11 +157,71 @@ category table (e.g. a year partition or the manifest), and that needs
 adjudicating against the pipeline change, exactly as `e813ffd` and PR #7 were
 handled. Do not re-baseline a pinned value to make it pass.
 
+### Task 1 AMENDMENT (added 2026-07-27, after Step 4 came back red)
+
+Step 4 predicted "still PASS 467" on the reasoning that the IG rows are inert
+until Task 3. **That was wrong, and the implementer correctly stopped rather than
+re-baselining.** Measured: `PASS 466 | FAIL 1`, failing at
+`tests/testthat/test-categories.R:18`.
+
+**Why:** `cog_categories()` (`R/categories.R:50-57`) is a **third consumer** of
+`summary_categories` that the plan's file-structure table missed. It groups by
+`(category, category_type, COALESCE(spend_subtype, revenue_subtype))` with **no
+item-code prefix filter**, so the 66 new IG rows flow straight through to an
+already-exported verb. The test's closed enumeration
+`expect_true(all(r$subtype %in% c("operations", "capital")))` no longer holds —
+`intergovernmental` is now a third spending subtype.
+
+**Adjudication (controller, 2026-07-27): the new behavior is CORRECT; update the
+test.** `cog_categories()` is a *discovery* verb — its documented purpose is
+"use this to discover valid `category` values". After Task 3, users will see
+`spend_subtype = "intergovernmental"` in `cog_spending(expenditure_concept =
+"total")` results. A discovery verb that hid a subtype the package can return
+would misreport the data model. Note the `category` values themselves are
+unchanged: IG rows reuse the existing functional categories, so only the
+*subtype* enumeration grows.
+
+This is an adjudicated behavior change, not a pinned value bent to get green —
+the distinction the brief asked you to protect. Record it in the commit message.
+
+**Required changes in `tests/testthat/test-categories.R`:**
+
+1. Widen the spending-subtype assertion at `:18`:
+
+```r
+  expect_true(all(r$subtype %in% c("operations", "capital", "intergovernmental")))
+```
+
+2. Add positive coverage immediately after that test, so the new subtype is
+   asserted rather than merely tolerated:
+
+```r
+test_that("cog_categories surfaces the intergovernmental spending subtype", {
+  skip_if_no_corpus()
+  r <- cog_categories(type = "spending")
+  expect_true("intergovernmental" %in% r$subtype)
+  # IG rows reuse the existing functional categories -- they add a subtype,
+  # not new category values.
+  ig_cats     <- sort(unique(r$category[r$subtype == "intergovernmental"]))
+  direct_cats <- sort(unique(r$category[r$subtype != "intergovernmental"]))
+  expect_true(all(ig_cats %in% c(direct_cats, "Other Education")))
+})
+```
+
+`"Other Education"` is allowed through because the pipeline ruled it a new
+category carrying IG dollars and, for now, zero Direct dollars (pipeline #58).
+
+**Do not touch `R/categories.R`.** Its behavior is right as-is.
+
+After these edits the suite must be **FAIL 0**, with PASS at 467 minus the
+widened assertion's arithmetic plus the new test's expectations — report the
+real number.
+
 - [ ] **Step 5: Commit**
 
 ```bash
 cd /home/jared/Nextcloud/Civilytics/Code/Civilytics/cog_explorer/uscogdata && \
-git add inst/extdata/fixture_corpus && \
+git add inst/extdata/fixture_corpus tests/testthat/test-categories.R && \
 git -c commit.gpgsign=false commit -m "chore: regenerate fixture corpus with the intergovernmental category rows
 
 Picks up pipeline PR #59: summary_categories now carries 66 M/L rows under
