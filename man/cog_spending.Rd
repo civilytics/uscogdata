@@ -64,7 +64,12 @@ intergovernmental leg -- payments to local governments (`M` codes) and
 to the state government (`L` codes, excluding the `L--` family-total
 rollup) -- so results gain rows with `spend_subtype ==
 "intergovernmental"`. Mutually exclusive with `recipe` (a recipe
-already defines its own component codes).}
+already defines its own component codes). **Do not sum `"total"`
+results across levels of government** (e.g. state + county + city):
+a state's `M12` payment to a school district is the same dollar the
+district reports as its own direct `E12`, so summing both double-counts
+it. This matters in particular with [cog_geographic_rollup()], which
+sums across exactly that kind of multi-layer government set.}
 }
 \value{
 Tibble with columns `year`, `canonical_govid`, `gov_name`,

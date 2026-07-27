@@ -49,7 +49,12 @@
 #'   to the state government (`L` codes, excluding the `L--` family-total
 #'   rollup) -- so results gain rows with `spend_subtype ==
 #'   "intergovernmental"`. Mutually exclusive with `recipe` (a recipe
-#'   already defines its own component codes).
+#'   already defines its own component codes). **Do not sum `"total"`
+#'   results across levels of government** (e.g. state + county + city):
+#'   a state's `M12` payment to a school district is the same dollar the
+#'   district reports as its own direct `E12`, so summing both double-counts
+#'   it. This matters in particular with [cog_geographic_rollup()], which
+#'   sums across exactly that kind of multi-layer government set.
 #' @return Tibble with columns `year`, `canonical_govid`, `gov_name`,
 #'   `spend_subtype`, `category`, `amt_nominal`, optional `amt_real`,
 #'   optional `amt_per_capita_nominal`, optional `amt_per_capita_real`,
@@ -109,6 +114,24 @@ cog_spending <- function(govid, years, category = NULL,
       i = "A recipe defines its own component codes; pass one or the other.",
       i = "For a recipe's intergovernmental counterpart, use the matching IG recipe (e.g. `corrections_ig_local_combined`)."
     ), class = "uscogdata_recipe_concept_conflict")
+  }
+
+  # .verb_spendrev() is shared with cog_revenue(), which never exposes
+  # expenditure_concept and always resolves it to "direct" -- so nothing on
+  # the public API can reach this today. But it's a cheap guard against a
+  # future call (direct or via a modified cog_revenue()) that would UNION
+  # the IG leg's expenditure M/L rows into a revenue result, which has no
+  # matching IG view and no sensible meaning.
+  if (identical(expenditure_concept, "total") &&
+      !identical(view_base, "spending_annotated")) {
+    cli::cli_abort(
+      paste0(
+        "`expenditure_concept = \"total\"` is only supported for spending ",
+        "(view_base = \"spending_annotated\"); got view_base = ",
+        "{.val {view_base}}."
+      ),
+      class = "uscogdata_expenditure_concept_unsupported"
+    )
   }
 
   years   <- as.integer(years)
@@ -280,6 +303,16 @@ cog_spending <- function(govid, years, category = NULL,
     sprintf("(SELECT * FROM %s UNION ALL SELECT * FROM %s)", view, ig_view)
   }
 
+  # bool_or(), not bool_and(): a no-op for the Direct/revenue legs (those
+  # views filter NOT is_aggregate, so no row in any group is ever aggregate),
+  # but load-bearing for the IG leg, which deliberately keeps aggregate rows
+  # (see inst/sql/24-ig_long.sql). The wide era is dense -- every government
+  # has a row for every code in a family, most of them $0 -- so a $0 leaf
+  # commonly lands in the same (year, gov, subtype, category) group as the
+  # real aggregate row. bool_and() would then read FALSE for that group even
+  # though its dollars came entirely from an aggregate row, silently
+  # suppressing the "Aggregate fallback applied" note on exactly the rows
+  # this feature exists to surface.
   sprintf(
     "SELECT
        year,
@@ -289,7 +322,7 @@ cog_spending <- function(govid, years, category = NULL,
        category,
        SUM(amt) * 1000.0 AS amt_nominal,
        string_agg(DISTINCT item_code, ',' ORDER BY item_code) AS codes_included,
-       bool_and(is_aggregate) AS aggregate_fallback
+       bool_or(is_aggregate) AS aggregate_fallback
      FROM %2$s
      WHERE canonical_govid IN (%3$s)
        AND year IN (%4$s)

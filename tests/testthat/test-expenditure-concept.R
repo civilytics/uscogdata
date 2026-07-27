@@ -29,8 +29,12 @@ test_that("expenditure_concept = 'total' adds an intergovernmental subtype", {
   t <- cog_spending(gov, years = 2019, category = "Police",
                     expenditure_concept = "total")
   expect_true("intergovernmental" %in% t$spend_subtype)
-  # Direct rows are untouched; Total only ever ADDS.
-  dt <- t[t$spend_subtype != "intergovernmental", ]
+  # Direct rows are untouched; Total only ever ADDS. Use %in% rather than
+  # != : a category = NULL result can contain a NULL-subtype group (codes
+  # with no summary_categories row, e.g. E16/E21/E85/F16/F85/G16/G21/G85),
+  # and `NA != "intergovernmental"` is NA, not TRUE, which would silently
+  # smuggle an all-NA phantom row into dt.
+  dt <- t[!(t$spend_subtype %in% "intergovernmental"), ]
   expect_equal(sort(dt$amt_nominal), sort(d$amt_nominal))
   expect_gt(sum(t$amt_nominal), sum(d$amt_nominal))
 })
@@ -83,5 +87,102 @@ test_that("recipe = and expenditure_concept = 'total' together aborts", {
     cog_spending("121011212191", 2020L, recipe = "corrections_combined",
                 expenditure_concept = "total"),
     class = "uscogdata_recipe_concept_conflict"
+  )
+})
+
+test_that("aggregate-sourced IG dollars are flagged aggregate_fallback = TRUE (bool_or, not bool_and)", {
+  # Regression test: .build_verb_sql() originally used bool_and(is_aggregate)
+  # for aggregate_fallback, which is correct for the Direct leg (a group can
+  # never mix aggregate and non-aggregate rows there -- spending_long filters
+  # NOT is_aggregate) but wrong for the IG leg. The wide era is dense -- every
+  # government has a $0 row for every code in a family -- so a $0 leaf sits in
+  # the same (year, gov, subtype, category) group as the real aggregate row
+  # and flips bool_and() to FALSE. Measured: AL state 2011 had $5,740,775,000
+  # of aggregate-sourced IG dollars (Corrections $31,358,000 + Education K-12
+  # $5,152,385,000 + General Government $557,032,000) reporting
+  # aggregate_fallback = FALSE under bool_and(), with the only TRUE row being
+  # Transit Utilities at $0. bool_or() reports all of them correctly.
+  gov <- "010000226085"
+  t <- cog_spending(gov, years = 2011, category = "Education K-12",
+                    expenditure_concept = "total")
+  ig <- t[t$spend_subtype == "intergovernmental", ]
+  expect_equal(nrow(ig), 1L)
+  expect_true(ig$aggregate_fallback)
+  expect_true(nzchar(ig$notes))
+  expect_match(ig$notes, "Aggregate fallback applied", fixed = TRUE)
+})
+
+test_that("legacy aggregate IG codes are year-disjoint from their modern leaf components", {
+  # The safety of ig_long's deliberate omission of `NOT is_aggregate` (see
+  # inst/sql/24-ig_long.sql) rests entirely on each legacy code's AGGREGATE
+  # instance being year-disjoint from the modern leaf codes it rolls up --
+  # if a future corpus rebuild ever back-filled a leaf into a year where the
+  # code is still flagged aggregate, `total` would silently double-count and
+  # this suite would still pass. This test fails loudly if that ever
+  # happens.
+  #
+  # Note the invariant is scoped to the AGGREGATE flag, not bare code
+  # presence: M89/L89 do NOT disappear after the wide era the way M47/L47
+  # do -- they continue past 2011 as their OWN independent leaf line item
+  # (is_aggregate = FALSE) alongside M91-93/L91-93, which is fine because a
+  # non-aggregate M89/L89 no longer represents a rollup of those codes.
+  # (Verified in the fixture: M89/L89 are is_aggregate = TRUE only in 2011,
+  # when M91-93/L91-93 don't exist yet; from 2012 on M89/L89 are
+  # is_aggregate = FALSE leaves coexisting with M91-93/L91-93.)
+  #
+  # Pairs are the M/L-prefixed components (this package's ig_long only
+  # covers M/L; other prefixes in the same rollup, e.g. N/O/P/Q/R, fall
+  # outside its domain and are irrelevant here) enumerated in
+  # cog_pipeline's data/wide_to_long_xwalk.csv `full_desc` column (read
+  # once at authoring time, not at test time -- this test stays offline):
+  #   M47 "To local governments, total (includes N47, O47, P47, R47, and M94)"
+  #   M89 "To local governments, total (incl N89, O89, P89, R89, M91, M92, and M93)"
+  #   L47 "To state government (includes L94)"
+  #   L89 "To state government (includes L91, L92, and L93)"
+  con <- .ensure_session()
+  pairs <- list(
+    list(aggregate = "M47", components = "M94"),
+    list(aggregate = "M89", components = c("M91", "M92", "M93")),
+    list(aggregate = "L47", components = "L94"),
+    list(aggregate = "L89", components = c("L91", "L92", "L93"))
+  )
+  agg_years_by_code <- DBI::dbGetQuery(con,
+    "SELECT DISTINCT year, item_code FROM ig_long WHERE is_aggregate")
+  codes_by_year <- DBI::dbGetQuery(con, "SELECT DISTINCT year, item_code FROM ig_long")
+
+  for (p in pairs) {
+    agg_years <- agg_years_by_code$year[agg_years_by_code$item_code == p$aggregate]
+    for (yr in agg_years) {
+      codes_yr <- codes_by_year$item_code[codes_by_year$year == yr]
+      has_component <- any(p$components %in% codes_yr)
+      expect_false(
+        has_component,
+        label = sprintf(
+          "year %s has aggregate-flagged %s co-occurring with a modern component (%s)",
+          yr, p$aggregate, paste(p$components, collapse = ",")
+        )
+      )
+    }
+  }
+})
+
+test_that(".verb_spendrev rejects expenditure_concept = 'total' for a non-spending view_base", {
+  # cog_revenue() never exposes expenditure_concept and always resolves it
+  # to the "direct" default, so there is no revenue codepath that reaches
+  # this today -- but .verb_spendrev() is shared, and nothing else stops a
+  # future caller from passing expenditure_concept = "total" alongside
+  # view_base = "revenue_annotated", which would UNION expenditure M/L rows
+  # into a revenue result. Exercise the internal helper directly.
+  expect_error(
+    uscogdata:::.verb_spendrev(
+      verb = "cog_revenue_test", view_base = "revenue_annotated",
+      subtype_col = "revenue_subtype",
+      flow_prefixes = c("T", "A", "U", "B", "C", "D"),
+      call = quote(cog_revenue_test()),
+      govid = "010000226085", years = 2019L, category = NULL,
+      per_capita = FALSE, adjust_to_year = NULL, basis = "raw",
+      recipe = NULL, expenditure_concept = "total"
+    ),
+    class = "uscogdata_expenditure_concept_unsupported"
   )
 })
