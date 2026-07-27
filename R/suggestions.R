@@ -98,19 +98,80 @@
       hint = sprintf("re-run with recipe = '%s'", rid)
     )
   }
-  suggestions
+  .attach_ig_counterparts(con, suggestions)
+}
+
+#' Attach `ig_recipe_id` to each suggestion: the intergovernmental-expenditure
+#' recipe (an M-to-local or L-to-state recipe) whose component codes cover
+#' exactly the same set of function suffixes as the firing recipe's own
+#' components, e.g. `corrections_combined`'s {E04, E05} -> suffixes {"04",
+#' "05"} matches `corrections_ig_local_combined`'s {M04, M05} -> the same
+#' {"04", "05"}. `NULL` when no such recipe exists, which also covers the
+#' case where the firing recipe already IS the IG recipe (self-matches are
+#' excluded, so an IG recipe never names itself as its own counterpart).
+#'
+#' Matching is deliberately an exact set match, not "any suffix in common":
+#' the two-digit suffix only means the same "function" across recipes that
+#' share the underlying Census functional-classification scheme (E/F/G/L/M
+#' all use "04"/"05" for corrections). M/L "combined other" codes (47/89/
+#' 91-94) reuse digits for an unrelated catch-all construct, so e.g.
+#' `general_gov_e89_wide`'s {E85, E89} -> {"85", "89"} must NOT match
+#' `ige_local_m89_wide`'s {"89", "91", "92", "93"} on the shared "89" alone --
+#' verified against the fixture's full `harmonization_recipes` catalog (see
+#' task-6-report.md): only the corrections family (E/F/G/M, suffixes 04/05)
+#' has an exact-set match in this corpus.
+#' @noRd
+.attach_ig_counterparts <- function(con, suggestions) {
+  if (length(suggestions) == 0L) return(suggestions)
+
+  comp <- DBI::dbGetQuery(con,
+    "SELECT recipe_id, component_code FROM harmonization_recipes")
+  comp$suffix <- substr(comp$component_code, 2L, nchar(comp$component_code))
+  suffix_sets <- lapply(split(comp$suffix, comp$recipe_id), function(x) sort(unique(x)))
+
+  ig_recipe_ids <- unique(
+    comp$recipe_id[substr(comp$component_code, 1L, 1L) %in% c("M", "L")]
+  )
+
+  find_counterpart <- function(rid) {
+    own <- suffix_sets[[rid]]
+    if (is.null(own)) return(NULL)
+    for (cand in ig_recipe_ids) {
+      if (identical(cand, rid)) next
+      if (setequal(suffix_sets[[cand]], own)) return(cand)
+    }
+    NULL
+  }
+
+  lapply(suggestions, function(s) {
+    # `s$ig_recipe_id <- NULL` would DELETE the element rather than set it
+    # (standard R list-assignment gotcha), leaving no-match entries missing
+    # the key entirely instead of carrying it as NULL. Single-bracket
+    # assignment with a wrapped list preserves a NULL-valued element so the
+    # field is always present, per the brief's "NULL when there is none".
+    s["ig_recipe_id"] <- list(find_counterpart(s$recipe_id))
+    s
+  })
 }
 
 #' Emit the single cli::cli_inform() message summarizing all suggestions
 #' for a verb call (the brief's "one message", not one per suggestion).
 #' Bullet text is pre-formatted plain text (no cli/glue `{}` markup) since
 #' recipe ids/labels are untrusted-ish data values, not literal call-site
-#' expressions.
+#' expressions. When a suggestion has an `ig_recipe_id`, one indented
+#' continuation line is appended naming the intergovernmental counterpart
+#' recipe (embedded `\n` renders as a hanging-indent continuation of the
+#' same bullet under cli, not a new bullet).
 #' @noRd
 .inform_suggestions <- function(suggestions) {
   bullets <- vapply(suggestions, function(s) {
-    sprintf("%s (%d-%d): %s", s$recipe_id,
+    bullet <- sprintf("%s (%d-%d): %s", s$recipe_id,
             s$available_years[1], s$available_years[2], s$hint)
+    if (!is.null(s$ig_recipe_id)) {
+      bullet <- paste0(bullet, sprintf(
+        "\n  intergovernmental counterpart: recipe = '%s'", s$ig_recipe_id))
+    }
+    bullet
   }, character(1))
   cli::cli_inform(c(
     i = "Coverage gap detected for the requested years; a harmonization recipe may fill it:",

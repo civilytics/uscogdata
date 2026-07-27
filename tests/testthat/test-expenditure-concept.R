@@ -264,3 +264,22 @@ test_that("the provenance schema documents expenditure_concept", {
   )
   expect_true("expenditure_concept" %in% names(sch$properties))
 })
+
+test_that("a firing suggestion names the intergovernmental counterpart recipe", {
+  # Corrections has no legacy leaf rows, so the coverage-gap suggestion fires;
+  # corrections_ig_local_combined is its IG counterpart.
+  r <- suppressMessages(
+    cog_spending("010000226085", years = c(2005, 2011), category = "Corrections")
+  )
+  sugg <- attr(r, "provenance")$suggestions
+  expect_gt(length(sugg), 0L)
+  ids <- vapply(sugg, function(s) s$recipe_id %||% "", character(1))
+  expect_true("corrections_combined" %in% ids)
+  ig <- unlist(lapply(sugg, function(s) s$ig_recipe_id))
+  expect_true("corrections_ig_local_combined" %in% ig)
+})
+
+test_that("no suggestion fires for a healthy query", {
+  r <- cog_spending("010000226085", years = 2019, category = "Police")
+  expect_length(attr(r, "provenance")$suggestions, 0L)
+})
