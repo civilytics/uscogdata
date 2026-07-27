@@ -367,6 +367,85 @@ test_that("C1(b): expenditure_concept_direct_suppressed is FALSE when the Direct
                    grepl("unavailable", t$notes[t$spend_subtype == "intergovernmental"])))
 })
 
+# M/I fix: .detect_direct_suppressed() was equating "no Direct sibling row"
+# with "Direct was suppressed", but the dominant real cause is a government
+# that simply has no direct spending in that category -- correct, ordinary
+# data. The fix gates the flag (and its row note) on a harmonization recipe
+# ACTUALLY covering that exact (year, canonical_govid, category) triple.
+
+test_that("M/I: true positive, category supplied explicitly (unchanged behavior)", {
+  al <- "010000226085"
+  t_cat <- suppressMessages(cog_spending(
+    al, years = 2011, category = "Corrections", expenditure_concept = "total"
+  ))
+  expect_true(attr(t_cat, "provenance")$expenditure_concept_direct_suppressed)
+  expect_match(t_cat$notes, "corrections_combined", fixed = TRUE)
+  expect_match(t_cat$notes, "unavailable", fixed = TRUE)
+})
+
+test_that("M/I: true positive, category = NULL now also names the recipe (was the fallback bug)", {
+  # Root bug: .build_suggestions() short-circuits to list() when category is
+  # NULL, so the note previously always hit its "no covering recipe found"
+  # fallback here even though corrections_combined genuinely covers this row.
+  al <- "010000226085"
+  t_null <- suppressMessages(cog_spending(
+    al, years = 2011, category = NULL, expenditure_concept = "total"
+  ))
+  corr_row <- t_null[t_null$category %in% "Corrections", ]
+  expect_equal(nrow(corr_row), 1L)
+  expect_true(attr(t_null, "provenance")$expenditure_concept_direct_suppressed)
+  expect_match(corr_row$notes, "corrections_combined", fixed = TRUE)
+  expect_match(corr_row$notes, "unavailable", fixed = TRUE)
+  expect_false(grepl("no covering recipe found", corr_row$notes, fixed = TRUE))
+})
+
+test_that("M/I: false positive -- Virginia Education K-12 FY2019 total is NOT flagged", {
+  # States fund K-12 through school districts, so the Direct leg (E12/F12/
+  # G12) is genuinely, correctly zero -- not suppressed. Must not be flagged
+  # and must carry no suppression note.
+  va <- "510000227542"
+  t_va <- suppressMessages(cog_spending(
+    va, years = 2019, category = "Education K-12", expenditure_concept = "total"
+  ))
+  expect_equal(nrow(t_va), 1L)
+  expect_equal(t_va$spend_subtype, "intergovernmental")
+  expect_equal(t_va$amt_nominal, 8028179000)
+  expect_false(isTRUE(attr(t_va, "provenance")$expenditure_concept_direct_suppressed))
+  expect_false(nzchar(t_va$notes) && grepl("unavailable", t_va$notes))
+})
+
+test_that("M/I: false positive by construction -- 'Other Education' has no E/F/G code, never flagged", {
+  # "Other Education" maps only to M21/L21 in summary_categories -- there is
+  # no E/F/G code for it in this corpus at all, so no Direct-recovering
+  # recipe can exist and it must never be flagged, in any fixture year.
+  con <- uscogdata:::.ensure_session()
+  years_all <- DBI::dbGetQuery(con, "SELECT DISTINCT year FROM long ORDER BY year")$year
+  states <- DBI::dbGetQuery(con,
+    "SELECT DISTINCT canonical_govid FROM long WHERE type = 0")$canonical_govid
+  oe <- suppressMessages(cog_spending(
+    states, years = years_all, category = "Other Education",
+    expenditure_concept = "total"
+  ))
+  expect_false(isTRUE(attr(oe, "provenance")$expenditure_concept_direct_suppressed))
+  expect_false(any(nzchar(oe$notes) & grepl("unavailable", oe$notes)))
+})
+
+test_that("M/I: a clean FY2019 category = NULL total query flags far fewer than the pre-fix 32/50 states", {
+  con <- uscogdata:::.ensure_session()
+  states <- DBI::dbGetQuery(con,
+    "SELECT DISTINCT canonical_govid FROM long WHERE type = 0")$canonical_govid
+  r <- suppressMessages(cog_spending(
+    states, years = 2019, category = NULL, expenditure_concept = "total"
+  ))
+  ig <- r[r$spend_subtype == "intergovernmental", ]
+  flagged <- ig[nzchar(ig$notes) & grepl("unavailable", ig$notes), ]
+  expect_lt(length(unique(flagged$canonical_govid)), 32L)
+  # Every remaining flagged row must actually name a covering recipe --
+  # never the old no-recipe-found fallback.
+  expect_true(all(grepl("recipe = '", flagged$notes, fixed = TRUE)))
+  expect_false(any(grepl("no covering recipe found", flagged$notes, fixed = TRUE)))
+})
+
 test_that("C2: expenditure_concept = 'total' aborts on a corpus with no intergovernmental category rows", {
   with_corpus_missing_ig_categories({
     con <- uscogdata:::.ensure_session()

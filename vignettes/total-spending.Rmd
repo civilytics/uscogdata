@@ -161,13 +161,17 @@ share of a government's own Direct spending is:
 
 | Government type | Intergovernmental / Direct |
 |---|---|
-| State  | 17.2% |
+| State  | 16.7%-48.4% (varies by year; 24.0% pooled across all four) |
 | County | 3.4%-5.1% (varies by year) |
 | City   | 2.6%-3.1% (varies by year) |
 
 So the Direct/Total choice matters overwhelmingly for **state** governments
 -- a state's Total genuinely differs from its Direct by a meaningful margin,
-while for a county or city the two are close. That's also why the mistake
+while for a county or city the two are close. The state range is also far
+wider than a single flat figure would suggest: legacy wide-era years (2011:
+48.4%) carry proportionally more intergovernmental spending than the modern
+era (2019-2020: 16.7%-17.0%), so a state's Direct/Total gap can be nearly
+3x larger a decade earlier than it is today. That's also why the mistake
 this vignette warns about is easy to make unnoticed at the county/city level
 and costly at the state level: rolling up every government in a state using
 `total` instead of `direct` overstates the true figure -- measured at 7.6%
@@ -186,8 +190,10 @@ its own spending, just routed to a different kind of recipient. On the
 bundled fixture corpus (all 50 states, 2011/2012/2019/2020), `L` is 0 for
 state governments (a state has no "payments to the state government" leg of
 its own) but is 43%-51% the size of `M` for counties (varies by year) and
-188.3% the size of `M` for cities -- so a `total` that omitted `L` would
-silently undercount Total specifically for local governments.
+144%-189% the size of `M` for cities (varies by year; 166% pooled across
+all four) -- so a `total` that omitted `L` would silently undercount Total
+specifically for local governments, and for cities `L` is often the
+*larger* of the two legs.
 `cog_spending(expenditure_concept = "total")` includes both legs (excluding
 the `L--` family-total rollup row, which would double-count its own
 components).

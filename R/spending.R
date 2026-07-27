@@ -251,18 +251,22 @@ cog_spending <- function(govid, years, category = NULL,
 
   # C1(b): when expenditure_concept = "total", flag any row where the IG
   # leg has dollars but the Direct leg has none for that same (year,
-  # canonical_govid, category) -- the UNION'd figure there is
-  # intergovernmental money ALONE, not Direct + IG, and both the row-level
-  # notes and the provenance must say so rather than pass silently as a
-  # plausible Total.
-  direct_suppressed <- if (identical(expenditure_concept, "total")) {
-    .detect_direct_suppressed(result, subtype_col)
+  # canonical_govid, category) AND a harmonization recipe actually recovers
+  # the missing Direct dollars for that exact triple -- see
+  # .detect_direct_suppressed() for why bare Direct-row absence alone is NOT
+  # sufficient (the dominant real cause is a government that simply has no
+  # direct spending in that category, which is correct, ordinary data). When
+  # a covering recipe is found, both the row-level notes and the provenance
+  # say so rather than pass silently as a plausible Total.
+  direct_suppressed_info <- if (identical(expenditure_concept, "total")) {
+    .detect_direct_suppressed(con, result, subtype_col)
   } else {
-    rep(FALSE, nrow(result))
+    list(flag = rep(FALSE, nrow(result)), notes = rep(NA_character_, nrow(result)))
   }
+  direct_suppressed <- direct_suppressed_info$flag
   direct_suppressed_flag <- isTRUE(any(direct_suppressed))
 
-  result$notes <- .notes_column(result, direct_suppressed, suggestions)
+  result$notes <- .notes_column(result, direct_suppressed_info$notes)
 
   # Determine expenditure_concept_note: only non-empty for "total", explains
   # how the IG leg was assembled from legacy-era aggregates. When the Direct
@@ -502,47 +506,126 @@ cog_spending <- function(govid, years, category = NULL,
 
 #' Detect rows where expenditure_concept = "total" is reporting the
 #' intergovernmental leg with NO Direct counterpart in the same (year,
-#' canonical_govid, category) group -- i.e. the Direct leg is suppressed
-#' (typically a legacy aggregate-only family, see C1(a) above) rather than
-#' genuinely zero. `TRUE` only for the `spend_subtype == "intergovernmental"`
-#' row(s) in each such group.
+#' canonical_govid, category) group AND a harmonization recipe actually
+#' recovers the missing Direct dollars for that exact (year, canonical_govid,
+#' category) triple.
+#'
+#' Bare Direct-row absence is deliberately NOT sufficient on its own: the
+#' dominant real cause of "no Direct sibling row" is a government that simply
+#' has no direct spending in that category (e.g. a state that funds K-12
+#' entirely through school districts), which is correct, ordinary data, not
+#' suppression. Genuine suppression -- a legacy aggregate-only family whose
+#' Direct-leg basis query excludes it by construction (spending_long/
+#' spending_long_harmonized both filter NOT is_aggregate) -- always has a
+#' covering harmonization recipe, because that is exactly what the recipe
+#' catalog exists to recover (see R/suggestions.R and `cog_recipes()`). So
+#' checking "does a recipe actually cover this triple" cleanly separates the
+#' two cases instead of conflating them.
+#'
+#' Returns `list(flag, notes)`, both the same length as `result`: `flag` is
+#' `TRUE` only for the `spend_subtype == "intergovernmental"` row(s) in a
+#' suppressed group, and `notes` names the recovering recipe(s) for those
+#' rows (`NA` everywhere else).
 #' @noRd
-.detect_direct_suppressed <- function(result, subtype_col) {
+.detect_direct_suppressed <- function(con, result, subtype_col) {
   n <- nrow(result)
-  if (n == 0L) return(logical(0))
+  empty_notes <- rep(NA_character_, n)
+  if (n == 0L) return(list(flag = logical(0), notes = character(0)))
   is_ig <- result[[subtype_col]] %in% "intergovernmental"
-  if (!any(is_ig)) return(rep(FALSE, n))
+  if (!any(is_ig)) return(list(flag = rep(FALSE, n), notes = empty_notes))
+
   key <- paste(result$year, result$canonical_govid, result$category, sep = "\r")
   has_direct <- key %in% unique(key[!is_ig])
-  is_ig & !has_direct
-}
+  candidate <- is_ig & !has_direct
 
-#' Build the notes text for a direct-suppressed row: names the recipe that
-#' recovers the missing Direct component when one of the (already
-#' Direct-leg-scoped, see C1(a)) suggestions covers this row's year, or a
-#' generic fallback when no such recipe was found.
-#' @noRd
-.direct_suppressed_note <- function(year, suggestions) {
-  matching <- Filter(function(s) {
-    ay <- s$available_years
-    !is.null(ay) && length(ay) == 2L && year >= ay[1] && year <= ay[2]
-  }, suggestions)
-  if (length(matching) == 0L) {
-    return(paste(
-      "Direct component is unavailable through this basis for this year",
-      "(legacy aggregate-only family); no covering recipe found in this",
-      "corpus -- see cog_recipes()."
-    ))
+  flag <- rep(FALSE, n)
+  notes <- empty_notes
+  if (!any(candidate)) return(list(flag = flag, notes = notes))
+
+  idx <- which(candidate)
+  rows <- unique(result[idx, c("year", "canonical_govid", "category")])
+  covering <- .covering_recipes(con, rows)
+  cov_key <- paste(covering$year, covering$canonical_govid, covering$category,
+                    sep = "\r")
+
+  for (i in idx) {
+    k <- paste(result$year[i], result$canonical_govid[i], result$category[i],
+               sep = "\r")
+    m <- match(k, cov_key)
+    if (is.na(m)) next
+    ids <- covering$recipe_ids[[m]]
+    if (length(ids) == 0L) next
+    flag[i] <- TRUE
+    notes[i] <- sprintf(
+      "Direct component is unavailable through this basis for this year; recover it via recipe = '%s' (see cog_recipes()).",
+      paste(sort(unique(ids)), collapse = "', '")
+    )
   }
-  ids <- sort(unique(vapply(matching, function(s) s$recipe_id, character(1))))
-  sprintf(
-    "Direct component is unavailable through this basis for this year; recover it via recipe = '%s' (see cog_recipes()).",
-    paste(ids, collapse = "', '")
-  )
+  list(flag = flag, notes = notes)
+}
+
+#' For each (year, canonical_govid, category) triple potentially affected by
+#' a suppressed Direct leg, find the harmonization recipe(s) that (a) cover
+#' this `category` (share a component item_code via `summary_categories`,
+#' excluding any recipe that is itself entirely intergovernmental M/L -- the
+#' same exclusion `.build_suggestions()` applies, see I2) and (b) actually
+#' produce a `long` row for this exact (canonical_govid, year) via the same
+#' generic join `.run_recipe()` uses (component year_min/year_max +
+#' gov_type_scope, no is_aggregate filter -- a recipe's whole point is to
+#' recover data that's aggregate-only). Adds a list-column `recipe_ids`
+#' (possibly length-0) to `rows`.
+#' @noRd
+.covering_recipes <- function(con, rows) {
+  rows$recipe_ids <- vector("list", nrow(rows))
+  cats <- unique(rows$category[!is.na(rows$category)])
+  if (length(cats) == 0L) return(rows)
+
+  cand <- DBI::dbGetQuery(con, sprintf(
+    "SELECT DISTINCT sc.category, r.recipe_id
+     FROM harmonization_recipes r
+     JOIN summary_categories sc ON sc.item_code = r.component_code
+     WHERE sc.category IN (%s)
+       AND r.recipe_id NOT IN (
+         SELECT DISTINCT recipe_id FROM harmonization_recipes
+         WHERE LEFT(component_code, 1) IN ('M', 'L')
+       )",
+    .sql_lit_chr(cats)
+  ))
+  if (nrow(cand) == 0L) return(rows)
+
+  recipe_ids_all <- unique(cand$recipe_id)
+  govids <- unique(rows$canonical_govid)
+  years  <- unique(rows$year)
+  covered <- DBI::dbGetQuery(con, sprintf(
+    "SELECT DISTINCT r.recipe_id, l.canonical_govid, l.year
+     FROM long l
+     JOIN harmonization_recipes r
+       ON l.item_code = r.component_code
+      AND l.year BETWEEN r.year_min AND r.year_max
+      AND (r.gov_type_scope = 'all'
+           OR (r.gov_type_scope = 'state' AND l.type = 0)
+           OR (r.gov_type_scope = 'local' AND l.type BETWEEN 1 AND 3))
+     WHERE r.recipe_id IN (%s)
+       AND l.canonical_govid IN (%s)
+       AND l.year IN (%s)",
+    .sql_lit_chr(recipe_ids_all), .sql_lit_chr(govids), paste(years, collapse = ",")
+  ))
+
+  for (i in seq_len(nrow(rows))) {
+    cat_i <- rows$category[i]
+    if (is.na(cat_i)) next
+    cat_recipe_ids <- cand$recipe_id[cand$category == cat_i]
+    if (length(cat_recipe_ids) == 0L) next
+    sub <- covered[covered$canonical_govid == rows$canonical_govid[i] &
+                   covered$year == rows$year[i] &
+                   covered$recipe_id %in% cat_recipe_ids, ]
+    rows$recipe_ids[[i]] <- sort(unique(sub$recipe_id))
+  }
+  rows
 }
 
 #' @noRd
-.notes_column <- function(result, direct_suppressed = NULL, suggestions = list()) {
+.notes_column <- function(result, direct_suppressed_notes = NULL) {
   n <- nrow(result)
   if (n == 0L) return(character(0))
   parts <- vector("list", 3L)
@@ -562,11 +645,8 @@ cog_spending <- function(govid, years, category = NULL,
   } else {
     rep(NA_character_, n)
   }
-  parts[[3]] <- if (!is.null(direct_suppressed) && any(direct_suppressed)) {
-    vapply(seq_len(n), function(i) {
-      if (!isTRUE(direct_suppressed[i])) return(NA_character_)
-      .direct_suppressed_note(result$year[i], suggestions)
-    }, character(1))
+  parts[[3]] <- if (!is.null(direct_suppressed_notes)) {
+    direct_suppressed_notes
   } else {
     rep(NA_character_, n)
   }
