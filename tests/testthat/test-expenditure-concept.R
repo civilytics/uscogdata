@@ -309,6 +309,118 @@ test_that("a mis-scoped cog_spending() call never attaches an M/L counterpart to
   expect_length(ig, 0L)
 })
 
+test_that("C1: 'total' on a legacy aggregate-only family reports the IG-only figure honestly, not as Direct + IG", {
+  # AL state government, Corrections, 2011. Measured pre-fix: 'total'
+  # returned $31,358,000 (the IG leg alone, on an aggregate-flagged M04/M05
+  # row) with 0 suggestions (the surviving IG row made the gap-detection
+  # machinery think the Direct leg was covered) and a note asserting
+  # "Total = Direct + intergovernmental" with no caveat. True Direct (via
+  # recipe = "corrections_combined") is $521,651,000 -- the IG-only figure
+  # is ~6% of it.
+  gov <- "010000226085"
+
+  d <- cog_spending(gov, years = 2011, category = "Corrections",
+                    expenditure_concept = "direct")
+  expect_equal(nrow(d), 0L)
+
+  t <- suppressMessages(cog_spending(
+    gov, years = 2011, category = "Corrections", expenditure_concept = "total"
+  ))
+  expect_equal(nrow(t), 1L)
+  expect_equal(t$spend_subtype, "intergovernmental")
+  expect_equal(t$amt_nominal, 31358000)
+
+  r <- cog_spending(gov, years = 2011, recipe = "corrections_combined")
+  expect_equal(r$amt_nominal, 521651000)
+
+  # C1(a): the recipe hints must fire for "total" exactly as they do for
+  # "direct" -- the surviving IG row must not be mistaken for Direct
+  # coverage.
+  prov <- attr(t, "provenance")
+  expect_gt(length(prov$suggestions), 0L)
+  ids <- vapply(prov$suggestions, function(s) s$recipe_id %||% "", character(1))
+  expect_true("corrections_combined" %in% ids)
+
+  # C1(b): the affected row's notes name a recovering recipe rather than
+  # staying silent, and the provenance carries a flag a downstream consumer
+  # (e.g. cog-api, which passes provenance through verbatim) can test.
+  expect_true(nzchar(t$notes))
+  expect_match(t$notes, "unavailable", fixed = TRUE)
+  expect_match(t$notes, "corrections_combined", fixed = TRUE)
+  expect_true(prov$expenditure_concept_direct_suppressed)
+
+  # The base "Total = Direct + IG" note must NOT stand unqualified when that
+  # arithmetic didn't actually happen for this row.
+  expect_match(prov$expenditure_concept_note, "NOTE", fixed = TRUE)
+  expect_match(prov$expenditure_concept_note,
+              "expenditure_concept_direct_suppressed", fixed = TRUE)
+})
+
+test_that("C1(b): expenditure_concept_direct_suppressed is FALSE when the Direct leg is present", {
+  d <- cog_spending("010000226085", years = 2019, category = "Police",
+                    expenditure_concept = "direct")
+  t <- cog_spending("010000226085", years = 2019, category = "Police",
+                    expenditure_concept = "total")
+  expect_false(isTRUE(attr(d, "provenance")$expenditure_concept_direct_suppressed))
+  expect_false(isTRUE(attr(t, "provenance")$expenditure_concept_direct_suppressed))
+  expect_false(any(nzchar(t$notes[t$spend_subtype == "intergovernmental"]) &
+                   grepl("unavailable", t$notes[t$spend_subtype == "intergovernmental"])))
+})
+
+test_that("C2: expenditure_concept = 'total' aborts on a corpus with no intergovernmental category rows", {
+  with_corpus_missing_ig_categories({
+    con <- uscogdata:::.ensure_session()
+    n <- DBI::dbGetQuery(con,
+      "SELECT COUNT(*) AS n FROM summary_categories WHERE LEFT(item_code, 1) IN ('M', 'L')"
+    )$n
+    expect_equal(n, 0)
+
+    err <- tryCatch(
+      cog_spending("010000226085", years = 2019, category = "Police",
+                  expenditure_concept = "total"),
+      condition = function(e) e
+    )
+    expect_s3_class(err, "uscogdata_ig_categories_unsupported")
+    msg <- conditionMessage(err)
+    expect_match(msg, "PR #59|predates", perl = TRUE)
+  })
+
+  # 'direct' is unaffected on the same corpus -- the guard is scoped to
+  # expenditure_concept = "total" only.
+  with_corpus_missing_ig_categories({
+    expect_no_error(
+      cog_spending("010000226085", years = 2019, category = "Police",
+                  expenditure_concept = "direct")
+    )
+  })
+})
+
+test_that("C2: expenditure_concept = 'total' still works on a corpus that DOES carry M/L category rows", {
+  expect_no_error(
+    cog_spending("010000226085", years = 2019, category = "Police",
+                expenditure_concept = "total")
+  )
+})
+
+test_that("I2: an intergovernmental (M/L) recipe never appears as its own top-level suggestion", {
+  # Task 1's M04/M05 category rows share the "Corrections" summary_categories
+  # category with the Direct-flavored E04/E05, so `corrections_ig_local_
+  # combined` (entirely M-prefixed) becomes a raw *candidate* in
+  # .build_suggestions()'s component_code-driven query. Following a
+  # "re-run with recipe = 'corrections_ig_local_combined'" hint on a plain
+  # cog_spending() call would silently return intergovernmental dollars
+  # under provenance$expenditure_concept = "direct". Task 6's gate
+  # (.attach_ig_counterparts()) already protects the *counterpart* lookup;
+  # this exercises that the candidate list itself is filtered too.
+  r <- suppressMessages(
+    cog_spending("010000226085", years = c(2005, 2011), category = "Corrections")
+  )
+  sugg <- attr(r, "provenance")$suggestions
+  ids <- vapply(sugg, function(s) s$recipe_id %||% "", character(1))
+  expect_true("corrections_combined" %in% ids)
+  expect_false("corrections_ig_local_combined" %in% ids)
+})
+
 test_that(".attach_ig_counterparts() never pairs a revenue-side recipe with its coincidental M/L suffix twin", {
   # Broader version of the case above, run at the matching-helper level
   # (the same level code review's pairwise enumeration was done at) rather
