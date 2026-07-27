@@ -63,13 +63,28 @@ from prior releases. `"total"` additionally UNIONs in the
 intergovernmental leg -- payments to local governments (`M` codes) and
 to the state government (`L` codes, excluding the `L--` family-total
 rollup) -- so results gain rows with `spend_subtype ==
-"intergovernmental"`. Mutually exclusive with `recipe` (a recipe
+"intergovernmental"`. Requires the active corpus's `summary_categories`
+to carry M/L rows (added by cog_pipeline PR #59); aborts with class
+`uscogdata_ig_categories_unsupported` on an older corpus rather than
+silently under-reporting. Mutually exclusive with `recipe` (a recipe
 already defines its own component codes). **Do not sum `"total"`
 results across levels of government** (e.g. state + county + city):
 a state's `M12` payment to a school district is the same dollar the
 district reports as its own direct `E12`, so summing both double-counts
 it. This matters in particular with [cog_geographic_rollup()], which
-sums across exactly that kind of multi-layer government set.}
+sums across exactly that kind of multi-layer government set.
+
+In the legacy wide era (<= FY2011), some functions are published ONLY
+as an aggregate-flagged family total (e.g. Corrections' `E04`/`E05`
+split), which the Direct leg excludes by construction but the IG leg
+deliberately keeps (see `inst/sql/24-ig_long.sql`). For a `"total"`
+query, any (year, category) where this leaves intergovernmental rows
+with NO Direct counterpart is flagged: the affected rows' `notes`
+name the harmonization recipe that recovers the missing Direct
+component (when one exists), and
+`provenance$expenditure_concept_direct_suppressed` is `TRUE` -- the
+figure in those rows is the intergovernmental leg alone, not Direct +
+IG.}
 }
 \value{
 Tibble with columns `year`, `canonical_govid`, `gov_name`,

@@ -8,6 +8,7 @@
                               basis_note = NA_character_,
                               expenditure_concept = "direct",
                               expenditure_concept_note = NA_character_,
+                              expenditure_concept_direct_suppressed = FALSE,
                               harmonization = NULL, recipe = NULL,
                               suggestions = list()) {
   manifest <- .uscogdata_env$manifest
@@ -55,6 +56,7 @@
     basis_note = basis_note,
     expenditure_concept = expenditure_concept,
     expenditure_concept_note = expenditure_concept_note,
+    expenditure_concept_direct_suppressed = isTRUE(expenditure_concept_direct_suppressed),
     harmonization = harmonization %||% list(
       applied = FALSE, na_rows_excluded = 0L, na_amount_excluded = 0,
       note = NA_character_

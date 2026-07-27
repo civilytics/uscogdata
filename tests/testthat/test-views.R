@@ -301,6 +301,23 @@ test_that(".harmonization_view_files guard is necessary: registration against a 
   on.exit(DBI::dbDisconnect(con2, shutdown = TRUE), add = TRUE)
   DBI::dbExecute(con2, .read_view_sql("10-long.sql"))
   expect_error(DBI::dbExecute(con2, .read_view_sql("25-ig_long_harmonized.sql")))
+
+  # Reconciling this test with the C2 guard (expenditure-concept review):
+  # `ig_annotated`/`spending_annotated` registering cleanly above proves
+  # only that CREATE VIEW binds against a `summary_categories` with no M/L
+  # rows at all (this synthetic corpus's own summary_categories has a
+  # single E36 row, see the COPY above) -- a LEFT JOIN never fails to
+  # resolve regardless of what the joined-to table contains. It does NOT
+  # mean querying expenditure_concept = "total" against this shape is safe:
+  # exactly this corpus (schema_version reported as supported, but
+  # summary_categories predates the M/L rows cog_pipeline PR #59 added) is
+  # what .require_ig_categories() exists to catch at the *verb* level,
+  # since PR #59 shipped those rows with no schema_version bump. Confirm
+  # the new runtime guard actually fires against this same `con`.
+  expect_error(
+    uscogdata:::.require_ig_categories(con),
+    class = "uscogdata_ig_categories_unsupported"
+  )
 })
 
 test_that("spending_long filters to E/F/G/K prefixes and excludes aggregates", {
