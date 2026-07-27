@@ -70,6 +70,37 @@ test_that("cog_explain prints a Suggestions section when the provenance has one"
   expect_true(grepl("re-run with recipe", txt))
 })
 
+test_that("cog_explain prints the expenditure concept (I1)", {
+  skip_if_no_corpus()
+  d <- cog_spending("010000226085", years = 2019, category = "Police")
+  t <- cog_spending("010000226085", years = 2019, category = "Police",
+                    expenditure_concept = "total")
+  txt_d <- paste(c(
+    capture.output(cog_explain(d)),
+    capture.output(cog_explain(d), type = "message")
+  ), collapse = "\n")
+  txt_t <- paste(c(
+    capture.output(cog_explain(t)),
+    capture.output(cog_explain(t), type = "message")
+  ), collapse = "\n")
+  expect_true(grepl("Concept: direct", txt_d))
+  expect_true(grepl("Concept: total", txt_t))
+})
+
+test_that("cog_explain surfaces the C1(b) direct-suppressed flag as a warning", {
+  skip_if_no_corpus()
+  t <- suppressMessages(cog_spending(
+    "010000226085", years = 2011, category = "Corrections",
+    expenditure_concept = "total"
+  ))
+  expect_true(attr(t, "provenance")$expenditure_concept_direct_suppressed)
+  txt <- paste(c(
+    capture.output(cog_explain(t)),
+    capture.output(cog_explain(t), type = "message")
+  ), collapse = "\n")
+  expect_true(grepl("Direct leg unavailable", txt))
+})
+
 test_that("cog_explain prints denominator + popyear_range + counts", {
   skip_if_no_corpus()
   with_fixture_corpus({
