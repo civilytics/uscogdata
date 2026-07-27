@@ -25,6 +25,12 @@
 #'   population from `gov_population_yearly`. Govs with missing population
 #'   are excluded from the result.
 #' @param adjust_to_year Integer base year for CPI-U conversion, or `NULL`.
+#' @param expenditure_concept `"direct"` (default) or `"total"`. Currently only
+#'   `"direct"` is accepted; the `"total"` option exists in [cog_spending()] for
+#'   single-government queries but cannot be used here because combining Total
+#'   across multiple layers of government double-counts intergovernmental
+#'   transfers (a state's payment to a school district is the same dollar the
+#'   district reports as its own Direct spending).
 #' @return Tibble with columns `year`, `layer`, `canonical_govid`, `gov_name`,
 #'   `spend_subtype`, `category`, `amt_nominal`, optional `amt_real` /
 #'   `amt_per_capita_nominal` / `amt_per_capita_real`, optional `pop_source`,
@@ -33,8 +39,13 @@
 #'   and `rollup$included_govids` / `rollup$excluded_govids`.
 #' @export
 cog_geographic_rollup <- function(govids, category, years,
-                                  per_capita = FALSE, adjust_to_year = NULL) {
+                                  per_capita = FALSE, adjust_to_year = NULL,
+                                  expenditure_concept = c("direct", "total")) {
   call <- match.call()
+  expenditure_concept <- match.arg(expenditure_concept)
+  if (identical(expenditure_concept, "total")) {
+    .abort_concept_not_aggregatable("cog_geographic_rollup")
+  }
   .validate_rollup_layers(govids)
 
   govids <- lapply(govids, .coerce_govid_input, arg = "govids[[layer]]")

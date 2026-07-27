@@ -9,7 +9,9 @@ test_that("all expected views register on session open", {
   expected <- c(
     "long", "spending_long", "revenue_long",
     "canonical_fips_xwalk", "summary_categories",
-    "spending_annotated", "revenue_annotated"
+    "spending_annotated", "revenue_annotated",
+    "ig_long", "ig_annotated",
+    "ig_long_harmonized", "ig_annotated_harmonized"
   )
   expect_true(all(expected %in% views$table_name))
 })
@@ -110,6 +112,70 @@ test_that("inst/sql/22- and 23- harmonized views enforce every WHERE predicate (
   expect_equal(rev$amt, 225)
 })
 
+test_that("inst/sql/24- and 25- IG views retain aggregates, COALESCE NULL harmonized_code, and exclude the L-- family total (real SQL text, synthetic parquet)", {
+  # ig_long / ig_long_harmonized have the subtlest predicates in the package:
+  # a deliberately ABSENT `NOT is_aggregate` (unlike every other *_long view),
+  # and COALESCE(harmonized_code, item_code) instead of a plain
+  # `harmonized_code IS NOT NULL` filter. The only end-to-end guard on this
+  # today is bound to AL state / 2011 / Education K-12, where M12 happens to
+  # be the sole IG code present -- regenerate the fixture without that one
+  # row and the guard would die silently while staying green. As with the
+  # 22-/23- test above, this reads the real inst/sql/24-/25- text off disk
+  # and executes it against a synthetic hive-partitioned parquet tree, so a
+  # regression in either predicate changes which rows survive.
+  skip_if_no_corpus()
+
+  tmp <- withr::local_tempdir()
+  part_dir <- file.path(tmp, "data", "long", "year=2004")
+  dir.create(part_dir, recursive = TRUE)
+  part_path <- file.path(part_dir, "part-0.parquet")
+
+  write_con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(DBI::dbDisconnect(write_con, shutdown = TRUE), add = TRUE)
+  DBI::dbExecute(write_con, sprintf("
+    COPY (
+      SELECT * FROM (VALUES
+        ('ig-A', 'M04', 100,   false, 'M04'), -- control: passes through as-is
+        ('ig-B', 'M38', 50,    false, 'M36'), -- fold control: real SB012 rule, renamed to M36 under harmonized basis
+        ('ig-C', 'M47', 99999, true,  NULL),  -- legacy aggregate, NO harmonized_code: must survive BOTH views
+        ('ig-D', 'L--', 55555, false, 'L--'), -- family total: excluded from BOTH views
+        ('ig-E', 'T29', 44444, false, 'T29')  -- wrong prefix (revenue, not M/L): excluded from BOTH views
+      ) AS t(canonical_govid, item_code, amt, is_aggregate, harmonized_code)
+    ) TO %s (FORMAT PARQUET)
+  ", uscogdata:::.sql_lit_chr(part_path)))
+
+  sql_dir <- system.file("sql", package = "uscogdata")
+  .read_view_sql <- function(filename) {
+    txt <- paste(readLines(file.path(sql_dir, filename), warn = FALSE), collapse = "\n")
+    gsub("\\{url\\}", paste0(tmp, "/"), txt, fixed = FALSE)
+  }
+
+  con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  DBI::dbExecute(con, .read_view_sql("10-long.sql"))
+  DBI::dbExecute(con, .read_view_sql("24-ig_long.sql"))
+  DBI::dbExecute(con, .read_view_sql("25-ig_long_harmonized.sql"))
+
+  raw <- DBI::dbGetQuery(con,
+    "SELECT item_code, SUM(amt) AS amt FROM ig_long
+     GROUP BY item_code ORDER BY item_code"
+  )
+  # L-- (family total) and T29 (wrong prefix) are gone; the aggregate row
+  # M47 survives -- proof `NOT is_aggregate` is absent from ig_long.
+  expect_equal(raw$item_code, c("M04", "M38", "M47"))
+  expect_equal(raw$amt, c(100, 50, 99999))
+
+  harmonized <- DBI::dbGetQuery(con,
+    "SELECT item_code, SUM(amt) AS amt FROM ig_long_harmonized
+     GROUP BY item_code ORDER BY item_code"
+  )
+  # M38 folds to M36 (real harmonized_code present); M47 keeps its raw code
+  # via COALESCE(NULL, 'M47') -- proof the aggregate row is NOT dropped by
+  # a plain `harmonized_code IS NOT NULL` filter. L-- and T29 stay excluded.
+  expect_equal(harmonized$item_code, c("M04", "M36", "M47"))
+  expect_equal(harmonized$amt, c(100, 50, 99999))
+})
+
 test_that(".build_series_break_refs matches fin_code + break_year window", {
   # No series_breaks_pq row falls inside the bundled fixture's 2011-2020
   # window (data-verified; see the "series_break_refs" test in
@@ -150,6 +216,108 @@ test_that("schema v5 harmonization views register when the corpus supports them"
     "harmonization_map", "harmonization_recipes", "series_breaks_pq"
   )
   expect_true(all(expected_v5 %in% views$table_name))
+})
+
+test_that(".harmonization_view_files guard is necessary: registration against a v4-shaped corpus (no harmonized_code column at all) succeeds only because the harmonized views are skipped", {
+  # with_doctored_schema_version() (used elsewhere in this suite) only
+  # rewrites manifest.json's schema_version -- the underlying `long` parquet
+  # is still the bundled v6 fixture, which DOES have a harmonized_code
+  # column, so it only proves the skip *happens*, not that it is *required*.
+  # This test builds a genuinely v4-shaped corpus: `long` has no
+  # harmonized_code column at all, matching a real pre-Phase-R2 publish
+  # tree, and then shows two things: (1) the real .register_views(), gated
+  # on manifest$schema_version, registers cleanly against it; (2) the exact
+  # SQL text of a gated file (25-ig_long_harmonized.sql), executed directly
+  # against the same corpus without the gate, fails -- proving the gate is
+  # load-bearing, not incidental.
+  tmp <- withr::local_tempdir()
+  part_dir <- file.path(tmp, "data", "long", "year=2004")
+  dir.create(part_dir, recursive = TRUE)
+  part_path <- file.path(part_dir, "part-0.parquet")
+
+  write_con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(DBI::dbDisconnect(write_con, shutdown = TRUE), add = TRUE)
+  DBI::dbExecute(write_con, sprintf("
+    COPY (
+      SELECT * FROM (VALUES
+        ('gov-1', 'E36', 100, false, 500000, 2020)
+      ) AS t(canonical_govid, item_code, amt, is_aggregate, population, popyear)
+    ) TO %s (FORMAT PARQUET)
+  ", uscogdata:::.sql_lit_chr(part_path)))
+
+  xwalk_path <- file.path(tmp, "data", "canonical_fips_xwalk.parquet")
+  DBI::dbExecute(write_con, sprintf("
+    COPY (
+      SELECT * FROM (VALUES
+        ('gov-1', 'Test Gov', 1, 'County', '01', '001', NULL, 500000)
+      ) AS t(canonical_govid, gov_name, govs_type, type_label, fips_state,
+             fips_county, fips_place, population_acs)
+    ) TO %s (FORMAT PARQUET)
+  ", uscogdata:::.sql_lit_chr(xwalk_path)))
+
+  cats_path <- file.path(tmp, "data", "summary_categories.parquet")
+  DBI::dbExecute(write_con, sprintf("
+    COPY (
+      SELECT * FROM (VALUES
+        ('E36', 'Test Category', 'expenditure', 'direct', NULL)
+      ) AS t(item_code, category, category_type, spend_subtype, revenue_subtype)
+    ) TO %s (FORMAT PARQUET)
+  ", uscogdata:::.sql_lit_chr(cats_path)))
+
+  # Confirm the synthetic `long` genuinely lacks harmonized_code (not just
+  # NULL values -- the column itself must be absent) before trusting the
+  # rest of this test.
+  cols <- DBI::dbGetQuery(write_con, sprintf(
+    "DESCRIBE SELECT * FROM read_parquet(%s)", uscogdata:::.sql_lit_chr(part_path)
+  ))$column_name
+  expect_false("harmonized_code" %in% cols)
+
+  url <- paste0(tmp, "/")
+
+  # (1) Full .register_views() against this v4-shaped corpus must succeed --
+  # this is the behavior the guard exists to protect.
+  con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  expect_no_error(
+    uscogdata:::.register_views(con, url, manifest = list(schema_version = 4L))
+  )
+  views <- DBI::dbGetQuery(con,
+    "SELECT table_name FROM information_schema.tables
+     WHERE table_schema = 'main' AND table_type = 'VIEW'")$table_name
+  expect_true(all(c("ig_long", "ig_annotated", "spending_annotated") %in% views))
+  expect_false(any(c("ig_long_harmonized", "ig_annotated_harmonized",
+                      "spending_long_harmonized") %in% views))
+
+  # (2) Prove the gate is load-bearing: the exact SQL text of the skipped
+  # file, executed directly (bypassing .register_views()'s schema_version
+  # check) against the SAME corpus, fails because it references
+  # long.harmonized_code, a column this corpus's `long` does not have.
+  sql_dir <- system.file("sql", package = "uscogdata")
+  .read_view_sql <- function(filename) {
+    txt <- paste(readLines(file.path(sql_dir, filename), warn = FALSE), collapse = "\n")
+    gsub("\\{url\\}", url, txt, fixed = FALSE)
+  }
+  con2 <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(DBI::dbDisconnect(con2, shutdown = TRUE), add = TRUE)
+  DBI::dbExecute(con2, .read_view_sql("10-long.sql"))
+  expect_error(DBI::dbExecute(con2, .read_view_sql("25-ig_long_harmonized.sql")))
+
+  # Reconciling this test with the C2 guard (expenditure-concept review):
+  # `ig_annotated`/`spending_annotated` registering cleanly above proves
+  # only that CREATE VIEW binds against a `summary_categories` with no M/L
+  # rows at all (this synthetic corpus's own summary_categories has a
+  # single E36 row, see the COPY above) -- a LEFT JOIN never fails to
+  # resolve regardless of what the joined-to table contains. It does NOT
+  # mean querying expenditure_concept = "total" against this shape is safe:
+  # exactly this corpus (schema_version reported as supported, but
+  # summary_categories predates the M/L rows cog_pipeline PR #59 added) is
+  # what .require_ig_categories() exists to catch at the *verb* level,
+  # since PR #59 shipped those rows with no schema_version bump. Confirm
+  # the new runtime guard actually fires against this same `con`.
+  expect_error(
+    uscogdata:::.require_ig_categories(con),
+    class = "uscogdata_ig_categories_unsupported"
+  )
 })
 
 test_that("spending_long filters to E/F/G/K prefixes and excludes aggregates", {

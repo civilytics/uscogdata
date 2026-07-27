@@ -60,6 +60,21 @@ cog_explain <- function(result, format = c("print", "list")) {
     cli::cli_text("Basis: {prov$basis}{note}")
   }
 
+  if (!is.null(prov$expenditure_concept)) {
+    concept_note <- if (!is.null(prov$expenditure_concept_note) &&
+                         !is.na(prov$expenditure_concept_note)) {
+      sprintf(" (%s)", prov$expenditure_concept_note)
+    } else {
+      ""
+    }
+    cli::cli_text("Concept: {prov$expenditure_concept}{concept_note}")
+    if (isTRUE(prov$expenditure_concept_direct_suppressed)) {
+      cli::cli_alert_warning(
+        "Direct leg unavailable for at least one requested (year, category) -- affected rows report intergovernmental dollars alone, not Direct + IG. See each row's notes."
+      )
+    }
+  }
+
   cli::cli_h2("Codes observed")
   codes <- prov$codes_summed$observed
   if (length(codes) == 0L) {

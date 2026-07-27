@@ -42,6 +42,34 @@
 #'   `basis = "recipe"` with an inert `harmonization` block (`applied =
 #'   FALSE`, pointing at the `recipe` block instead) rather than a
 #'   possibly-misleading `"harmonized"`/`"raw"` value.
+#' @param expenditure_concept `"direct"` (default) returns only the
+#'   government's own direct spending (item codes `E`/`F`/`G`), unchanged
+#'   from prior releases. `"total"` additionally UNIONs in the
+#'   intergovernmental leg -- payments to local governments (`M` codes) and
+#'   to the state government (`L` codes, excluding the `L--` family-total
+#'   rollup) -- so results gain rows with `spend_subtype ==
+#'   "intergovernmental"`. Requires the active corpus's `summary_categories`
+#'   to carry M/L rows (added by cog_pipeline PR #59); aborts with class
+#'   `uscogdata_ig_categories_unsupported` on an older corpus rather than
+#'   silently under-reporting. Mutually exclusive with `recipe` (a recipe
+#'   already defines its own component codes). **Do not sum `"total"`
+#'   results across levels of government** (e.g. state + county + city):
+#'   a state's `M12` payment to a school district is the same dollar the
+#'   district reports as its own direct `E12`, so summing both double-counts
+#'   it. This matters in particular with [cog_geographic_rollup()], which
+#'   sums across exactly that kind of multi-layer government set.
+#'
+#'   In the legacy wide era (<= FY2011), some functions are published ONLY
+#'   as an aggregate-flagged family total (e.g. Corrections' `E04`/`E05`
+#'   split), which the Direct leg excludes by construction but the IG leg
+#'   deliberately keeps (see `inst/sql/24-ig_long.sql`). For a `"total"`
+#'   query, any (year, category) where this leaves intergovernmental rows
+#'   with NO Direct counterpart is flagged: the affected rows' `notes`
+#'   name the harmonization recipe that recovers the missing Direct
+#'   component (when one exists), and
+#'   `provenance$expenditure_concept_direct_suppressed` is `TRUE` -- the
+#'   figure in those rows is the intergovernmental leg alone, not Direct +
+#'   IG.
 #' @return Tibble with columns `year`, `canonical_govid`, `gov_name`,
 #'   `spend_subtype`, `category`, `amt_nominal`, optional `amt_real`,
 #'   optional `amt_per_capita_nominal`, optional `amt_per_capita_real`,
@@ -50,12 +78,13 @@
 #' @export
 cog_spending <- function(govid, years, category = NULL,
                          per_capita = FALSE, adjust_to_year = NULL,
-                         basis = c("harmonized", "raw"), recipe = NULL) {
+                         basis = c("harmonized", "raw"), recipe = NULL,
+                         expenditure_concept = c("direct", "total")) {
   .verb_spendrev(
     verb          = "cog_spending",
     view_base     = "spending_annotated",
     subtype_col   = "spend_subtype",
-    flow_prefixes = c("E", "F", "G", "K"),
+    flow_prefixes = c("E", "F", "G"),
     call          = match.call(),
     govid         = govid,
     years         = years,
@@ -63,21 +92,78 @@ cog_spending <- function(govid, years, category = NULL,
     per_capita    = per_capita,
     adjust_to_year = adjust_to_year,
     basis         = basis,
-    recipe        = recipe
+    recipe        = recipe,
+    expenditure_concept = expenditure_concept
   )
+}
+
+#' @noRd
+.abort_concept_not_aggregatable <- function(verb) {
+  cli::cli_abort(c(
+    "{.code expenditure_concept = \"total\"} cannot be used in {.fn {verb}}.",
+    "*" = "Use {.code expenditure_concept = \"direct\"} (the default) for any \\
+           comparison or sum that spans more than one government.",
+    "i" = "Why: Census \"Total\" is a government's own Direct spending PLUS the \\
+           money it hands to other governments. The receiving government reports \\
+           that same dollar again as its own Direct when it actually spends it, \\
+           so combining Total across governments double-counts intergovernmental \\
+           transfers.",
+    "i" = "For one government's own Total, use \\
+           {.code cog_spending(expenditure_concept = \"total\")}."
+  ), class = "uscogdata_concept_not_aggregatable")
 }
 
 #' @noRd
 .verb_spendrev <- function(verb, view_base, subtype_col, flow_prefixes, call,
                            govid, years, category,
                            per_capita, adjust_to_year,
-                           basis = c("harmonized", "raw"), recipe = NULL) {
+                           basis = c("harmonized", "raw"), recipe = NULL,
+                           expenditure_concept = c("direct", "total")) {
   basis_explicit <- length(basis) == 1L
   basis <- match.arg(basis, c("harmonized", "raw"))
+  # match.arg() itself throws a base `simpleError`, not an rlang-classed
+  # condition; wrap it so an invalid expenditure_concept aborts consistently
+  # with the rest of this package's validation (cli::cli_abort -> rlang_error).
+  expenditure_concept <- tryCatch(
+    match.arg(expenditure_concept, c("direct", "total")),
+    error = function(e) {
+      cli::cli_abort(
+        "`expenditure_concept` must be one of {.val direct} or {.val total}.",
+        class = "uscogdata_invalid_expenditure_concept",
+        parent = e
+      )
+    }
+  )
 
   govid <- .coerce_govid_input(govid, arg = "govid")
   .validate_verb_inputs(govid, years, category, per_capita, adjust_to_year,
                         recipe)
+
+  if (!is.null(recipe) && identical(expenditure_concept, "total")) {
+    cli::cli_abort(c(
+      "`recipe` and `expenditure_concept = \"total\"` are mutually exclusive.",
+      i = "A recipe defines its own component codes; pass one or the other.",
+      i = "For a recipe's intergovernmental counterpart, use the matching IG recipe (e.g. `corrections_ig_local_combined`)."
+    ), class = "uscogdata_recipe_concept_conflict")
+  }
+
+  # .verb_spendrev() is shared with cog_revenue(), which never exposes
+  # expenditure_concept and always resolves it to "direct" -- so nothing on
+  # the public API can reach this today. But it's a cheap guard against a
+  # future call (direct or via a modified cog_revenue()) that would UNION
+  # the IG leg's expenditure M/L rows into a revenue result, which has no
+  # matching IG view and no sensible meaning.
+  if (identical(expenditure_concept, "total") &&
+      !identical(view_base, "spending_annotated")) {
+    cli::cli_abort(
+      paste0(
+        "`expenditure_concept = \"total\"` is only supported for spending ",
+        "(view_base = \"spending_annotated\"); got view_base = ",
+        "{.val {view_base}}."
+      ),
+      class = "uscogdata_expenditure_concept_unsupported"
+    )
+  }
 
   years   <- as.integer(years)
   if (!is.null(adjust_to_year)) adjust_to_year <- as.integer(adjust_to_year)
@@ -105,7 +191,13 @@ cog_spending <- function(govid, years, category = NULL,
     category_for_prov <- recipe_label
   } else {
     view <- .select_view(view_base, resolved$basis)
-    sql <- .build_verb_sql(view, subtype_col, govid, years, category)
+    ig_view <- if (identical(expenditure_concept, "total")) {
+      .require_ig_categories(con)
+      .select_ig_view(resolved$basis)
+    } else {
+      NULL
+    }
+    sql <- .build_verb_sql(view, subtype_col, govid, years, category, ig_view)
     result <- tibble::as_tibble(DBI::dbGetQuery(con, sql))
   }
 
@@ -113,8 +205,6 @@ cog_spending <- function(govid, years, category = NULL,
   if (!is.null(adjust_to_year)) {
     result <- .attach_real_dollars(result, adjust_to_year, per_capita)
   }
-
-  result$notes <- .notes_column(result)
 
   # A recipe result doesn't go through spending_annotated(_harmonized) /
   # revenue_annotated(_harmonized) at all -- .run_recipe()'s generic join
@@ -141,7 +231,64 @@ cog_spending <- function(govid, years, category = NULL,
     harmonization <- .build_harmonization_block(
       con, govid, years, resolved, flow_prefixes
     )
-    suggestions <- .build_suggestions(con, govid, years, category, result, resolved$basis)
+    # C1(a): gap detection must run against the Direct leg alone. `result`
+    # can also carry UNION'd intergovernmental rows (expenditure_concept =
+    # "total"), and the wide era (<= FY2011) routinely has legacy IG dollars
+    # surviving (ig_long deliberately keeps aggregate rows) for a
+    # (year, category) whose legacy Direct dollars were suppressed (spending_
+    # long/spending_long_harmonized both filter NOT is_aggregate). Passing
+    # the UNION'd result here would let a surviving IG row count as coverage
+    # and silently cancel the recipe-hint suggestion that should fire.
+    direct_leg_result <- if (identical(expenditure_concept, "total")) {
+      result[!(result[[subtype_col]] %in% "intergovernmental"), , drop = FALSE]
+    } else {
+      result
+    }
+    suggestions <- .build_suggestions(con, govid, years, category,
+                                       direct_leg_result,
+                                       resolved$basis, flow_prefixes)
+  }
+
+  # C1(b): when expenditure_concept = "total", flag any row where the IG
+  # leg has dollars but the Direct leg has none for that same (year,
+  # canonical_govid, category) AND a harmonization recipe actually recovers
+  # the missing Direct dollars for that exact triple -- see
+  # .detect_direct_suppressed() for why bare Direct-row absence alone is NOT
+  # sufficient (the dominant real cause is a government that simply has no
+  # direct spending in that category, which is correct, ordinary data). When
+  # a covering recipe is found, both the row-level notes and the provenance
+  # say so rather than pass silently as a plausible Total.
+  direct_suppressed_info <- if (identical(expenditure_concept, "total")) {
+    .detect_direct_suppressed(con, result, subtype_col)
+  } else {
+    list(flag = rep(FALSE, nrow(result)), notes = rep(NA_character_, nrow(result)))
+  }
+  direct_suppressed <- direct_suppressed_info$flag
+  direct_suppressed_flag <- isTRUE(any(direct_suppressed))
+
+  result$notes <- .notes_column(result, direct_suppressed_info$notes)
+
+  # Determine expenditure_concept_note: only non-empty for "total", explains
+  # how the IG leg was assembled from legacy-era aggregates. When the Direct
+  # leg is suppressed for at least one requested (year, category), append an
+  # explicit warning rather than let the base note's "Total = Direct + IG"
+  # framing stand unqualified for rows where that arithmetic didn't happen.
+  expenditure_concept_note_for_prov <- if (identical(expenditure_concept, "total")) {
+    base_note <- "Total = Direct + intergovernmental (M to local govts + L to state govts). Legacy-era IG is assembled from aggregate-flagged rows, which are year-disjoint from their modern leaf components; the L-- family total is excluded."
+    if (direct_suppressed_flag) {
+      paste0(
+        base_note,
+        " NOTE: for at least one requested (year, category) the Direct leg ",
+        "has NO rows in this corpus (a legacy aggregate-only family) -- the ",
+        "affected result rows report the intergovernmental leg alone, not ",
+        "Direct + IG. See `expenditure_concept_direct_suppressed` and each ",
+        "affected row's `notes`."
+      )
+    } else {
+      base_note
+    }
+  } else {
+    NA_character_
   }
 
   prov <- .build_provenance(
@@ -157,6 +304,9 @@ cog_spending <- function(govid, years, category = NULL,
     subtype_col    = subtype_col,
     basis          = basis_for_prov,
     basis_note     = basis_note_for_prov,
+    expenditure_concept = expenditure_concept,
+    expenditure_concept_note = expenditure_concept_note_for_prov,
+    expenditure_concept_direct_suppressed = direct_suppressed_flag,
     harmonization  = harmonization,
     recipe         = recipe_block,
     suggestions    = suggestions
@@ -212,13 +362,51 @@ cog_spending <- function(govid, years, category = NULL,
 }
 
 #' @noRd
+.select_ig_view <- function(basis) {
+  if (identical(basis, "harmonized")) "ig_annotated_harmonized" else "ig_annotated"
+}
+
+#' Abort unless the active corpus's `summary_categories` actually carries
+#' intergovernmental (M/L) rows.
+#'
+#' The 66 M/L category rows arrived via cog_pipeline PR #59 with NO
+#' `schema_version` bump (`DESCRIPTION` still declares `MinCorpusSchema: 4`),
+#' so `schema_version` alone cannot gate `expenditure_concept = "total"` --
+#' a pre-#59 corpus can validly report schema_version 4, 5, or 6 and still
+#' have zero M/L rows in `summary_categories`. Against such a corpus,
+#' `ig_annotated`'s LEFT JOIN to `summary_categories` silently produces NA
+#' `category`/`spend_subtype` for every IG row: with a `category` filter
+#' this returns 0 rows (reads as "no intergovernmental spending" rather than
+#' "can't tell"), and with `category = NULL` every IG dollar collapses into
+#' one NA-subtype group that is invisible to the `spend_subtype ==
+#' "intergovernmental"` filter this package's own tests, roxygen, and
+#' vignette all rely on. Checking the data directly (rather than
+#' schema_version) is the only reliable gate.
+#' @noRd
+.require_ig_categories <- function(con, what = "expenditure_concept = \"total\"") {
+  n <- DBI::dbGetQuery(con,
+    "SELECT COUNT(*) AS n FROM summary_categories WHERE LEFT(item_code, 1) IN ('M', 'L')"
+  )$n
+  if (identical(as.integer(n), 0L)) {
+    cli::cli_abort(c(
+      sprintf("%s requires a corpus with intergovernmental category rows.", what),
+      x = "The active corpus's `summary_categories` has no M/L (intergovernmental) rows.",
+      i = "This corpus predates the intergovernmental category rows added by cog_pipeline PR #59.",
+      i = "Point USCOGDATA_URL at a newer corpus that includes the M/L summary_categories rows."
+    ), class = "uscogdata_ig_categories_unsupported")
+  }
+  invisible(TRUE)
+}
+
+#' @noRd
 .sql_lit_chr <- function(x) {
   safe <- gsub("'", "''", x, fixed = TRUE)
   paste0("'", safe, "'", collapse = ",")
 }
 
 #' @noRd
-.build_verb_sql <- function(view, subtype_col, govid, years, category) {
+.build_verb_sql <- function(view, subtype_col, govid, years, category,
+                            ig_view = NULL) {
   govid_lit <- .sql_lit_chr(govid)
   years_lit <- paste(as.integer(years), collapse = ",")
   category_pred <- if (is.null(category)) {
@@ -227,6 +415,26 @@ cog_spending <- function(govid, years, category = NULL,
     sprintf("AND category IN (%s)", .sql_lit_chr(category))
   }
 
+  # expenditure_concept = "total" adds the intergovernmental leg. UNION ALL,
+  # never UNION: the two legs are disjoint by item_code prefix (E/F/G vs M/L),
+  # so de-duplication would be pure cost, and a silent row-drop if two
+  # governments ever reported identical values.
+  source_expr <- if (is.null(ig_view)) {
+    view
+  } else {
+    sprintf("(SELECT * FROM %s UNION ALL SELECT * FROM %s)", view, ig_view)
+  }
+
+  # bool_or(), not bool_and(): a no-op for the Direct/revenue legs (those
+  # views filter NOT is_aggregate, so no row in any group is ever aggregate),
+  # but load-bearing for the IG leg, which deliberately keeps aggregate rows
+  # (see inst/sql/24-ig_long.sql). The wide era is dense -- every government
+  # has a row for every code in a family, most of them $0 -- so a $0 leaf
+  # commonly lands in the same (year, gov, subtype, category) group as the
+  # real aggregate row. bool_and() would then read FALSE for that group even
+  # though its dollars came entirely from an aggregate row, silently
+  # suppressing the "Aggregate fallback applied" note on exactly the rows
+  # this feature exists to surface.
   sprintf(
     "SELECT
        year,
@@ -236,14 +444,14 @@ cog_spending <- function(govid, years, category = NULL,
        category,
        SUM(amt) * 1000.0 AS amt_nominal,
        string_agg(DISTINCT item_code, ',' ORDER BY item_code) AS codes_included,
-       bool_and(is_aggregate) AS aggregate_fallback
+       bool_or(is_aggregate) AS aggregate_fallback
      FROM %2$s
      WHERE canonical_govid IN (%3$s)
        AND year IN (%4$s)
        %5$s
      GROUP BY year, canonical_govid, gov_name, xwalk_gov_name, %1$s, category
      ORDER BY year, canonical_govid, %1$s, category",
-    subtype_col, view, govid_lit, years_lit, category_pred
+    subtype_col, source_expr, govid_lit, years_lit, category_pred
   )
 }
 
@@ -296,11 +504,131 @@ cog_spending <- function(govid, years, category = NULL,
   result
 }
 
+#' Detect rows where expenditure_concept = "total" is reporting the
+#' intergovernmental leg with NO Direct counterpart in the same (year,
+#' canonical_govid, category) group AND a harmonization recipe actually
+#' recovers the missing Direct dollars for that exact (year, canonical_govid,
+#' category) triple.
+#'
+#' Bare Direct-row absence is deliberately NOT sufficient on its own: the
+#' dominant real cause of "no Direct sibling row" is a government that simply
+#' has no direct spending in that category (e.g. a state that funds K-12
+#' entirely through school districts), which is correct, ordinary data, not
+#' suppression. Genuine suppression -- a legacy aggregate-only family whose
+#' Direct-leg basis query excludes it by construction (spending_long/
+#' spending_long_harmonized both filter NOT is_aggregate) -- always has a
+#' covering harmonization recipe, because that is exactly what the recipe
+#' catalog exists to recover (see R/suggestions.R and `cog_recipes()`). So
+#' checking "does a recipe actually cover this triple" cleanly separates the
+#' two cases instead of conflating them.
+#'
+#' Returns `list(flag, notes)`, both the same length as `result`: `flag` is
+#' `TRUE` only for the `spend_subtype == "intergovernmental"` row(s) in a
+#' suppressed group, and `notes` names the recovering recipe(s) for those
+#' rows (`NA` everywhere else).
 #' @noRd
-.notes_column <- function(result) {
+.detect_direct_suppressed <- function(con, result, subtype_col) {
+  n <- nrow(result)
+  empty_notes <- rep(NA_character_, n)
+  if (n == 0L) return(list(flag = logical(0), notes = character(0)))
+  is_ig <- result[[subtype_col]] %in% "intergovernmental"
+  if (!any(is_ig)) return(list(flag = rep(FALSE, n), notes = empty_notes))
+
+  key <- paste(result$year, result$canonical_govid, result$category, sep = "\r")
+  has_direct <- key %in% unique(key[!is_ig])
+  candidate <- is_ig & !has_direct
+
+  flag <- rep(FALSE, n)
+  notes <- empty_notes
+  if (!any(candidate)) return(list(flag = flag, notes = notes))
+
+  idx <- which(candidate)
+  rows <- unique(result[idx, c("year", "canonical_govid", "category")])
+  covering <- .covering_recipes(con, rows)
+  cov_key <- paste(covering$year, covering$canonical_govid, covering$category,
+                    sep = "\r")
+
+  for (i in idx) {
+    k <- paste(result$year[i], result$canonical_govid[i], result$category[i],
+               sep = "\r")
+    m <- match(k, cov_key)
+    if (is.na(m)) next
+    ids <- covering$recipe_ids[[m]]
+    if (length(ids) == 0L) next
+    flag[i] <- TRUE
+    notes[i] <- sprintf(
+      "Direct component is unavailable through this basis for this year; recover it via recipe = '%s' (see cog_recipes()).",
+      paste(sort(unique(ids)), collapse = "', '")
+    )
+  }
+  list(flag = flag, notes = notes)
+}
+
+#' For each (year, canonical_govid, category) triple potentially affected by
+#' a suppressed Direct leg, find the harmonization recipe(s) that (a) cover
+#' this `category` (share a component item_code via `summary_categories`,
+#' excluding any recipe that is itself entirely intergovernmental M/L -- the
+#' same exclusion `.build_suggestions()` applies, see I2) and (b) actually
+#' produce a `long` row for this exact (canonical_govid, year) via the same
+#' generic join `.run_recipe()` uses (component year_min/year_max +
+#' gov_type_scope, no is_aggregate filter -- a recipe's whole point is to
+#' recover data that's aggregate-only). Adds a list-column `recipe_ids`
+#' (possibly length-0) to `rows`.
+#' @noRd
+.covering_recipes <- function(con, rows) {
+  rows$recipe_ids <- vector("list", nrow(rows))
+  cats <- unique(rows$category[!is.na(rows$category)])
+  if (length(cats) == 0L) return(rows)
+
+  cand <- DBI::dbGetQuery(con, sprintf(
+    "SELECT DISTINCT sc.category, r.recipe_id
+     FROM harmonization_recipes r
+     JOIN summary_categories sc ON sc.item_code = r.component_code
+     WHERE sc.category IN (%s)
+       AND r.recipe_id NOT IN (
+         SELECT DISTINCT recipe_id FROM harmonization_recipes
+         WHERE LEFT(component_code, 1) IN ('M', 'L')
+       )",
+    .sql_lit_chr(cats)
+  ))
+  if (nrow(cand) == 0L) return(rows)
+
+  recipe_ids_all <- unique(cand$recipe_id)
+  govids <- unique(rows$canonical_govid)
+  years  <- unique(rows$year)
+  covered <- DBI::dbGetQuery(con, sprintf(
+    "SELECT DISTINCT r.recipe_id, l.canonical_govid, l.year
+     FROM long l
+     JOIN harmonization_recipes r
+       ON l.item_code = r.component_code
+      AND l.year BETWEEN r.year_min AND r.year_max
+      AND (r.gov_type_scope = 'all'
+           OR (r.gov_type_scope = 'state' AND l.type = 0)
+           OR (r.gov_type_scope = 'local' AND l.type BETWEEN 1 AND 3))
+     WHERE r.recipe_id IN (%s)
+       AND l.canonical_govid IN (%s)
+       AND l.year IN (%s)",
+    .sql_lit_chr(recipe_ids_all), .sql_lit_chr(govids), paste(years, collapse = ",")
+  ))
+
+  for (i in seq_len(nrow(rows))) {
+    cat_i <- rows$category[i]
+    if (is.na(cat_i)) next
+    cat_recipe_ids <- cand$recipe_id[cand$category == cat_i]
+    if (length(cat_recipe_ids) == 0L) next
+    sub <- covered[covered$canonical_govid == rows$canonical_govid[i] &
+                   covered$year == rows$year[i] &
+                   covered$recipe_id %in% cat_recipe_ids, ]
+    rows$recipe_ids[[i]] <- sort(unique(sub$recipe_id))
+  }
+  rows
+}
+
+#' @noRd
+.notes_column <- function(result, direct_suppressed_notes = NULL) {
   n <- nrow(result)
   if (n == 0L) return(character(0))
-  parts <- vector("list", 2L)
+  parts <- vector("list", 3L)
   agg <- result[["aggregate_fallback"]]
   parts[[1]] <- if (!is.null(agg)) {
     ifelse(agg %in% TRUE,
@@ -314,6 +642,11 @@ cog_spending <- function(govid, years, category = NULL,
     ifelse(ps == "unavailable",
            "No population denominator available for this gov type",
            NA_character_)
+  } else {
+    rep(NA_character_, n)
+  }
+  parts[[3]] <- if (!is.null(direct_suppressed_notes)) {
+    direct_suppressed_notes
   } else {
     rep(NA_character_, n)
   }
