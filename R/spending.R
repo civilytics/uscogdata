@@ -83,6 +83,22 @@ cog_spending <- function(govid, years, category = NULL,
 }
 
 #' @noRd
+.abort_concept_not_aggregatable <- function(verb) {
+  cli::cli_abort(c(
+    "{.code expenditure_concept = \"total\"} cannot be used in {.fn {verb}}.",
+    "*" = "Use {.code expenditure_concept = \"direct\"} (the default) for any \\
+           comparison or sum that spans more than one government.",
+    "i" = "Why: Census \"Total\" is a government's own Direct spending PLUS the \\
+           money it hands to other governments. The receiving government reports \\
+           that same dollar again as its own Direct when it actually spends it, \\
+           so combining Total across governments double-counts intergovernmental \\
+           transfers.",
+    "i" = "For one government's own Total, use \\
+           {.code cog_spending(expenditure_concept = \"total\")}."
+  ), class = "uscogdata_concept_not_aggregatable")
+}
+
+#' @noRd
 .verb_spendrev <- function(verb, view_base, subtype_col, flow_prefixes, call,
                            govid, years, category,
                            per_capita, adjust_to_year,

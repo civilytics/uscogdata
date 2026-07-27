@@ -9,7 +9,8 @@ cog_geographic_rollup(
   category,
   years,
   per_capita = FALSE,
-  adjust_to_year = NULL
+  adjust_to_year = NULL,
+  expenditure_concept = c("direct", "total")
 )
 }
 \arguments{
@@ -27,6 +28,13 @@ population from `gov_population_yearly`. Govs with missing population
 are excluded from the result.}
 
 \item{adjust_to_year}{Integer base year for CPI-U conversion, or `NULL`.}
+
+\item{expenditure_concept}{`"direct"` (default) or `"total"`. Currently only
+`"direct"` is accepted; the `"total"` option exists in [cog_spending()] for
+single-government queries but cannot be used here because combining Total
+across multiple layers of government double-counts intergovernmental
+transfers (a state's payment to a school district is the same dollar the
+district reports as its own Direct spending).}
 }
 \value{
 Tibble with columns `year`, `layer`, `canonical_govid`, `gov_name`,

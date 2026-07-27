@@ -186,3 +186,44 @@ test_that(".verb_spendrev rejects expenditure_concept = 'total' for a non-spendi
     class = "uscogdata_expenditure_concept_unsupported"
   )
 })
+
+test_that("cog_geographic_rollup refuses expenditure_concept = 'total'", {
+  expect_error(
+    cog_geographic_rollup(
+      govids = list(state = "010000226085"),
+      category = "Police", years = 2019,
+      expenditure_concept = "total"
+    ),
+    class = "uscogdata_concept_not_aggregatable"
+  )
+})
+
+test_that("cog_peer_compare refuses expenditure_concept = 'total'", {
+  expect_error(
+    cog_peer_compare(
+      target_govid = "010000226085", peers = "010000226085",
+      category = "Police", years = 2019,
+      expenditure_concept = "total"
+    ),
+    class = "uscogdata_concept_not_aggregatable"
+  )
+})
+
+test_that("the refusal message names the fix and the reason", {
+  err <- tryCatch(
+    cog_geographic_rollup(govids = list(state = "010000226085"),
+                          category = "Police", years = 2019,
+                          expenditure_concept = "total"),
+    condition = function(e) e
+  )
+  msg <- paste(conditionMessage(err), collapse = " ")
+  expect_match(msg, "direct")
+  expect_match(msg, "double-count|double count")
+})
+
+test_that("both cross-government verbs still accept the direct default", {
+  expect_no_error(
+    cog_geographic_rollup(govids = list(state = "010000226085"),
+                          category = "Police", years = 2019)
+  )
+})

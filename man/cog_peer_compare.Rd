@@ -10,7 +10,8 @@ cog_peer_compare(
   category,
   years,
   per_capita = TRUE,
-  adjust_to_year = NULL
+  adjust_to_year = NULL,
+  expenditure_concept = c("direct", "total")
 )
 }
 \arguments{
@@ -27,6 +28,11 @@ cog_peer_compare(
 population.}
 
 \item{adjust_to_year}{Integer base year for CPI-U conversion or `NULL`.}
+
+\item{expenditure_concept}{`"direct"` (default) or `"total"`. Currently only
+`"direct"` is accepted; the `"total"` option exists in [cog_spending()] for
+single-government queries but cannot be used here because combining Total
+across peer sets counts intergovernmental transfers twice.}
 }
 \value{
 Tibble matching [cog_spending()]'s columns, plus a `role`

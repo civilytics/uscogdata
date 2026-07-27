@@ -143,6 +143,10 @@ cog_find_peers <- function(target_govid,
 #' @param per_capita Default `TRUE` — peer compare usually normalizes by
 #'   population.
 #' @param adjust_to_year Integer base year for CPI-U conversion or `NULL`.
+#' @param expenditure_concept `"direct"` (default) or `"total"`. Currently only
+#'   `"direct"` is accepted; the `"total"` option exists in [cog_spending()] for
+#'   single-government queries but cannot be used here because combining Total
+#'   across peer sets counts intergovernmental transfers twice.
 #' @return Tibble matching [cog_spending()]'s columns, plus a `role`
 #'   column taking values `"target"`, `"peer"`, `"summary_p25"`,
 #'   `"summary_p50"`, or `"summary_p75"`, `target_rank` (target's rank
@@ -153,8 +157,13 @@ cog_find_peers <- function(target_govid,
 #'   `cohort_year`, and `cohort_govids`.
 #' @export
 cog_peer_compare <- function(target_govid, peers, category, years,
-                             per_capita = TRUE, adjust_to_year = NULL) {
+                             per_capita = TRUE, adjust_to_year = NULL,
+                             expenditure_concept = c("direct", "total")) {
   call <- match.call()
+  expenditure_concept <- match.arg(expenditure_concept)
+  if (identical(expenditure_concept, "total")) {
+    .abort_concept_not_aggregatable("cog_peer_compare")
+  }
   if (!is.character(target_govid) || length(target_govid) != 1L) {
     cli::cli_abort("`target_govid` must be a length-1 character string.")
   }
