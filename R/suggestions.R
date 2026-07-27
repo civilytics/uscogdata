@@ -35,10 +35,16 @@
 #' @param result The verb's already-computed result tibble (post basis
 #'   query, pre per_capita/adjust_to_year).
 #' @param basis The *resolved* basis (`"harmonized"` or `"raw"`).
-#' @return List of `list(recipe_id, label, available_years, hint)`, possibly
-#'   empty.
+#' @param flow_prefixes The calling verb's own flow-type prefixes (e.g.
+#'   `c("E", "F", "G")` for `cog_spending()`, `c("T", "A", "U", "B", "C",
+#'   "D")` for `cog_revenue()` -- see `.verb_spendrev()`). Passed through to
+#'   `.attach_ig_counterparts()` to keep the intergovernmental-counterpart
+#'   lookup scoped to the calling verb's own flow family.
+#' @return List of `list(recipe_id, label, available_years, hint,
+#'   ig_recipe_id)`, possibly empty.
 #' @noRd
-.build_suggestions <- function(con, govid, years, category, result, basis) {
+.build_suggestions <- function(con, govid, years, category, result, basis,
+                                flow_prefixes) {
   if (!identical(basis, "harmonized") || is.null(category)) return(list())
 
   candidates <- DBI::dbGetQuery(con, sprintf(
@@ -98,7 +104,7 @@
       hint = sprintf("re-run with recipe = '%s'", rid)
     )
   }
-  .attach_ig_counterparts(con, suggestions)
+  .attach_ig_counterparts(con, suggestions, flow_prefixes)
 }
 
 #' Attach `ig_recipe_id` to each suggestion: the intergovernmental-expenditure
@@ -116,29 +122,70 @@
 #' all use "04"/"05" for corrections). M/L "combined other" codes (47/89/
 #' 91-94) reuse digits for an unrelated catch-all construct, so e.g.
 #' `general_gov_e89_wide`'s {E85, E89} -> {"85", "89"} must NOT match
-#' `ige_local_m89_wide`'s {"89", "91", "92", "93"} on the shared "89" alone --
-#' verified against the fixture's full `harmonization_recipes` catalog (see
-#' task-6-report.md): only the corrections family (E/F/G/M, suffixes 04/05)
-#' has an exact-set match in this corpus.
+#' `ige_local_m89_wide`'s {"89", "91", "92", "93"} on the shared "89" alone.
+#' Checked by hand against the full harmonization_recipes catalog: only the
+#' corrections family (E/F/G/M, suffixes 04/05) has an exact-set match in
+#' this corpus.
+#'
+#' Exact-set suffix matching is NOT enough on its own, though: the same
+#' reused-digit problem exists ACROSS the revenue-side IG families too.
+#' `ig_local_d47_wide` (D47/D94, suffixes {"47","94"}) is an exact-set match
+#' for `ige_local_m47_wide` (M47/M94, same suffixes) even though one is
+#' intergovernmental REVENUE received from local governments and the other is
+#' intergovernmental EXPENDITURE paid to local governments -- unrelated flows
+#' that happen to reuse "47"/"94" for their own "transit/utilities" and
+#' "other/combined" catch-alls. `ig_federal_b47_wide`, `ig_state_c47_wide`,
+#' and their `*_89` siblings all collide the same way. None of this is
+#' reachable via `cog_revenue()` in the bundled fixture today (its B/C/D
+#' recipes never happen to have a covered gap year for any fixture govid),
+#' but it IS reachable via a mis-scoped `cog_spending()` call on a
+#' revenue-only category, e.g. `cog_spending(gov, category = "IG Federal")`
+#' fires `ig_federal_b47_wide`/`ig_federal_b89_wide` for real in the fixture
+#' -- so this is a live, not merely theoretical, gap.
+#'
+#' Two flow-family checks close this, both required (see
+#' `tests/testthat/test-expenditure-concept.R`, "revenue-flavored ... never
+#' receives an M/L counterpart" tests, for the pairwise verification):
+#'   1. `own_prefix %in% flow_prefixes`: the firing recipe's own component
+#'      codes must belong to the calling verb's own flow family (the same
+#'      `flow_prefixes` `.build_harmonization_block()` uses, see
+#'      `R/basis.R`). This blocks a recipe surfaced through a mis-scoped
+#'      category from ever reaching the M/L search, e.g. `cog_spending()`'s
+#'      flow_prefixes are `c("E","F","G")`, which `ig_federal_b47_wide`'s own
+#'      `"B"` is not part of.
+#'   2. `own_prefix %in% c("E","F","G")`: M/L only ever pairs with the
+#'      DIRECT-expenditure family, never with revenue (`cog_revenue()`'s
+#'      flow_prefixes already fold B/C/D in as ordinary revenue -- there is
+#'      no separate "Total" bolt-on for revenue the way `expenditure_concept`
+#'      adds one for spending) and never with ANOTHER M/L recipe (without
+#'      this check, `ige_local_m47_wide` would wrongly match sibling
+#'      `ige_state_l47_wide` on their shared {"47","94"} suffix set).
+#'      Condition 1 alone does not catch this: under `cog_revenue()`,
+#'      `ig_federal_b47_wide`'s own `"B"` IS inside revenue's own
+#'      `flow_prefixes`, so only this second, family-specific check blocks
+#'      the search.
 #' @noRd
-.attach_ig_counterparts <- function(con, suggestions) {
+.attach_ig_counterparts <- function(con, suggestions, flow_prefixes) {
   if (length(suggestions) == 0L) return(suggestions)
 
   comp <- DBI::dbGetQuery(con,
     "SELECT recipe_id, component_code FROM harmonization_recipes")
+  comp$prefix <- substr(comp$component_code, 1L, 1L)
   comp$suffix <- substr(comp$component_code, 2L, nchar(comp$component_code))
   suffix_sets <- lapply(split(comp$suffix, comp$recipe_id), function(x) sort(unique(x)))
+  prefix_sets <- lapply(split(comp$prefix, comp$recipe_id), function(x) sort(unique(x)))
 
-  ig_recipe_ids <- unique(
-    comp$recipe_id[substr(comp$component_code, 1L, 1L) %in% c("M", "L")]
-  )
+  ig_recipe_ids <- unique(comp$recipe_id[comp$prefix %in% c("M", "L")])
 
   find_counterpart <- function(rid) {
-    own <- suffix_sets[[rid]]
-    if (is.null(own)) return(NULL)
+    own_prefix <- prefix_sets[[rid]]
+    own_suffix <- suffix_sets[[rid]]
+    if (is.null(own_prefix) || is.null(own_suffix)) return(NULL)
+    if (!all(own_prefix %in% flow_prefixes)) return(NULL)
+    if (!all(own_prefix %in% c("E", "F", "G"))) return(NULL)
     for (cand in ig_recipe_ids) {
       if (identical(cand, rid)) next
-      if (setequal(suffix_sets[[cand]], own)) return(cand)
+      if (setequal(suffix_sets[[cand]], own_suffix)) return(cand)
     }
     NULL
   }

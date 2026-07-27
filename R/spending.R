@@ -217,7 +217,8 @@ cog_spending <- function(govid, years, category = NULL,
     harmonization <- .build_harmonization_block(
       con, govid, years, resolved, flow_prefixes
     )
-    suggestions <- .build_suggestions(con, govid, years, category, result, resolved$basis)
+    suggestions <- .build_suggestions(con, govid, years, category, result,
+                                       resolved$basis, flow_prefixes)
   }
 
   # Determine expenditure_concept_note: only non-empty for "total", explains

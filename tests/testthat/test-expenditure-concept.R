@@ -283,3 +283,63 @@ test_that("no suggestion fires for a healthy query", {
   r <- cog_spending("010000226085", years = 2019, category = "Police")
   expect_length(attr(r, "provenance")$suggestions, 0L)
 })
+
+test_that("a mis-scoped cog_spending() call never attaches an M/L counterpart to a revenue-flavored recipe", {
+  # "IG Federal" is a revenue-only category (summary_categories maps it to
+  # B-prefixed component codes only; its recipes are ig_federal_b47_wide /
+  # ig_federal_b89_wide). A cog_spending() call scoped to it returns zero
+  # spending rows for every requested year -- there is no spending
+  # component in this category at all -- so the coverage-gap machinery
+  # fires for real (not hypothetically) even though this isn't the kind of
+  # format-boundary gap the recipe catalog is meant to signpost. This is
+  # exactly the live-corpus risk flagged in review: ig_federal_b47_wide's
+  # own component codes (B47/B94, suffixes {"47","94"}) are an EXACT
+  # suffix-set match for the expenditure recipe ige_local_m47_wide
+  # (M47/M94, same suffixes) -- a coincidence of reused digits, not a real
+  # Direct/Total pairing. The flow-family gate in
+  # .attach_ig_counterparts() must keep ig_recipe_id NULL here.
+  r <- suppressMessages(
+    cog_spending("010000226085", years = c(2005, 2011), category = "IG Federal")
+  )
+  sugg <- attr(r, "provenance")$suggestions
+  expect_gt(length(sugg), 0L)
+  ids <- vapply(sugg, function(s) s$recipe_id %||% "", character(1))
+  expect_true("ig_federal_b47_wide" %in% ids)
+  ig <- unlist(lapply(sugg, function(s) s$ig_recipe_id))
+  expect_length(ig, 0L)
+})
+
+test_that(".attach_ig_counterparts() never pairs a revenue-side recipe with its coincidental M/L suffix twin", {
+  # Broader version of the case above, run at the matching-helper level
+  # (the same level code review's pairwise enumeration was done at) rather
+  # than end-to-end: the fixture has no (govid, year) combination where
+  # cog_revenue() itself produces a covered gap for any B/C/D recipe, so an
+  # end-to-end repro for THIS specific set of recipes isn't reachable
+  # today. Each of these six recipes shares an exact suffix set with an
+  # M/L expenditure recipe purely by reused-digit coincidence:
+  #   ig_federal_b47_wide {"47","94"} == ige_local_m47_wide / ige_state_l47_wide
+  #   ig_federal_b89_wide {"89","91","92","93"} == ige_local_m89_wide / ige_state_l89_wide
+  #   ig_state_c47_wide   {"47","94"} == ige_local_m47_wide / ige_state_l47_wide
+  #   ig_state_c89_wide   {"89","91","92","93"} == ige_local_m89_wide / ige_state_l89_wide
+  #   ig_local_d47_wide   {"47","94"} == ige_local_m47_wide / ige_state_l47_wide
+  #   ig_local_d89_wide   {"89","91","92","93"} == ige_local_m89_wide / ige_state_l89_wide
+  # None of them may receive an ig_recipe_id under cog_revenue()'s own
+  # flow_prefixes, since M/L only ever pairs with the direct-expenditure
+  # (E/F/G) family.
+  con <- uscogdata:::.ensure_session()
+  fake_suggestion <- function(rid) {
+    list(recipe_id = rid, label = "x", available_years = c(1967L, 2023L),
+         hint = "h")
+  }
+  fake_suggestions <- lapply(
+    c("ig_federal_b47_wide", "ig_federal_b89_wide",
+      "ig_state_c47_wide", "ig_state_c89_wide",
+      "ig_local_d47_wide", "ig_local_d89_wide"),
+    fake_suggestion
+  )
+  out <- uscogdata:::.attach_ig_counterparts(
+    con, fake_suggestions, c("T", "A", "U", "B", "C", "D")
+  )
+  ig <- unlist(lapply(out, function(s) s$ig_recipe_id))
+  expect_length(ig, 0L)
+})
