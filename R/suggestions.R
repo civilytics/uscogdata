@@ -22,6 +22,13 @@
 # positives from ordinary reporting variance -- most governments don't use
 # every sibling code in a multi-code category every year, and that is not
 # a format-boundary gap worth signposting.
+#
+# C1(a): for expenditure_concept = "total" callers, `result` here must
+# already be the Direct-leg subset (the caller filters out
+# spend_subtype == "intergovernmental" rows before calling in). A gap year
+# is "the requested year has no Direct rows", never "no rows at all" --
+# an IG row surviving on a legacy aggregate that Direct excludes must not
+# read as coverage and cancel the very suggestion that would recover it.
 
 #' Build the `prov$suggestions` list for a (non-recipe) basis = "harmonized"
 #' verb call: recipes whose generic join would fill a real gap in `result`.
@@ -33,7 +40,8 @@
 #' @param category `category` argument as passed to the verb (character
 #'   vector or `NULL`; suggestions are only computed when non-NULL).
 #' @param result The verb's already-computed result tibble (post basis
-#'   query, pre per_capita/adjust_to_year).
+#'   query, pre per_capita/adjust_to_year), pre-filtered to the Direct leg
+#'   only when the caller's `expenditure_concept = "total"` (see C1(a)).
 #' @param basis The *resolved* basis (`"harmonized"` or `"raw"`).
 #' @param flow_prefixes The calling verb's own flow-type prefixes (e.g.
 #'   `c("E", "F", "G")` for `cog_spending()`, `c("T", "A", "U", "B", "C",
@@ -47,10 +55,26 @@
                                 flow_prefixes) {
   if (!identical(basis, "harmonized") || is.null(category)) return(list())
 
+  # Exclude any recipe that is ITSELF an intergovernmental (M/L) recipe --
+  # i.e. every one of its own component codes is M/L-prefixed. Without this,
+  # a category whose summary_categories rows span both a Direct family
+  # (e.g. E04/E05, "Corrections") and its M/L counterpart (M04/M05, same
+  # category since Task 1) makes the M/L recipe itself (e.g.
+  # `corrections_ig_local_combined`) a raw top-level candidate for a plain
+  # (Direct) cog_spending() call -- following that hint would silently
+  # return intergovernmental dollars under `expenditure_concept = "direct"`
+  # provenance. This is a stronger, unconditional exclusion than the
+  # flow-prefix gate below/in `.attach_ig_counterparts()`: an M/L recipe
+  # should never be suggested as a coverage-gap filler for EITHER verb, not
+  # just kept from being named as the *counterpart* of another suggestion.
   candidates <- DBI::dbGetQuery(con, sprintf(
     "SELECT DISTINCT recipe_id FROM harmonization_recipes
      WHERE component_code IN (
        SELECT DISTINCT item_code FROM summary_categories WHERE category IN (%s)
+     )
+     AND recipe_id NOT IN (
+       SELECT DISTINCT recipe_id FROM harmonization_recipes
+       WHERE LEFT(component_code, 1) IN ('M', 'L')
      )",
     .sql_lit_chr(category)
   ))$recipe_id
