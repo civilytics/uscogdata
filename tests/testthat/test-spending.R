@@ -98,7 +98,11 @@ test_that("cog_spending rejects invalid inputs", {
 
 test_that("cog_spending accepts a cog_gov_search result directly", {
   skip_if_no_corpus()
-  picks <- cog_gov_search("^BROWARD COUNTY$", state = "FL", type = "county")
+  # Unanchored: utility mode matches `name` as a literal substring now, so
+  # "^...$" would be searched for as those characters rather than read as
+  # anchors (uscogdata#16). Scoped by state and type, the bare name still
+  # resolves to exactly one row.
+  picks <- cog_gov_search("BROWARD COUNTY", state = "FL", type = "county")
   expect_gt(nrow(picks), 0L)
   r <- cog_spending(picks, 2020L, "Corrections")
   expect_equal(unique(r$canonical_govid), "121011212191")

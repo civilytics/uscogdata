@@ -13,7 +13,6 @@
 # is unaffected, so the fix is documentation: one sentence in @return.
 
 test_that("cog_peer_compare() documents that summary_* rows are per-category quantiles", {
-  testthat::skip("Blocked on uscogdata#14 (finding F-021)")
 
   rd <- paste(readLines(testthat::test_path("..", "..", "man", "cog_peer_compare.Rd"),
                         warn = FALSE), collapse = " ")

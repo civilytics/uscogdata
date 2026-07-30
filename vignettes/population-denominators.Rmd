@@ -13,6 +13,8 @@ knitr::opts_chunk$set(eval = FALSE, collapse = TRUE, comment = "#>")
 
 # Why per-year population matters
 
+A note on units first, since every figure below is a rate: the numerator is in **full US dollars**. The raw Census files report **thousands of dollars** and the corpus keeps them that way in its own `amt` column, but `cog_spending()` and `cog_revenue()` multiply by 1000 on the way out, so `amt_per_capita_nominal` is already dollars per person. Do not scale it again.
+
 Per-capita finance numbers divide each year's spending or revenue by a population denominator. The choice of denominator is a research decision, not an implementation detail: a 24-year corpus paired with a single 5-year ACS estimate produces biased per-capita values whose magnitude scales with each government's population change.
 
 `uscogdata` defaults to the **Census F-33 population value Census itself uses to compute its published per-capita tables.** That value is recorded on every COG row as `population`, with `popyear` indicating the vintage. For a city that grew from 200,000 to 300,000 between 2000 and 2023, this default reproduces the per-capita value Census published. A static ACS denominator would have understated 2000 per-capita by ~33%.

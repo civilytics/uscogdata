@@ -80,8 +80,11 @@ test_that("cog_geographic_rollup provenance reports the outer verb", {
 
 test_that("cog_geographic_rollup accepts data.frames per layer", {
   skip_if_no_corpus()
-  fl_state  <- cog_gov_search("^FLORIDA$", type = "state")
-  broward   <- cog_gov_search("^BROWARD COUNTY$", state = "FL", type = "county")
+  # Unanchored: utility mode matches literally now, so "^...$" would be
+  # searched for as characters rather than read as anchors (uscogdata#16).
+  # Both still resolve to exactly one row once scoped by type/state.
+  fl_state  <- cog_gov_search("FLORIDA", type = "state")
+  broward   <- cog_gov_search("BROWARD COUNTY", state = "FL", type = "county")
   r <- cog_geographic_rollup(
     govids = list(state = fl_state, county = broward),
     category = "Police", years = 2020L

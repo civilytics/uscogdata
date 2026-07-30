@@ -19,6 +19,27 @@ package implements.
 # pak::pkg_install("gitea.civilytics.org/Civilytics/uscogdata")
 ```
 
+## Amounts are in full US dollars
+
+Every amount column this package returns — `amt_nominal`, `amt_real`,
+`amt_per_capita_nominal`, `amt_per_capita_real` — is in **full US dollars**.
+
+The raw Census source files report **thousands of dollars**, and the corpus's
+own `amt` column preserves that. The verbs multiply by 1000 on the way out, so
+you never have to. The conversion is recorded in every result:
+
+```r
+r <- cog_spending("552025209777", 2020L)
+attr(r, "provenance")$transformations$units_conversion
+#> $applied TRUE  $source_unit "$1,000s (raw Census)"  $target_unit "$USD"  $multiplier 1000
+```
+
+**Do not multiply again.** If you have read elsewhere that COG amounts are in
+`$1,000s` — true of the raw corpus, and of `cog_explorer`'s conventions doc —
+that rule does not apply to anything a `cog_*()` verb hands you. Applying it
+twice overstates every figure by 1000x, and the result looks plausible rather
+than obviously wrong.
+
 ## Configuration
 
 - `USCOGDATA_URL` — corpus root URL (public Nextcloud share, trailing slash)

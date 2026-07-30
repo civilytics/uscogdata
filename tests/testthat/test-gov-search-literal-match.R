@@ -18,7 +18,6 @@
 # semantics, not a row the fix makes findable.
 
 test_that("cog_gov_search() matches name literally, not as an unescaped regex", {
-  testthat::skip("Blocked on uscogdata#16 (finding F-025)")
 
   # -- correctness (1): a government must be findable by its own exact name ---
   # FREDONIA (BRISCOE) CITY is real; today the parentheses are read as regex

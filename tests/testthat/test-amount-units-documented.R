@@ -17,7 +17,6 @@
 # cog-api's llms.txt, which is silent on units).
 
 test_that("returned amounts are documented as full US dollars where readers meet the package", {
-  testthat::skip("Blocked on uscogdata#15 (finding F-004)")
 
   says_units <- function(path) {
     txt <- paste(readLines(path, warn = FALSE), collapse = " ")
