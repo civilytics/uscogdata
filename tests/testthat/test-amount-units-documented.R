@@ -17,7 +17,16 @@
 # cog-api's llms.txt, which is silent on units).
 
 test_that("returned amounts are documented as full US dollars where readers meet the package", {
-  testthat::skip("Blocked on uscogdata#15 (finding F-004)")
+
+  # README and vignettes ship only in the source tree, not in the installed
+  # package, so these assertions cannot run under R CMD check -- CI's earlier
+  # testthat::test_local() step is what enforces them. See
+  # skip_if_no_source_tree() in helper-fixture.R.
+  docs <- skip_if_no_source_tree(
+    "README.md",
+    c("vignettes", "total-spending.Rmd"),
+    c("vignettes", "population-denominators.Rmd")
+  )
 
   says_units <- function(path) {
     txt <- paste(readLines(path, warn = FALSE), collapse = " ")
@@ -25,10 +34,7 @@ test_that("returned amounts are documented as full US dollars where readers meet
       grepl("\\$1,000s|thousands of dollars", txt, ignore.case = TRUE)
   }
 
-  expect_true(says_units(testthat::test_path("..", "..", "README.md")))
-  expect_true(says_units(testthat::test_path("..", "..", "vignettes", "total-spending.Rmd")))
-  expect_true(says_units(testthat::test_path("..", "..", "vignettes",
-                                             "population-denominators.Rmd")))
+  for (path in docs) expect_true(says_units(path))
 
   # Pin the documented claim to the actual behaviour, so the two cannot drift.
   # The expected raw amount is read straight from the corpus's parquet

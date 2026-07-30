@@ -13,10 +13,16 @@
 # is unaffected, so the fix is documentation: one sentence in @return.
 
 test_that("cog_peer_compare() documents that summary_* rows are per-category quantiles", {
-  testthat::skip("Blocked on uscogdata#14 (finding F-021)")
 
-  rd <- paste(readLines(testthat::test_path("..", "..", "man", "cog_peer_compare.Rd"),
-                        warn = FALSE), collapse = " ")
+  # man/ ships only in the source tree (the installed package carries a
+  # compiled help database instead), so the prose assertions below cannot run
+  # under R CMD check -- CI's earlier testthat::test_local() step enforces
+  # them. The numeric pin further down needs only the corpus, but it lives in
+  # the same test_that() as the sentence it protects, deliberately: they are
+  # one claim, and splitting them would let the prose drift while a separate
+  # test kept passing.
+  rd_path <- skip_if_no_source_tree(c("man", "cog_peer_compare.Rd"))
+  rd <- paste(readLines(rd_path, warn = FALSE), collapse = " ")
 
   # The @return section must say the quantile is computed within each cell...
   expect_match(rd, "within each|per-category|per category", ignore.case = TRUE)

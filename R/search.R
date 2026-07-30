@@ -6,8 +6,11 @@
 #' the cross-vintage canonical-government registry. Operates in two modes:
 #'
 #' * **Utility mode** (single `name`, the original behavior): returns all
-#'   rows whose `gov_name` matches the regex case-insensitively, sorted by
-#'   `population_acs` descending. Useful for exploratory lookups.
+#'   rows whose `gov_name` contains `name` as a **literal, case-insensitive
+#'   substring**, sorted by `population_acs` descending. Useful for
+#'   exploratory lookups. Regex metacharacters in `name` are escaped, so a
+#'   government is findable by its own complete name even when that name
+#'   contains parentheses or a period.
 #' * **Basket mode** (`length(name) > 1`): resolves each input row to a
 #'   single canonical govid and returns a tibble in input order, suitable
 #'   for piping straight into [cog_spending()] / [cog_revenue()] /
@@ -19,7 +22,8 @@
 #' 1. Filter `canonical_fips_xwalk` by `state` and (if non-NA) `type`.
 #' 2. **Exact pass:** case-insensitive equality against `gov_name`.
 #'    Single hit -> resolved. Multiple -> step 4.
-#' 3. **Substring fallback:** case-insensitive regex against `gov_name`.
+#' 3. **Substring fallback:** case-insensitive literal substring against
+#'    `gov_name` (metacharacters escaped).
 #'    Single hit -> resolved (`match_method = "substring"`). Zero hits ->
 #'    `status = "no_match"`. Multiple hits -> step 4.
 #' 4. **Disambiguation:** if matches share one `govs_type`, pick the
@@ -48,7 +52,7 @@
 #'   [cog_spending()], [cog_revenue()].
 #' @examples
 #' \dontrun{
-#' # Utility mode — exploratory regex lookup
+#' # Utility mode — exploratory substring lookup
 #' cog_gov_search("broward", state = "FL")
 #'
 #' # Basket mode — resolve a known cohort
@@ -98,9 +102,16 @@ cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
     if (!is.character(name) || length(name) != 1L) {
       cli::cli_abort("`name` must be a length-1 character string.")
     }
+    # Escaped, so `name` is a literal case-insensitive substring -- the same
+    # treatment basket mode has always given it. Interpolating it raw made a
+    # government unfindable by its own name whenever that name contains a
+    # metacharacter (FREDONIA (BRISCOE) CITY), turned a bare "." into a
+    # match-everything wildcard, and let malformed pattern text reach the
+    # engine as an error -- which cog-api surfaced as a 500, reachable by
+    # typing a real name one character at a time (uscogdata#16, F-025).
     preds <- c(preds,
                sprintf("regexp_matches(gov_name, %s, 'i')",
-                       .sql_lit_chr(name)))
+                       .sql_lit_chr(.escape_regex(name))))
   }
   if (!is.null(state)) {
     st_fips <- .coerce_state_to_fips(state)
@@ -136,8 +147,9 @@ cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
 #' @noRd
 .escape_regex <- function(x) {
   # Backslash-escape POSIX regex metacharacters so `name` is treated as a
-  # literal substring in the DuckDB regexp_matches call (substring fallback
-  # only; utility-mode intentionally preserves regex behavior).
+  # literal substring in the DuckDB regexp_matches call. Used by BOTH modes:
+  # utility mode used to interpolate raw, which was a defect rather than a
+  # feature -- see the call site and uscogdata#16.
   gsub("([\\^$.|?*+(){}\\[\\]])", "\\\\\\1", x, perl = TRUE)
 }
 

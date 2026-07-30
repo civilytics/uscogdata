@@ -29,6 +29,13 @@ controls which of these a query answers. This vignette walks through both
 questions with code that actually runs against the package's bundled fixture
 corpus, then explains why the second question refuses `"total"` outright.
 
+Before any of the numbers below: every amount column here — `amt_nominal`,
+`amt_real`, and their `amt_per_capita_*` counterparts — is in **full US
+dollars**. The raw Census files report **thousands of dollars** and the
+corpus preserves that in its own `amt` column, but the verbs multiply by 1000
+on the way out. So `amt_nominal = 1317000` means $1.317 million, not $1.317
+billion. Do not scale it again.
+
 ```{r}
 library(uscogdata)
 

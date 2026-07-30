@@ -32,8 +32,11 @@ the cross-vintage canonical-government registry. Operates in two modes:
 }
 \details{
 * **Utility mode** (single `name`, the original behavior): returns all
-  rows whose `gov_name` matches the regex case-insensitively, sorted by
-  `population_acs` descending. Useful for exploratory lookups.
+  rows whose `gov_name` contains `name` as a **literal, case-insensitive
+  substring**, sorted by `population_acs` descending. Useful for
+  exploratory lookups. Regex metacharacters in `name` are escaped, so a
+  government is findable by its own complete name even when that name
+  contains parentheses or a period.
 * **Basket mode** (`length(name) > 1`): resolves each input row to a
   single canonical govid and returns a tibble in input order, suitable
   for piping straight into [cog_spending()] / [cog_revenue()] /
@@ -45,7 +48,8 @@ the cross-vintage canonical-government registry. Operates in two modes:
 1. Filter `canonical_fips_xwalk` by `state` and (if non-NA) `type`.
 2. **Exact pass:** case-insensitive equality against `gov_name`.
    Single hit -> resolved. Multiple -> step 4.
-3. **Substring fallback:** case-insensitive regex against `gov_name`.
+3. **Substring fallback:** case-insensitive literal substring against
+   `gov_name` (metacharacters escaped).
    Single hit -> resolved (`match_method = "substring"`). Zero hits ->
    `status = "no_match"`. Multiple hits -> step 4.
 4. **Disambiguation:** if matches share one `govs_type`, pick the
@@ -58,7 +62,7 @@ inputs (`ambiguous` / `no_match`) appear only in the sidecar.
 }
 \examples{
 \dontrun{
-# Utility mode — exploratory regex lookup
+# Utility mode — exploratory substring lookup
 cog_gov_search("broward", state = "FL")
 
 # Basket mode — resolve a known cohort

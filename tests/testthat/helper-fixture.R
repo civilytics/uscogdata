@@ -6,6 +6,33 @@ fixture_corpus_path <- function() {
   if (nzchar(p)) paste0(p, "/") else ""
 }
 
+# Path to a file in the SOURCE tree (README.md, man/*.Rd, vignettes/*.Rmd),
+# or "" when it isn't there.
+#
+# Tests that assert on documentation content have to read the sources, and the
+# sources only exist when the suite runs from a checkout. Under R CMD check the
+# suite runs from the INSTALLED package, where man/ and vignettes/ are not
+# shipped and `../../README.md` does not resolve -- so those tests must skip
+# rather than error. CI runs testthat::test_local() from the checkout BEFORE
+# rcmdcheck, so the assertions are still enforced on every push; this only
+# stops them from failing a context that structurally cannot satisfy them.
+source_tree_path <- function(...) {
+  p <- testthat::test_path("..", "..", ...)
+  if (file.exists(p)) p else ""
+}
+
+# Skip unless every named source file is present (see source_tree_path()).
+skip_if_no_source_tree <- function(...) {
+  paths <- vapply(list(...), function(rel) do.call(source_tree_path, as.list(rel)),
+                  character(1))
+  missing <- vapply(paths, function(p) !nzchar(p), logical(1))
+  testthat::skip_if(
+    any(missing),
+    "package source tree not available (running against the installed package)"
+  )
+  invisible(paths)
+}
+
 # Skip a test if no corpus is reachable (bundled fixture or explicit remote URL).
 skip_if_no_corpus <- function() {
   p <- fixture_corpus_path()

@@ -43,11 +43,39 @@ Tibble matching [cog_spending()]'s columns, plus a `role`
   `attr(peers, "cohort_year")`; `NA` when `peers` was a bare character
   vector). Provenance reports `verb = "cog_peer_compare"`, `peer_count`,
   `cohort_year`, and `cohort_govids`.
+
+  **The `summary_*` rows are per-category quantiles: they are not additive.**
+  Each one is computed **within each `(year, spend_subtype,
+  category)` cell** across the peer set, so a `summary_p50` row is *the
+  median peer's value in that one category*, not *the value of the median
+  peer's total*. The median peer for Police and the median peer for Fire
+  are usually different governments, so summing `summary_*` rows across
+  categories does not give any peer's total and misstates the band it
+  appears to describe — measured at −32.7% to +251.0% across 24 years on
+  one cohort, with a sign flip at FY2012.
+
+  Facet by `role` **and** `category` (the documented use, and what the
+  rows are built for). For a genuine "median peer's total spending" line,
+  sum each peer's own categories first and take the quantile of those
+  per-government totals:
+
+  ```r
+  library(dplyr)
+  cmp |>
+    filter(role %in% c("target", "peer")) |>
+    group_by(year, role, canonical_govid) |>
+    summarise(total = sum(amt_per_capita_real, na.rm = TRUE), .groups = "drop") |>
+    filter(role == "peer") |>
+    group_by(year) |>
+    summarise(p50 = quantile(total, 0.5, na.rm = TRUE))
+  ```
 }
 \description{
 Pulls spending for the target plus a peer set (either a
 [cog_find_peers()] result or a character vector of `canonical_govid`) and
 appends peer-distribution summary rows (`summary_p25`, `summary_p50`,
 `summary_p75`) so the result can be faceted by `role` in a single ggplot
-call.
+call. Those summary rows are quantiles **within each category**, not
+quantiles of each peer's total — see the `@return` section before summing
+them.
 }
