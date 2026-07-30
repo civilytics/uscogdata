@@ -70,16 +70,42 @@
 #'   `provenance$expenditure_concept_direct_suppressed` is `TRUE` -- the
 #'   figure in those rows is the intergovernmental leg alone, not Direct +
 #'   IG.
+#' @param complete If `TRUE`, fill the requested grid so that a cell the
+#'   corpus does not carry still appears, labelled with **why** it is
+#'   missing, and add a `value_source` column to every row:
+#'
+#'   * `"reported"` — the corpus carries this cell.
+#'   * `"census_zero"` — dense-source year (`<= FY2011`), cell absent:
+#'     Census published `$0`. `amt_nominal` is `0`.
+#'   * `"not_reported"` — sparse-source year (`>= FY2012`), cell absent: the
+#'     government did not report, and the value is unknown. `amt_nominal` is
+#'     `NA`, **not** `0` — writing a zero there would invent data.
+#'
+#'   The grid comes from the corpus's `code_set` table, scoped to each
+#'   government's own type, so a county is never filled with cells only a
+#'   state can report. Reported rows are passed through untouched.
+#'
+#'   Defaults to `FALSE` (the historical behaviour: absent cells simply do
+#'   not appear). Needs a corpus published from 2026-07-29 onward, which is
+#'   when `representation`/`code_set` began shipping; aborts with class
+#'   `uscogdata_representation_unavailable` otherwise. Not available with
+#'   `recipe` or with `expenditure_concept = "total"` (class
+#'   `uscogdata_complete_unsupported`) — neither draws its cells from
+#'   `code_set`.
 #' @return Tibble with columns `year`, `canonical_govid`, `gov_name`,
 #'   `spend_subtype`, `category`, `amt_nominal`, optional `amt_real`,
 #'   optional `amt_per_capita_nominal`, optional `amt_per_capita_real`,
-#'   optional `pop_source`, `codes_included`, `aggregate_fallback`, `notes`.
-#'   Carries a `provenance` attribute matching `inst/schemas/provenance-v1.json`.
+#'   optional `pop_source`, `codes_included`, `aggregate_fallback`, `notes`,
+#'   and `value_source` when `complete = TRUE`.
+#'   Carries a `provenance` attribute matching `inst/schemas/provenance-v1.json`,
+#'   whose `completion` block reports `applied`, `rows_filled`, and the
+#'   per-year `absence_means` rule that was applied.
 #' @export
 cog_spending <- function(govid, years, category = NULL,
                          per_capita = FALSE, adjust_to_year = NULL,
                          basis = c("harmonized", "raw"), recipe = NULL,
-                         expenditure_concept = c("direct", "total")) {
+                         expenditure_concept = c("direct", "total"),
+                         complete = FALSE) {
   .verb_spendrev(
     verb          = "cog_spending",
     view_base     = "spending_annotated",
@@ -93,7 +119,8 @@ cog_spending <- function(govid, years, category = NULL,
     adjust_to_year = adjust_to_year,
     basis         = basis,
     recipe        = recipe,
-    expenditure_concept = expenditure_concept
+    expenditure_concept = expenditure_concept,
+    complete      = complete
   )
 }
 
@@ -118,7 +145,8 @@ cog_spending <- function(govid, years, category = NULL,
                            govid, years, category,
                            per_capita, adjust_to_year,
                            basis = c("harmonized", "raw"), recipe = NULL,
-                           expenditure_concept = c("direct", "total")) {
+                           expenditure_concept = c("direct", "total"),
+                           complete = FALSE) {
   basis_explicit <- length(basis) == 1L
   basis <- match.arg(basis, c("harmonized", "raw"))
   # match.arg() itself throws a base `simpleError`, not an rlang-classed
@@ -165,12 +193,27 @@ cog_spending <- function(govid, years, category = NULL,
     )
   }
 
+  complete <- isTRUE(complete)
+  if (complete && !is.null(recipe)) {
+    .abort_complete_unsupported(
+      "A recipe defines its own component codes and never goes through `summary_categories`, so there is no grid to fill from.",
+      "Query the recipe without `complete`, or use a category query with `complete = TRUE`."
+    )
+  }
+  if (complete && identical(expenditure_concept, "total")) {
+    .abort_complete_unsupported(
+      "The intergovernmental leg deliberately keeps aggregate-flagged rows (see `inst/sql/24-ig_long.sql`), so its cells are not the ones `code_set` describes.",
+      "Use `expenditure_concept = \"direct\"` with `complete = TRUE`, or drop `complete`."
+    )
+  }
+
   years   <- as.integer(years)
   if (!is.null(adjust_to_year)) adjust_to_year <- as.integer(adjust_to_year)
 
   con <- .ensure_session()
   manifest <- .uscogdata_env$manifest
   scope <- .check_govids_in_scope(govid)
+  if (complete) .require_representation(con, manifest)
 
   resolved <- .resolve_basis(basis, basis_explicit, manifest)
 
@@ -199,6 +242,18 @@ cog_spending <- function(govid, years, category = NULL,
     }
     sql <- .build_verb_sql(view, subtype_col, govid, years, category, ig_view)
     result <- tibble::as_tibble(DBI::dbGetQuery(con, sql))
+  }
+
+  # Fill BEFORE per_capita / inflation so the added cells get the same
+  # treatment as reported ones: a census_zero stays $0 per capita and in real
+  # dollars, and a not_reported stays NA through both rather than becoming a
+  # spurious 0.
+  completion <- list(applied = FALSE, rows_filled = 0L, absence_means = list())
+  if (complete) {
+    result <- .complete_result(result, con, subtype_col, govid, years,
+                               category, flow_prefixes)
+    completion <- attr(result, ".completion")
+    attr(result, ".completion") <- NULL
   }
 
   if (per_capita) result <- .attach_per_capita(result, con, govid)
@@ -309,7 +364,8 @@ cog_spending <- function(govid, years, category = NULL,
     expenditure_concept_direct_suppressed = direct_suppressed_flag,
     harmonization  = harmonization,
     recipe         = recipe_block,
-    suggestions    = suggestions
+    suggestions    = suggestions,
+    completion     = completion
   )
   prov$scope$govids_found   <- scope$found
   prov$scope$govids_missing <- scope$missing

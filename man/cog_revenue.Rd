@@ -11,7 +11,8 @@ cog_revenue(
   per_capita = FALSE,
   adjust_to_year = NULL,
   basis = c("harmonized", "raw"),
-  recipe = NULL
+  recipe = NULL,
+  complete = FALSE
 )
 }
 \arguments{
@@ -55,12 +56,36 @@ argument is ignored and the result's provenance reports
 `basis = "recipe"` with an inert `harmonization` block (`applied =
 FALSE`, pointing at the `recipe` block instead) rather than a
 possibly-misleading `"harmonized"`/`"raw"` value.}
+
+\item{complete}{If `TRUE`, fill the requested grid so that a cell the
+  corpus does not carry still appears, labelled with **why** it is
+  missing, and add a `value_source` column to every row:
+
+  * `"reported"` — the corpus carries this cell.
+  * `"census_zero"` — dense-source year (`<= FY2011`), cell absent:
+    Census published `$0`. `amt_nominal` is `0`.
+  * `"not_reported"` — sparse-source year (`>= FY2012`), cell absent: the
+    government did not report, and the value is unknown. `amt_nominal` is
+    `NA`, **not** `0` — writing a zero there would invent data.
+
+  The grid comes from the corpus's `code_set` table, scoped to each
+  government's own type, so a county is never filled with cells only a
+  state can report. Reported rows are passed through untouched.
+
+  Defaults to `FALSE` (the historical behaviour: absent cells simply do
+  not appear). Needs a corpus published from 2026-07-29 onward, which is
+  when `representation`/`code_set` began shipping; aborts with class
+  `uscogdata_representation_unavailable` otherwise. Not available with
+  `recipe` or with `expenditure_concept = "total"` (class
+  `uscogdata_complete_unsupported`) — neither draws its cells from
+  `code_set`.}
 }
 \value{
 Tibble with columns `year`, `canonical_govid`, `gov_name`,
   `revenue_subtype`, `category`, `amt_nominal`, optional `amt_real`,
   optional `amt_per_capita_nominal`, optional `amt_per_capita_real`,
-  optional `pop_source`, `codes_included`, `aggregate_fallback`, `notes`.
+  optional `pop_source`, `codes_included`, `aggregate_fallback`, `notes`,
+  and `value_source` when `complete = TRUE`.
 }
 \description{
 Mirror of [cog_spending()] for revenue categories. One row per

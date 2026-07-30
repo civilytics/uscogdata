@@ -85,6 +85,42 @@ with_doctored_schema_version <- function(version, code) {
   force(code)
 }
 
+# Copy the bundled fixture to a temp dir with representation.parquet and
+# code_set.parquet removed (and dropped from the manifest's metadata list),
+# then run `code` against it. Models a corpus published BEFORE sparsification:
+# schema_version is left alone deliberately, because it was never bumped for
+# that change -- the pre-sparsification fixture this package shipped until
+# 2026-07-30 was schema v6 and carried neither table. Presence in the manifest
+# is therefore the only honest signal, and this helper is what proves the
+# package keys off it rather than off the version number.
+with_corpus_missing_representation <- function(code) {
+  src <- fixture_corpus_path()
+  tmp <- withr::local_tempdir(.local_envir = parent.frame())
+  file.copy(list.files(src, full.names = TRUE), tmp, recursive = TRUE)
+
+  dropped <- c("representation.parquet", "code_set.parquet")
+  file.remove(file.path(tmp, "data", dropped))
+
+  manifest_path <- file.path(tmp, "manifest.json")
+  m <- jsonlite::fromJSON(manifest_path, simplifyVector = FALSE)
+  m$files$metadata <- Filter(
+    function(f) !basename(f$path) %in% dropped, m$files$metadata
+  )
+  writeLines(
+    jsonlite::toJSON(m, auto_unbox = TRUE, pretty = TRUE, null = "null"),
+    manifest_path
+  )
+
+  old_url <- Sys.getenv("USCOGDATA_URL", unset = NA)
+  uscogdata:::cog_close()
+  Sys.setenv(USCOGDATA_URL = paste0(tmp, "/"))
+  on.exit({
+    uscogdata:::cog_close()
+    if (is.na(old_url)) Sys.unsetenv("USCOGDATA_URL") else Sys.setenv(USCOGDATA_URL = old_url)
+  }, add = TRUE)
+  force(code)
+}
+
 # Copy the bundled fixture to a temp dir with summary_categories.parquet
 # rewritten to drop every M/L (intergovernmental) row, then run `code`
 # against it with a clean session (mirrors with_fixture_corpus()/

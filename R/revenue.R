@@ -11,11 +11,13 @@
 #' @return Tibble with columns `year`, `canonical_govid`, `gov_name`,
 #'   `revenue_subtype`, `category`, `amt_nominal`, optional `amt_real`,
 #'   optional `amt_per_capita_nominal`, optional `amt_per_capita_real`,
-#'   optional `pop_source`, `codes_included`, `aggregate_fallback`, `notes`.
+#'   optional `pop_source`, `codes_included`, `aggregate_fallback`, `notes`,
+#'   and `value_source` when `complete = TRUE`.
 #' @export
 cog_revenue <- function(govid, years, category = NULL,
                         per_capita = FALSE, adjust_to_year = NULL,
-                        basis = c("harmonized", "raw"), recipe = NULL) {
+                        basis = c("harmonized", "raw"), recipe = NULL,
+                        complete = FALSE) {
   .verb_spendrev(
     verb           = "cog_revenue",
     view_base      = "revenue_annotated",
@@ -28,6 +30,7 @@ cog_revenue <- function(govid, years, category = NULL,
     per_capita     = per_capita,
     adjust_to_year = adjust_to_year,
     basis          = basis,
-    recipe         = recipe
+    recipe         = recipe,
+    complete       = complete
   )
 }

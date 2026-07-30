@@ -10,7 +10,8 @@
                               expenditure_concept_note = NA_character_,
                               expenditure_concept_direct_suppressed = FALSE,
                               harmonization = NULL, recipe = NULL,
-                              suggestions = list()) {
+                              suggestions = list(),
+                              completion = NULL) {
   manifest <- .uscogdata_env$manifest
 
   codes <- result[["codes_included"]]
@@ -126,6 +127,13 @@
     ),
     series_break_refs = break_refs,
     corpus_break_refs = corpus_refs,
+    # What `complete = TRUE` filled, and the rule it filled by. Always
+    # present so a consumer can read `completion$applied` without testing
+    # for the key -- an absent block and applied = FALSE would otherwise be
+    # indistinguishable from an older reader version.
+    completion = completion %||% list(
+      applied = FALSE, rows_filled = 0L, absence_means = list()
+    ),
     manifest = list(
       schema_version = as.integer(manifest$schema_version),
       pipeline_commit = manifest$pipeline_commit %||% NA_character_,

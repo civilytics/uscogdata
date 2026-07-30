@@ -1,5 +1,37 @@
 # uscogdata 0.1.0 (development)
 
+## `complete = TRUE`: absent cells, labelled with why they are absent
+
+* `cog_spending()` and `cog_revenue()` gain `complete`, defaulting to `FALSE`
+  (today's behaviour). With `complete = TRUE` the requested grid is filled
+  from the corpus's `code_set` table and every row carries a new
+  `value_source` column:
+
+  | `value_source` | meaning | `amt_nominal` |
+  |---|---|---|
+  | `reported` | the corpus carries this cell | as published |
+  | `census_zero` | dense-source year (≤ FY2011), cell absent — Census published `$0` | `0` |
+  | `not_reported` | sparse-source year (≥ FY2012), cell absent — unknown | `NA` |
+
+  The `NA` is deliberate and is the whole point: filling a modern absence
+  with `0` would invent data, which is precisely the error the corpus's
+  representation contract exists to prevent.
+* This restores information the reader lost when the corpus was sparsified
+  (`SB194`, cog_pipeline#64) — a wide-era query whose cells were all `$0`
+  had begun returning nothing at all — and improves on what came before it,
+  since the pre-sparsification corpus could not distinguish a published zero
+  from an unreported cell either.
+* The grid is scoped to each government's **own type**, so a county is never
+  filled with cells only a state can report.
+* Needs a corpus published from 2026-07-29 onward (when `representation` and
+  `code_set` began shipping); aborts with class
+  `uscogdata_representation_unavailable` otherwise. Gated on the manifest
+  listing those tables rather than on `schema_version`, which was never
+  bumped for the change. Not available with `recipe` or
+  `expenditure_concept = "total"` — neither draws its cells from `code_set`.
+* `provenance$completion` reports `applied`, `rows_filled`, and the per-year
+  `absence_means` rule; `cog_explain()` prints a "Completion" section.
+
 ## Corpus-wide series breaks now reach users (`corpus_break_refs`)
 
 * Four catalogued series breaks carry `fin_code = "ALL"` — caveats about the

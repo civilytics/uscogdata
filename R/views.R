@@ -32,6 +32,29 @@
   "45-ig_annotated_harmonized.sql"
 )
 
+# The representation contract (cog_pipeline#64): two parquet tables that say
+# what an ABSENT cell means in a given year. Gated on manifest PRESENCE, not
+# on schema_version, because the sparsification that introduced them did not
+# bump the version -- the pre-sparsification corpus this package shipped
+# against until 2026-07-30 was already schema v6 and carried neither table.
+# Keying off the version number would therefore register a view over a file
+# that does not exist and fail at CREATE VIEW time on exactly the corpora this
+# check exists to tolerate.
+.representation_view_files <- c(
+  "36-representation.sql" = "representation.parquet",
+  "37-code_set.sql"       = "code_set.parquet"
+)
+
+#' Does the mounted corpus publish `file` (e.g. "code_set.parquet")?
+#' Reads the manifest's metadata list rather than stat-ing the URL, so it
+#' works identically for a local fixture and a remote share.
+#' @noRd
+.corpus_has_table <- function(manifest, file) {
+  paths <- vapply(manifest$files$metadata %||% list(),
+                  function(f) as.character(f$path %||% ""), character(1))
+  file %in% basename(paths)
+}
+
 #' Register DuckDB views from inst/sql/ SQL files
 #' @noRd
 .register_views <- function(con, url, manifest) {
@@ -39,7 +62,10 @@
   files   <- sort(list.files(sql_dir, pattern = "\\.sql$", full.names = TRUE))
   schema_version <- suppressWarnings(as.integer(manifest$schema_version %||% 0L))
   for (f in files) {
-    if (basename(f) %in% .harmonization_view_files && schema_version < 5L) next
+    base <- basename(f)
+    if (base %in% .harmonization_view_files && schema_version < 5L) next
+    if (base %in% names(.representation_view_files) &&
+        !.corpus_has_table(manifest, .representation_view_files[[base]])) next
     sql <- paste(readLines(f, warn = FALSE), collapse = "\n")
     sql <- gsub("\\{url\\}", url, sql, fixed = FALSE)
     DBI::dbExecute(con, sql)

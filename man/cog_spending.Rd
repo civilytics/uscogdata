@@ -12,7 +12,8 @@ cog_spending(
   adjust_to_year = NULL,
   basis = c("harmonized", "raw"),
   recipe = NULL,
-  expenditure_concept = c("direct", "total")
+  expenditure_concept = c("direct", "total"),
+  complete = FALSE
 )
 }
 \arguments{
@@ -58,40 +59,66 @@ FALSE`, pointing at the `recipe` block instead) rather than a
 possibly-misleading `"harmonized"`/`"raw"` value.}
 
 \item{expenditure_concept}{`"direct"` (default) returns only the
-government's own direct spending (item codes `E`/`F`/`G`), unchanged
-from prior releases. `"total"` additionally UNIONs in the
-intergovernmental leg -- payments to local governments (`M` codes) and
-to the state government (`L` codes, excluding the `L--` family-total
-rollup) -- so results gain rows with `spend_subtype ==
-"intergovernmental"`. Requires the active corpus's `summary_categories`
-to carry M/L rows (added by cog_pipeline PR #59); aborts with class
-`uscogdata_ig_categories_unsupported` on an older corpus rather than
-silently under-reporting. Mutually exclusive with `recipe` (a recipe
-already defines its own component codes). **Do not sum `"total"`
-results across levels of government** (e.g. state + county + city):
-a state's `M12` payment to a school district is the same dollar the
-district reports as its own direct `E12`, so summing both double-counts
-it. This matters in particular with [cog_geographic_rollup()], which
-sums across exactly that kind of multi-layer government set.
+  government's own direct spending (item codes `E`/`F`/`G`), unchanged
+  from prior releases. `"total"` additionally UNIONs in the
+  intergovernmental leg -- payments to local governments (`M` codes) and
+  to the state government (`L` codes, excluding the `L--` family-total
+  rollup) -- so results gain rows with `spend_subtype ==
+  "intergovernmental"`. Requires the active corpus's `summary_categories`
+  to carry M/L rows (added by cog_pipeline PR #59); aborts with class
+  `uscogdata_ig_categories_unsupported` on an older corpus rather than
+  silently under-reporting. Mutually exclusive with `recipe` (a recipe
+  already defines its own component codes). **Do not sum `"total"`
+  results across levels of government** (e.g. state + county + city):
+  a state's `M12` payment to a school district is the same dollar the
+  district reports as its own direct `E12`, so summing both double-counts
+  it. This matters in particular with [cog_geographic_rollup()], which
+  sums across exactly that kind of multi-layer government set.
 
-In the legacy wide era (<= FY2011), some functions are published ONLY
-as an aggregate-flagged family total (e.g. Corrections' `E04`/`E05`
-split), which the Direct leg excludes by construction but the IG leg
-deliberately keeps (see `inst/sql/24-ig_long.sql`). For a `"total"`
-query, any (year, category) where this leaves intergovernmental rows
-with NO Direct counterpart is flagged: the affected rows' `notes`
-name the harmonization recipe that recovers the missing Direct
-component (when one exists), and
-`provenance$expenditure_concept_direct_suppressed` is `TRUE` -- the
-figure in those rows is the intergovernmental leg alone, not Direct +
-IG.}
+  In the legacy wide era (<= FY2011), some functions are published ONLY
+  as an aggregate-flagged family total (e.g. Corrections' `E04`/`E05`
+  split), which the Direct leg excludes by construction but the IG leg
+  deliberately keeps (see `inst/sql/24-ig_long.sql`). For a `"total"`
+  query, any (year, category) where this leaves intergovernmental rows
+  with NO Direct counterpart is flagged: the affected rows' `notes`
+  name the harmonization recipe that recovers the missing Direct
+  component (when one exists), and
+  `provenance$expenditure_concept_direct_suppressed` is `TRUE` -- the
+  figure in those rows is the intergovernmental leg alone, not Direct +
+  IG.}
+
+\item{complete}{If `TRUE`, fill the requested grid so that a cell the
+  corpus does not carry still appears, labelled with **why** it is
+  missing, and add a `value_source` column to every row:
+
+  * `"reported"` — the corpus carries this cell.
+  * `"census_zero"` — dense-source year (`<= FY2011`), cell absent:
+    Census published `$0`. `amt_nominal` is `0`.
+  * `"not_reported"` — sparse-source year (`>= FY2012`), cell absent: the
+    government did not report, and the value is unknown. `amt_nominal` is
+    `NA`, **not** `0` — writing a zero there would invent data.
+
+  The grid comes from the corpus's `code_set` table, scoped to each
+  government's own type, so a county is never filled with cells only a
+  state can report. Reported rows are passed through untouched.
+
+  Defaults to `FALSE` (the historical behaviour: absent cells simply do
+  not appear). Needs a corpus published from 2026-07-29 onward, which is
+  when `representation`/`code_set` began shipping; aborts with class
+  `uscogdata_representation_unavailable` otherwise. Not available with
+  `recipe` or with `expenditure_concept = "total"` (class
+  `uscogdata_complete_unsupported`) — neither draws its cells from
+  `code_set`.}
 }
 \value{
 Tibble with columns `year`, `canonical_govid`, `gov_name`,
   `spend_subtype`, `category`, `amt_nominal`, optional `amt_real`,
   optional `amt_per_capita_nominal`, optional `amt_per_capita_real`,
-  optional `pop_source`, `codes_included`, `aggregate_fallback`, `notes`.
-  Carries a `provenance` attribute matching `inst/schemas/provenance-v1.json`.
+  optional `pop_source`, `codes_included`, `aggregate_fallback`, `notes`,
+  and `value_source` when `complete = TRUE`.
+  Carries a `provenance` attribute matching `inst/schemas/provenance-v1.json`,
+  whose `completion` block reports `applied`, `rows_filled`, and the
+  per-year `absence_means` rule that was applied.
 }
 \description{
 One row per `(year, canonical_govid, spend_subtype, category)`. Amounts are
