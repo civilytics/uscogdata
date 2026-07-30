@@ -33,6 +33,11 @@
     "aggregate_fallback": { "type": ["object", "null"] },
     "transformations":{ "type": "object" },
     "series_break_refs": { "type": "array", "items": { "type": "string" } },
+    "corpus_break_refs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Ids of catalogued series breaks whose fin_code is the literal 'ALL' -- caveats about the corpus as a whole (dollar precision across 1976/1977, imputation exclusion from 2002, the dense -> sparse representation change at 2012, the government id scheme change at 2017) rather than about one item code. Selected on the break_year window alone, so they do not depend on which codes a result contains. Disjoint from series_break_refs by construction: an entry qualifies the whole result, not one series."
+    },
     "manifest":       { "type": "object" },
     "sql_query":      { "type": "string" }
   }

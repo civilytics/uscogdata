@@ -1,5 +1,25 @@
 # uscogdata 0.1.0 (development)
 
+## Corpus-wide series breaks now reach users (`corpus_break_refs`)
+
+* Four catalogued series breaks carry `fin_code = "ALL"` — caveats about the
+  corpus as a whole rather than about one item code. `series_break_refs` is
+  built by matching `fin_code` against the item codes in the result, and no
+  row's `item_code` is ever the literal `"ALL"`, so **none of them could ever
+  be surfaced**: `SB085` (dollar precision across the 1976/1977 boundary),
+  `SB087` (imputation exclusion from FY2002), `SB194` (the dense → sparse
+  representation change at FY2012) and `SB086` (the government id scheme
+  change at FY2017).
+* Provenance gains `corpus_break_refs`, selected on the break-year window
+  alone and disjoint from `series_break_refs` by construction, so a consumer
+  can tell a whole-result caveat from a break in one series. `cog_explain()`
+  prints them under their own "Corpus-wide caveats" heading. cog-api passes
+  provenance through verbatim, so the field appears there without an API
+  change.
+* `SB194` is the one that made this urgent: a query spanning FY2011 → FY2012
+  crosses the boundary where an absent cell stops meaning "Census published
+  `$0`" and starts meaning "not reported", and until now nothing said so.
+
 ## Bundled fixture regenerated against the sparsified corpus
 
 * `inst/extdata/fixture_corpus/` now tracks the corpus published on

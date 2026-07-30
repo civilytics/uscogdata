@@ -177,11 +177,13 @@ test_that("inst/sql/24- and 25- IG views retain aggregates, COALESCE NULL harmon
 })
 
 test_that(".build_series_break_refs matches fin_code + break_year window", {
-  # No series_breaks_pq row falls inside the bundled fixture's 2011-2020
-  # window (data-verified; see the "series_break_refs" test in
+  # No CODE-SPECIFIC series_breaks_pq row falls inside the bundled fixture's
+  # 2011-2020 window (data-verified; see the "series_break_refs" test in
   # test-spending.R), so this proves the matching logic itself against the
   # live view + a synthetic year window that DOES hit a cataloged break
-  # (SB075, fin_code E62, break_year 2005).
+  # (SB075, fin_code E62, break_year 2005). The corpus-wide entries are a
+  # separate path with its own coverage -- SB194 does sit at 2012, inside
+  # the fixture window; see test-corpus-breaks.R.
   skip_if_no_corpus()
   con <- cog_open()
   on.exit(cog_close())

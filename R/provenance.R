@@ -37,8 +37,17 @@
 
   schema_version <- suppressWarnings(as.integer(manifest$schema_version %||% 0L))
   con <- .uscogdata_env$con
-  break_refs <- if (!is.null(con) && DBI::dbIsValid(con)) {
+  have_con <- !is.null(con) && DBI::dbIsValid(con)
+  break_refs <- if (have_con) {
     .build_series_break_refs(con, codes_observed, years, schema_version)
+  } else {
+    character(0)
+  }
+  # Corpus-wide caveats travel separately: they qualify the whole result
+  # rather than one series, and they do not depend on codes_observed (see
+  # .build_corpus_break_refs()).
+  corpus_refs <- if (have_con) {
+    .build_corpus_break_refs(con, years, schema_version)
   } else {
     character(0)
   }
@@ -116,6 +125,7 @@
       )
     ),
     series_break_refs = break_refs,
+    corpus_break_refs = corpus_refs,
     manifest = list(
       schema_version = as.integer(manifest$schema_version),
       pipeline_commit = manifest$pipeline_commit %||% NA_character_,

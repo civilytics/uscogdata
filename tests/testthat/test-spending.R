@@ -321,11 +321,13 @@ test_that("provenance$series_break_refs is a populated-when-applicable character
     r <- cog_spending("121011212191", 2020L, "Corrections")
     refs <- attr(r, "provenance")$series_break_refs
     expect_type(refs, "character")
-    # No catalogued series_breaks_pq row falls inside this fixture's
-    # 2011/2012/2019/2020 window for the codes this query touches (E04/G04)
-    # -- data-verified; the mechanism itself is what's under test here, via
-    # a query-shaped unit test in test-views.R since the fixture has no
-    # positive case to pin against.
+    # No catalogued code-specific series_breaks_pq row falls inside this
+    # fixture's 2011/2012/2019/2020 window for the codes this query touches
+    # (E04/G04) -- data-verified; the mechanism itself is what's under test
+    # here, via a query-shaped unit test in test-views.R since the fixture
+    # has no positive case to pin against. Corpus-wide ("ALL") entries never
+    # appear in this field by construction -- they travel in
+    # corpus_break_refs; see test-corpus-breaks.R.
     expect_equal(refs, character(0))
   })
 })
