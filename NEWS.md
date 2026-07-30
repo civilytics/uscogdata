@@ -1,5 +1,39 @@
 # uscogdata 0.1.0 (development)
 
+## Multi-government aggregates now disclose their reporting coverage
+
+* The Census of Governments is a **complete census only in years ending in 2
+  and 7**; every other year is a sample, and the sample varies enormously. On
+  the bundled fixture, Wisconsin's 608-city universe rolls up **597**
+  governments in FY2012 and **112** in FY2019 — an 18%-to-98% swing the
+  return value said nothing about, so a statewide total resting on a fifth of
+  the universe looked exactly like one resting on all of it.
+* `cog_geographic_rollup()`, `cog_peer_compare()` and `cog_find_peers()` gain
+  `coverage`:
+
+  | value | effect |
+  |---|---|
+  | `"all"` (default) | every unit that reported that year — unchanged behaviour |
+  | `"census"` | census years only; aborts if the range holds none rather than returning nothing |
+  | `"consistent"` | only units reporting in *every* requested year — a balanced panel |
+
+* **Regardless of mode**, every result now carries `provenance$coverage` with
+  per-year `n_units_reporting`, `n_units_expected` and `is_census_year`, plus
+  `provenance$coverage_mode`. `cog_explain()` prints a "Reporting coverage"
+  section. So the default mode can no longer mislead silently.
+* `is_census_year` is a statement about the **survey calendar**, never a claim
+  of completeness: FY1967 is a census year in which only 97 of Wisconsin's 608
+  cities report. `n_units_reporting` is the number that tells the truth.
+* On `cog_peer_compare()` the target is exempt from `"consistent"` balancing —
+  it is the subject of the comparison, not a member of the cohort — and the
+  `summary_*` quantiles are computed after the filter, so they describe the
+  cohort actually returned. `n_units_reporting` counts peers only, against the
+  cohort size.
+* On `cog_find_peers()`, `coverage` governs the cohort **vintage** when `year`
+  is `NULL`: `"census"` snaps to the most recent census year with an observed
+  population, so a cohort is not built from a sample year in which most of the
+  candidate universe is absent.
+
 ## `complete = TRUE`: absent cells, labelled with why they are absent
 
 * `cog_spending()` and `cog_revenue()` gain `complete`, defaulting to `FALSE`
