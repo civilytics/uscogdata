@@ -14,16 +14,16 @@
     "basis_note":     { "type": ["string", "null"] },
     "expenditure_concept": {
       "type": "string",
-      "enum": ["direct", "total"],
-      "description": "Which spending concept produced this result. 'direct' is the government's own E/F/G spending; 'total' adds its intergovernmental payments (M to local governments, L to state governments). Only 'direct' is valid for results combined across governments."
+      "enum": ["primary", "direct", "total"],
+      "description": "Which spending concept produced this result, defined as crosswalk spend_subtype sets (never item-code prefixes). 'primary' (the default) is the government's own service provision: operations + capital + assistance. 'direct' adds interest on debt and insurance trust benefit payments (Census's published Direct Expenditure). 'total' adds intergovernmental payments (M to local governments, L to state government, Q11/Q12/Q18 to school systems). Only 'primary' and 'direct' are valid for results combined across governments."
     },
     "expenditure_concept_note": {
       "type": ["string", "null"],
-      "description": "How the intergovernmental leg was assembled; null for 'direct'."
+      "description": "How the intergovernmental leg was assembled; null for 'primary' and 'direct'."
     },
     "expenditure_concept_direct_suppressed": {
       "type": "boolean",
-      "description": "TRUE when expenditure_concept = 'total' and at least one requested (year, category) has intergovernmental rows but NO Direct rows in this corpus (typically a legacy aggregate-only family) -- those result rows report the intergovernmental leg alone, not Direct + IG. Always FALSE for expenditure_concept = 'direct'. See the affected rows' `notes` for the recovering recipe, if any."
+      "description": "TRUE when expenditure_concept = 'total' and at least one requested (year, category) has intergovernmental rows but NO Direct rows in this corpus (typically a legacy aggregate-only family) -- those result rows report the intergovernmental leg alone, not Direct + IG. Always FALSE for expenditure_concept = 'primary' or 'direct'. See the affected rows' `notes` for the recovering recipe, if any."
     },
     "harmonization":  { "type": "object" },
     "recipe":         { "type": ["object", "null"] },

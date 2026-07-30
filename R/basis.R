@@ -44,11 +44,18 @@
 
 #' Count + sum item-level rows that basis="harmonized" excludes because they
 #' carry no harmonized_code (discontinued / not-yet-ruled codes) within the
-#' requested flow type (spending or revenue), govids, and years. Only
-#' meaningful when the resolved basis is "harmonized"; returns an
-#' applied = FALSE stub otherwise (raw basis never excludes rows this way).
+#' calling verb's crosswalk scope (`subtype_col` values in `subtype_scope` --
+#' the same subtype-membership classification the verb SQL uses, never
+#' item-code prefixes), govids, and years. Only meaningful when the resolved
+#' basis is "harmonized"; returns an applied = FALSE stub otherwise (raw
+#' basis never excludes rows this way).
+#'
+#' The intergovernmental leg is deliberately outside this count even for
+#' expenditure_concept = "total": ig_long_harmonized COALESCEs rather than
+#' drops NULL-harmonized rows, so harmonization never excludes an IG row.
 #' @noRd
-.build_harmonization_block <- function(con, govid, years, resolved, flow_prefixes) {
+.build_harmonization_block <- function(con, govid, years, resolved,
+                                       subtype_col, subtype_scope) {
   if (!identical(resolved$basis, "harmonized")) {
     return(list(
       applied = FALSE,
@@ -63,9 +70,11 @@
      FROM long
      WHERE canonical_govid IN (%s) AND year IN (%s)
        AND NOT is_aggregate AND harmonized_code IS NULL
-       AND LEFT(item_code, 1) IN (%s)",
+       AND item_code IN (
+         SELECT item_code FROM summary_categories WHERE %s IN (%s)
+       )",
     .sql_lit_chr(govid), paste(as.integer(years), collapse = ","),
-    .sql_lit_chr(flow_prefixes)
+    subtype_col, .sql_lit_chr(subtype_scope)
   )
   na <- DBI::dbGetQuery(con, sql)
 

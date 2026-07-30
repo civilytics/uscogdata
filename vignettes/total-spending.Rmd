@@ -1,8 +1,8 @@
 ---
-title: "Total spending: Direct, Total, and when each is right"
+title: "Total spending: Primary, Direct, Total, and when each is right"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Total spending: Direct, Total, and when each is right}
+  %\VignetteIndexEntry{Total spending: Primary, Direct, Total, and when each is right}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -17,17 +17,28 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 is about one government or several:
 
 1. **"What did my county spend in total, a decade ago vs today?"** — one
-   government, tracked over time. Either `direct` or `total` spending answers
-   this correctly, as long as the same concept is used for both years.
+   government, tracked over time. Any concept answers this correctly, as
+   long as the same concept is used for both years.
 2. **"How do all the counties in my state compare, a decade ago vs today,
    against the neighboring state?"** — several governments, summed together.
-   Here only `direct` gives the right answer; summing `total` across
-   governments double-counts money that passes between them.
+   Here only a non-intergovernmental concept (`primary` or `direct`) gives
+   the right answer; summing `total` across governments double-counts money
+   that passes between them.
 
-`cog_spending()`'s `expenditure_concept` argument (`"direct"` or `"total"`)
-controls which of these a query answers. This vignette walks through both
-questions with code that actually runs against the package's bundled fixture
-corpus, then explains why the second question refuses `"total"` outright.
+`cog_spending()`'s `expenditure_concept` argument controls which of these a
+query answers, via three nested concepts defined as sets of the crosswalk's
+`spend_subtype` values (never item-code first letters — the letter `Y` alone
+spans revenue, expenditure, and balance codes):
+
+- `"primary"` (the default) — the government's own service provision:
+  `operations` + `capital` + `assistance`.
+- `"direct"` — Census's published Direct Expenditure: `primary` plus
+  `interest` on debt and `insurance_benefits` (e.g. pension payments).
+- `"total"` — `direct` plus the `intergovernmental` leg.
+
+This vignette walks through both questions with code that actually runs
+against the package's bundled fixture corpus, then explains why the second
+question refuses `"total"` outright.
 
 Before any of the numbers below: every amount column here — `amt_nominal`,
 `amt_real`, and their `amt_per_capita_*` counterparts — is in **full US
@@ -68,20 +79,23 @@ al_total <- cog_spending(
 al_total
 ```
 
-The `intergovernmental` rows are what `"total"` adds on top of `"direct"`
-(`capital` + `operations`): Alabama's own payments out to counties and
-cities for highway work. Because this query only ever concerns Alabama,
-including that piece is safe -- there's no other government's number it
-could be double-counted against.
+The `intergovernmental` rows are what `"total"` adds on top of the
+non-intergovernmental subtypes (here `capital` + `operations`): Alabama's
+own payments out to counties and cities for highway work. Because this
+query only ever concerns Alabama, including that piece is safe -- there's
+no other government's number it could be double-counted against.
 
-`"direct"` (the default) answers the same trend question just as validly:
+`"primary"` (the default) answers the same trend question just as validly
+(for Highways, which maps only to operations/capital codes, `"primary"` and
+`"direct"` coincide -- there is no highway-specific interest or insurance
+benefit to add):
 
 ```{r}
-al_direct <- cog_spending(
+al_primary <- cog_spending(
   "010000226085", years = c(2012, 2020), category = "Highways"
-  # expenditure_concept = "direct" is the default; shown here for contrast
+  # expenditure_concept = "primary" is the default; shown here for contrast
 )
-al_direct
+al_primary
 ```
 
 Both are internally consistent series. What breaks the comparison is
@@ -93,8 +107,8 @@ every year in the series.
 # Archetype 2: a cross-government rollup
 
 `cog_geographic_rollup()` sums spending across state/county/city layers for
-a place. Its default -- and, as shown below, its *only* accepted value for
-`expenditure_concept` -- is `"direct"`:
+a place. Its default is `"primary"`, and (as shown below) it accepts only
+the non-intergovernmental concepts, `"primary"` and `"direct"`:
 
 ```{r}
 fl_rollup <- cog_geographic_rollup(
@@ -145,15 +159,15 @@ shows up **twice** in the underlying corpus:
   the county is the government that actually lets the contract and pays the
   paving crew.
 
-`direct` (item codes `E`/`F`/`G`) only ever counts the second of those --
-the government that actually did the spending. `total` (Direct plus the
-`M`/`L` intergovernmental legs) counts the first one *as well*, which is
-exactly right for describing Alabama's own budget: Alabama's `total`
-genuinely includes the $10M it committed to highways, whether it built the
-road itself or paid the county to. But sum `total` across Alabama **and**
-the county, and that $10M is counted twice -- once as Alabama's payment out,
-once as the county's spending in -- reporting $20M of highway work for $10M
-actually spent.
+`primary` and `direct` (the crosswalk's non-intergovernmental expenditure
+subtypes) only ever count the second of those -- the government that
+actually did the spending. `total` (Direct plus the intergovernmental leg)
+counts the first one *as well*, which is exactly right for describing
+Alabama's own budget: Alabama's `total` genuinely includes the $10M it
+committed to highways, whether it built the road itself or paid the county
+to. But sum `total` across Alabama **and** the county, and that $10M is
+counted twice -- once as Alabama's payment out, once as the county's
+spending in -- reporting $20M of highway work for $10M actually spent.
 
 This is exactly the shape of query `cog_geographic_rollup()` exists to run
 (summing across layers of government), so it refuses `"total"` rather than
@@ -168,48 +182,51 @@ share of a government's own Direct spending is:
 
 | Government type | Intergovernmental / Direct |
 |---|---|
-| State  | 16.7%-48.4% (varies by year; 24.0% pooled across all four) |
-| County | 3.4%-5.1% (varies by year) |
-| City   | 2.6%-3.1% (varies by year) |
+| State  | 33.1%-40.5% (varies by year; 36.2% pooled across all four) |
+| County | 3.3%-4.8% (varies by year) |
+| City   | 2.4%-2.9% (varies by year) |
 
-So the Direct/Total choice matters overwhelmingly for **state** governments
--- a state's Total genuinely differs from its Direct by a meaningful margin,
-while for a county or city the two are close. The state range is also far
-wider than a single flat figure would suggest: legacy wide-era years (2011:
-48.4%) carry proportionally more intergovernmental spending than the modern
-era (2019-2020: 16.7%-17.0%), so a state's Direct/Total gap can be nearly
-3x larger a decade earlier than it is today. That's also why the mistake
-this vignette warns about is easy to make unnoticed at the county/city level
-and costly at the state level: rolling up every government in a state using
-`total` instead of `direct` overstates the true figure -- measured at 7.6%
-for Alabama in FY2019, and 11.6% nationally.
+So the Direct/Total choice matters overwhelmingly for **state**
+governments -- a state's Total genuinely differs from its Direct by more
+than a third, while for a county or city the two are close. (The state
+share is much larger than pre-#11 measurements suggested, because the
+intergovernmental leg now correctly includes the `Q11`/`Q12`/`Q18` state
+payments to school systems -- for most states the single largest transfer
+they make.) That's also why the mistake this vignette warns about is easy
+to make unnoticed at the county/city level and costly at the state level:
+rolling up every government using `total` instead of `primary`/`direct`
+overstates the FY2019 figure by 24.1% for Alabama and 23.2% nationally.
 
-# Why Total = Direct + M + L, not Direct + M
+# Why Total = Direct + M + L + Q, not Direct + M
 
-It's tempting to assume `total` only needs to add `M`. But `M` and `L` are
-both money the queried government itself pays **out** -- they're not two
-different accounts of a receiving government's revenue. `M` is what it
-pays to other **local** governments (e.g. a county paying a city for a
-shared paving contract); `L` is what it pays **up** to its **state**
-government (e.g. a county's contribution to a state-administered program).
-A local government's Total genuinely includes both legs, because both are
-its own spending, just routed to a different kind of recipient. On the
-bundled fixture corpus (all 50 states, 2011/2012/2019/2020), `L` is 0 for
-state governments (a state has no "payments to the state government" leg of
-its own) but is 43%-51% the size of `M` for counties (varies by year) and
-144%-189% the size of `M` for cities (varies by year; 166% pooled across
-all four) -- so a `total` that omitted `L` would silently undercount Total
-specifically for local governments, and for cities `L` is often the
-*larger* of the two legs.
-`cog_spending(expenditure_concept = "total")` includes both legs (excluding
-the `L--` family-total rollup row, which would double-count its own
-components).
+It's tempting to assume `total` only needs to add `M`. But the
+intergovernmental leg has three families, all money the queried government
+itself pays **out** -- they're not different accounts of a receiving
+government's revenue. `M` is what it pays to other **local** governments
+(e.g. a county paying a city for a shared paving contract); `L` is what it
+pays **up** to its **state** government (e.g. a county's contribution to a
+state-administered program); and `Q11`/`Q12`/`Q18` are a state's payments
+to **school systems** (K-12 and higher-ed aid -- for most states the
+single largest transfer they make, and the piece the pre-#11 prefix
+allowlist silently dropped, finding F-017). A government's Total genuinely
+includes every leg it pays, because each is its own spending, just routed
+to a different kind of recipient. On the bundled fixture corpus (all 50
+states, 2011/2012/2019/2020), `L` is 0 for state governments (a state has
+no "payments to the state government" leg of its own) but is 43%-51% the
+size of `M` for counties (varies by year) and 144%-189% the size of `M`
+for cities (varies by year; 166% pooled across all four) -- so a `total`
+that omitted `L` would silently undercount Total specifically for local
+governments, and for cities `L` is often the *larger* of the two legs.
+`cog_spending(expenditure_concept = "total")` includes every leg
+(excluding the `L--` family-total rollup row, which would double-count its
+own components).
 
 # Composition rules
 
-- `expenditure_concept` (whose spending counts -- Direct vs Direct plus
-  intergovernmental) is **orthogonal** to `basis` (which vintage of the
-  item-code space a query resolves against -- `"harmonized"` vs `"raw"`).
+- `expenditure_concept` (whose spending counts -- Primary, Direct, or
+  Direct plus intergovernmental) is **orthogonal** to `basis` (which
+  vintage of the item-code space a query resolves against --
+  `"harmonized"` vs `"raw"`).
   They combine freely: `expenditure_concept = "total", basis = "raw"` is a
   valid, meaningful query, and so is every other pairing.
 - `expenditure_concept = "total"` is **mutually exclusive** with `recipe`: a
@@ -225,12 +242,15 @@ components).
 
 # Summary
 
-- Comparing one government to itself over time: `"direct"` or `"total"`
-  both work -- pick one and hold it fixed across every year compared.
+- Comparing one government to itself over time: any concept works -- pick
+  one and hold it fixed across every year compared.
 - Comparing or summing across governments -- counties within a state, a
-  state against its neighbor, cities against counties: use `"direct"`.
-  `cog_geographic_rollup()` and `cog_peer_compare()` enforce this by
-  refusing `"total"`.
-- `"total"` = Direct (`E`/`F`/`G`) + intergovernmental (`M` to local
-  governments + `L` to the state government, excluding the `L--`
-  family-total row).
+  state against its neighbor, cities against counties: use `"primary"`
+  (the default) or `"direct"`. `cog_geographic_rollup()` and
+  `cog_peer_compare()` enforce this by refusing `"total"`.
+- `"primary"` = operations + capital + assistance. `"direct"` = primary +
+  interest on debt + insurance trust benefits (Census's published Direct
+  Expenditure). `"total"` = direct + intergovernmental (`M` to local
+  governments, `L` to the state government excluding the `L--`
+  family-total row, and `Q11`/`Q12`/`Q18` state payments to school
+  systems).

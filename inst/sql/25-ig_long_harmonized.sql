@@ -8,8 +8,15 @@
 -- WHERE harmonized_code IS NULL GROUP BY 1, 2`). COALESCE keeps the one real
 -- IG collapse rule (M38 -> M36, SB012, year-disjoint 1967-2011 vs 2012+)
 -- while never dropping a row.
+--
+-- Membership is checked on the published item_code (mirroring 24-ig_long.sql)
+-- rather than the COALESCEd code: every IG harmonization target (M36) is
+-- itself an IG crosswalk member, so the two are equivalent, and item_code is
+-- the column that exists on every row.
 CREATE OR REPLACE VIEW ig_long_harmonized AS
 SELECT * REPLACE (COALESCE(harmonized_code, item_code) AS item_code)
 FROM long
-WHERE LEFT(item_code, 1) IN ('M', 'L')
-  AND item_code NOT LIKE '%--';
+WHERE item_code IN (
+    SELECT item_code FROM summary_categories
+    WHERE spend_subtype = 'intergovernmental'
+  );

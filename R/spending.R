@@ -1,5 +1,40 @@
 # R/spending.R
 
+# The three expenditure concepts (uscogdata#11), as sets of the crosswalk's
+# `spend_subtype` values. Classification is crosswalk membership, never
+# item-code first letters: prefix Y alone spans revenue (Y01/Y02),
+# expenditure (Y05/Y06) and balance codes, so no first-letter allowlist can
+# route it (finding F-018).
+#
+#   primary = operations + capital + assistance           (the default)
+#   direct  = primary + interest + insurance_benefits     (Census Direct Expenditure)
+#   total   = direct + intergovernmental                  (via the ig_* views)
+#
+# Census manual section 5.2.2.1: Direct Expenditure is ALL expenditure other
+# than intergovernmental -- including payments to retirees, i.e. insurance
+# trust benefits. Verified against Census's own published FY2020 state
+# aggregates (20statetypepu.txt): `total` reproduces the published
+# expenditure sum to the dollar; omitting insurance benefits understates
+# California's Direct by 10.9%.
+.spend_subtypes_primary <- c("operations", "capital", "assistance")
+.spend_subtypes_direct  <- c(.spend_subtypes_primary, "interest", "insurance_benefits")
+
+#' @noRd
+.expenditure_concept_subtypes <- function(concept) {
+  switch(concept,
+    primary = .spend_subtypes_primary,
+    # "total" = the direct subtypes here PLUS the intergovernmental leg,
+    # which travels through the ig_* views rather than this scope (see
+    # .build_verb_sql()).
+    direct  = ,
+    total   = .spend_subtypes_direct
+  )
+}
+
+# cog_revenue()'s single concept (until uscogdata#12 adds more): Census
+# General Revenue -- every crosswalk revenue subtype except insurance_trust.
+.revenue_subtypes_general <- c("own_source", "federal", "state", "local_aid")
+
 #' Summarized spending by category
 #'
 #' One row per `(year, canonical_govid, spend_subtype, category)`. Amounts are
@@ -42,22 +77,34 @@
 #'   `basis = "recipe"` with an inert `harmonization` block (`applied =
 #'   FALSE`, pointing at the `recipe` block instead) rather than a
 #'   possibly-misleading `"harmonized"`/`"raw"` value.
-#' @param expenditure_concept `"direct"` (default) returns only the
-#'   government's own direct spending (item codes `E`/`F`/`G`), unchanged
-#'   from prior releases. `"total"` additionally UNIONs in the
-#'   intergovernmental leg -- payments to local governments (`M` codes) and
-#'   to the state government (`L` codes, excluding the `L--` family-total
-#'   rollup) -- so results gain rows with `spend_subtype ==
-#'   "intergovernmental"`. Requires the active corpus's `summary_categories`
-#'   to carry M/L rows (added by cog_pipeline PR #59); aborts with class
-#'   `uscogdata_ig_categories_unsupported` on an older corpus rather than
-#'   silently under-reporting. Mutually exclusive with `recipe` (a recipe
-#'   already defines its own component codes). **Do not sum `"total"`
-#'   results across levels of government** (e.g. state + county + city):
-#'   a state's `M12` payment to a school district is the same dollar the
-#'   district reports as its own direct `E12`, so summing both double-counts
-#'   it. This matters in particular with [cog_geographic_rollup()], which
-#'   sums across exactly that kind of multi-layer government set.
+#' @param expenditure_concept Which spending concept to return. Concepts are
+#'   defined as sets of the crosswalk's `spend_subtype` values -- never as
+#'   item-code first letters, which cannot classify correctly (prefix `Y`
+#'   alone spans revenue, expenditure, and balance codes):
+#'
+#'   * `"primary"` (default) -- the government's own service provision:
+#'     `operations` + `capital` + `assistance` subtypes.
+#'   * `"direct"` -- Census's published Direct Expenditure: `primary` plus
+#'     `interest` (interest on debt) and `insurance_benefits` (insurance
+#'     trust benefit payments, e.g. pensions -- Census manual section
+#'     5.2.2.1 includes payments to retirees in Direct).
+#'   * `"total"` -- `direct` plus the intergovernmental leg: payments to
+#'     local governments (`M` codes), to the state government (`L` codes,
+#'     excluding the `L--` family-total rollup), and state payments to
+#'     school systems (`Q11`/`Q12`/`Q18`), so results gain rows with
+#'     `spend_subtype == "intergovernmental"`. Requires the active corpus's
+#'     `summary_categories` to carry M/L rows (added by cog_pipeline PR
+#'     #59); aborts with class `uscogdata_ig_categories_unsupported` on an
+#'     older corpus rather than silently under-reporting. Mutually
+#'     exclusive with `recipe` (a recipe already defines its own component
+#'     codes).
+#'
+#'   **Do not sum `"total"` results across levels of government** (e.g.
+#'   state + county + city): a state's `M12` payment to a school district is
+#'   the same dollar the district reports as its own direct `E12`, so
+#'   summing both double-counts it. This matters in particular with
+#'   [cog_geographic_rollup()], which sums across exactly that kind of
+#'   multi-layer government set.
 #'
 #'   In the legacy wide era (<= FY2011), some functions are published ONLY
 #'   as an aggregate-flagged family total (e.g. Corrections' `E04`/`E05`
@@ -104,8 +151,12 @@
 cog_spending <- function(govid, years, category = NULL,
                          per_capita = FALSE, adjust_to_year = NULL,
                          basis = c("harmonized", "raw"), recipe = NULL,
-                         expenditure_concept = c("direct", "total"),
+                         expenditure_concept = c("primary", "direct", "total"),
                          complete = FALSE) {
+  # flow_prefixes no longer classifies rows (crosswalk subtype membership
+  # does, per expenditure_concept) -- it only scopes the recipe-suggestion
+  # machinery to this verb's recipe families (see R/suggestions.R; the
+  # catalog only has E/F/G-component direct-expenditure recipes).
   .verb_spendrev(
     verb          = "cog_spending",
     view_base     = "spending_annotated",
@@ -128,8 +179,9 @@ cog_spending <- function(govid, years, category = NULL,
 .abort_concept_not_aggregatable <- function(verb) {
   cli::cli_abort(c(
     "{.code expenditure_concept = \"total\"} cannot be used in {.fn {verb}}.",
-    "*" = "Use {.code expenditure_concept = \"direct\"} (the default) for any \\
-           comparison or sum that spans more than one government.",
+    "*" = "Use {.code expenditure_concept = \"primary\"} (the default) or \\
+           {.code \"direct\"} for any comparison or sum that spans more than \\
+           one government.",
     "i" = "Why: Census \"Total\" is a government's own Direct spending PLUS the \\
            money it hands to other governments. The receiving government reports \\
            that same dollar again as its own Direct when it actually spends it, \\
@@ -145,7 +197,7 @@ cog_spending <- function(govid, years, category = NULL,
                            govid, years, category,
                            per_capita, adjust_to_year,
                            basis = c("harmonized", "raw"), recipe = NULL,
-                           expenditure_concept = c("direct", "total"),
+                           expenditure_concept = c("primary", "direct", "total"),
                            complete = FALSE) {
   basis_explicit <- length(basis) == 1L
   basis <- match.arg(basis, c("harmonized", "raw"))
@@ -153,15 +205,27 @@ cog_spending <- function(govid, years, category = NULL,
   # condition; wrap it so an invalid expenditure_concept aborts consistently
   # with the rest of this package's validation (cli::cli_abort -> rlang_error).
   expenditure_concept <- tryCatch(
-    match.arg(expenditure_concept, c("direct", "total")),
+    match.arg(expenditure_concept, c("primary", "direct", "total")),
     error = function(e) {
       cli::cli_abort(
-        "`expenditure_concept` must be one of {.val direct} or {.val total}.",
+        "`expenditure_concept` must be one of {.val primary}, {.val direct}, or {.val total}.",
         class = "uscogdata_invalid_expenditure_concept",
         parent = e
       )
     }
   )
+
+  # The concept's subtype scope. Every code path below -- the verb SQL, the
+  # harmonization exclusion count, and the complete = TRUE grid -- is scoped
+  # by crosswalk subtype membership, never by item-code prefix. For revenue
+  # there is a single concept today (General Revenue; uscogdata#12 will add
+  # more). "total"'s extra intergovernmental leg travels through the ig_*
+  # views, not through this scope.
+  subtype_scope <- if (identical(subtype_col, "spend_subtype")) {
+    .expenditure_concept_subtypes(expenditure_concept)
+  } else {
+    .revenue_subtypes_general
+  }
 
   govid <- .coerce_govid_input(govid, arg = "govid")
   .validate_verb_inputs(govid, years, category, per_capita, adjust_to_year,
@@ -176,10 +240,10 @@ cog_spending <- function(govid, years, category = NULL,
   }
 
   # .verb_spendrev() is shared with cog_revenue(), which never exposes
-  # expenditure_concept and always resolves it to "direct" -- so nothing on
-  # the public API can reach this today. But it's a cheap guard against a
+  # expenditure_concept and always resolves it to the default -- so nothing
+  # on the public API can reach this today. But it's a cheap guard against a
   # future call (direct or via a modified cog_revenue()) that would UNION
-  # the IG leg's expenditure M/L rows into a revenue result, which has no
+  # the IG leg's expenditure M/L/Q rows into a revenue result, which has no
   # matching IG view and no sensible meaning.
   if (identical(expenditure_concept, "total") &&
       !identical(view_base, "spending_annotated")) {
@@ -240,7 +304,8 @@ cog_spending <- function(govid, years, category = NULL,
     } else {
       NULL
     }
-    sql <- .build_verb_sql(view, subtype_col, govid, years, category, ig_view)
+    sql <- .build_verb_sql(view, subtype_col, govid, years, category, ig_view,
+                           subtype_scope)
     result <- tibble::as_tibble(DBI::dbGetQuery(con, sql))
   }
 
@@ -251,7 +316,7 @@ cog_spending <- function(govid, years, category = NULL,
   completion <- list(applied = FALSE, rows_filled = 0L, absence_means = list())
   if (complete) {
     result <- .complete_result(result, con, subtype_col, govid, years,
-                               category, flow_prefixes)
+                               category, subtype_scope)
     completion <- attr(result, ".completion")
     attr(result, ".completion") <- NULL
   }
@@ -284,7 +349,7 @@ cog_spending <- function(govid, years, category = NULL,
     basis_for_prov <- resolved$basis
     basis_note_for_prov <- resolved$note
     harmonization <- .build_harmonization_block(
-      con, govid, years, resolved, flow_prefixes
+      con, govid, years, resolved, subtype_col, subtype_scope
     )
     # C1(a): gap detection must run against the Direct leg alone. `result`
     # can also carry UNION'd intergovernmental rows (expenditure_concept =
@@ -462,7 +527,7 @@ cog_spending <- function(govid, years, category = NULL,
 
 #' @noRd
 .build_verb_sql <- function(view, subtype_col, govid, years, category,
-                            ig_view = NULL) {
+                            ig_view = NULL, subtype_scope = NULL) {
   govid_lit <- .sql_lit_chr(govid)
   years_lit <- paste(as.integer(years), collapse = ",")
   category_pred <- if (is.null(category)) {
@@ -471,9 +536,22 @@ cog_spending <- function(govid, years, category = NULL,
     sprintf("AND category IN (%s)", .sql_lit_chr(category))
   }
 
+  # The concept's subtype allowlist (see .expenditure_concept_subtypes()).
+  # The base views carry every subtype of their flow (spending_annotated has
+  # all five non-IG expenditure subtypes); the concept narrows here. For
+  # "total", the IG leg's rows are 'intergovernmental', so that value joins
+  # the allowlist exactly when ig_view is present.
+  subtype_pred <- if (is.null(subtype_scope)) {
+    ""
+  } else {
+    scope <- if (is.null(ig_view)) subtype_scope else c(subtype_scope, "intergovernmental")
+    sprintf("AND %s IN (%s)", subtype_col, .sql_lit_chr(scope))
+  }
+
   # expenditure_concept = "total" adds the intergovernmental leg. UNION ALL,
-  # never UNION: the two legs are disjoint by item_code prefix (E/F/G vs M/L),
-  # so de-duplication would be pure cost, and a silent row-drop if two
+  # never UNION: the two legs are disjoint by crosswalk subtype (the direct
+  # view excludes 'intergovernmental'; the IG view is only that), so
+  # de-duplication would be pure cost, and a silent row-drop if two
   # governments ever reported identical values.
   source_expr <- if (is.null(ig_view)) {
     view
@@ -505,9 +583,10 @@ cog_spending <- function(govid, years, category = NULL,
      WHERE canonical_govid IN (%3$s)
        AND year IN (%4$s)
        %5$s
+       %6$s
      GROUP BY year, canonical_govid, gov_name, xwalk_gov_name, %1$s, category
      ORDER BY year, canonical_govid, %1$s, category",
-    subtype_col, source_expr, govid_lit, years_lit, category_pred
+    subtype_col, source_expr, govid_lit, years_lit, category_pred, subtype_pred
   )
 }
 

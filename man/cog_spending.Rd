@@ -12,7 +12,7 @@ cog_spending(
   adjust_to_year = NULL,
   basis = c("harmonized", "raw"),
   recipe = NULL,
-  expenditure_concept = c("direct", "total"),
+  expenditure_concept = c("primary", "direct", "total"),
   complete = FALSE
 )
 }
@@ -58,22 +58,34 @@ argument is ignored and the result's provenance reports
 FALSE`, pointing at the `recipe` block instead) rather than a
 possibly-misleading `"harmonized"`/`"raw"` value.}
 
-\item{expenditure_concept}{`"direct"` (default) returns only the
-  government's own direct spending (item codes `E`/`F`/`G`), unchanged
-  from prior releases. `"total"` additionally UNIONs in the
-  intergovernmental leg -- payments to local governments (`M` codes) and
-  to the state government (`L` codes, excluding the `L--` family-total
-  rollup) -- so results gain rows with `spend_subtype ==
-  "intergovernmental"`. Requires the active corpus's `summary_categories`
-  to carry M/L rows (added by cog_pipeline PR #59); aborts with class
-  `uscogdata_ig_categories_unsupported` on an older corpus rather than
-  silently under-reporting. Mutually exclusive with `recipe` (a recipe
-  already defines its own component codes). **Do not sum `"total"`
-  results across levels of government** (e.g. state + county + city):
-  a state's `M12` payment to a school district is the same dollar the
-  district reports as its own direct `E12`, so summing both double-counts
-  it. This matters in particular with [cog_geographic_rollup()], which
-  sums across exactly that kind of multi-layer government set.
+\item{expenditure_concept}{Which spending concept to return. Concepts are
+  defined as sets of the crosswalk's `spend_subtype` values -- never as
+  item-code first letters, which cannot classify correctly (prefix `Y`
+  alone spans revenue, expenditure, and balance codes):
+
+  * `"primary"` (default) -- the government's own service provision:
+    `operations` + `capital` + `assistance` subtypes.
+  * `"direct"` -- Census's published Direct Expenditure: `primary` plus
+    `interest` (interest on debt) and `insurance_benefits` (insurance
+    trust benefit payments, e.g. pensions -- Census manual section
+    5.2.2.1 includes payments to retirees in Direct).
+  * `"total"` -- `direct` plus the intergovernmental leg: payments to
+    local governments (`M` codes), to the state government (`L` codes,
+    excluding the `L--` family-total rollup), and state payments to
+    school systems (`Q11`/`Q12`/`Q18`), so results gain rows with
+    `spend_subtype == "intergovernmental"`. Requires the active corpus's
+    `summary_categories` to carry M/L rows (added by cog_pipeline PR
+    #59); aborts with class `uscogdata_ig_categories_unsupported` on an
+    older corpus rather than silently under-reporting. Mutually
+    exclusive with `recipe` (a recipe already defines its own component
+    codes).
+
+  **Do not sum `"total"` results across levels of government** (e.g.
+  state + county + city): a state's `M12` payment to a school district is
+  the same dollar the district reports as its own direct `E12`, so
+  summing both double-counts it. This matters in particular with
+  [cog_geographic_rollup()], which sums across exactly that kind of
+  multi-layer government set.
 
   In the legacy wide era (<= FY2011), some functions are published ONLY
   as an aggregate-flagged family total (e.g. Corrections' `E04`/`E05`

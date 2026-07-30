@@ -36,8 +36,8 @@ test_that("inst/sql/22- and 23- harmonized views enforce every WHERE predicate (
   # {url} exactly as .register_views() does, and executes them -- plus
   # their 10-long.sql dependency -- against a synthetic hive-partitioned
   # parquet tree written to a temp dir. A regression in any predicate (e.g.
-  # `NOT is_aggregate` dropped, the prefix list changed, the NULL guard
-  # removed) would change which of the rows below survive.
+  # `NOT is_aggregate` dropped, the crosswalk-membership subquery changed,
+  # the NULL guard removed) would change which of the rows below survive.
   #
   # The synthetic parquet is written with DuckDB's own COPY ... TO (FORMAT
   # PARQUET) rather than the arrow package: this package has no arrow
@@ -61,24 +61,44 @@ test_that("inst/sql/22- and 23- harmonized views enforce every WHERE predicate (
         ('spend-B', 'E38', 50,     false, 'E36'), -- collapse-fold: passes every predicate, renamed to E36
         ('spend-C', 'E05', 999999, true,  'E05'), -- excluded ONLY by `NOT is_aggregate`
         ('spend-D', 'E99', 888888, false, NULL),  -- excluded by `harmonized_code IS NOT NULL`
-        -- 'S74' is outside BOTH flow families (E/F/G/K spending and
-        -- T/A/U/B/C/D revenue -- it mirrors the real corpus's own
-        -- non-flow-type codes like S74/Z61), so it can only leak into
-        -- EITHER view via the E/F/G/K or T/A/U/B/C/D prefix filter, never
-        -- both at once -- a prefix drawn from the other view's own family
-        -- (e.g. a real T-code for the spending row) would incorrectly
-        -- leak into the other view's assertion below and not discriminate
-        -- the predicate under test.
-        ('spend-E', 'S74', 777777, false, 'S74'), -- excluded ONLY by the E/F/G/K prefix filter
-        -- Revenue (T/A/U/B/C/D) rows, exercised against revenue_long_harmonized:
+        -- 'S74' and 'Z61' are classified `balance` in the synthetic
+        -- crosswalk below (mirroring the real corpus's own non-flow codes),
+        -- so each is excluded from its view ONLY by the crosswalk-membership
+        -- subquery -- the mechanism that replaced the prefix allowlists
+        -- (uscogdata#11) and keeps balance stocks out of both flows
+        -- (uscogdata#25).
+        ('spend-E', 'S74', 777777, false, 'S74'), -- excluded ONLY by crosswalk membership (balance)
+        -- Revenue rows, exercised against revenue_long_harmonized:
         ('rev-A',   'U11', 200,    false, 'U11'), -- control: passes every predicate as-is
         ('rev-B',   'U10', 25,     false, 'U11'), -- collapse-fold: passes every predicate, renamed to U11
         ('rev-C',   'T29', 555555, true,  'T29'), -- excluded ONLY by `NOT is_aggregate`
         ('rev-D',   'T88', 444444, false, NULL),  -- excluded by `harmonized_code IS NOT NULL`
-        ('rev-E',   'Z61', 333333, false, 'Z61')  -- excluded ONLY by the T/A/U/B/C/D prefix filter
+        ('rev-E',   'Z61', 333333, false, 'Z61')  -- excluded ONLY by crosswalk membership (balance)
       ) AS t(canonical_govid, item_code, amt, is_aggregate, harmonized_code)
     ) TO %s (FORMAT PARQUET)
   ", uscogdata:::.sql_lit_chr(part_path)))
+
+  # The flow views classify by membership in summary_categories, so the
+  # synthetic corpus needs one too. Every flow code above is a member of its
+  # own flow (so is_aggregate / NULL-harmonized exclusions stay the SOLE
+  # excluder for those rows); S74/Z61 are members but classified balance, so
+  # membership itself is what excludes them.
+  DBI::dbExecute(write_con, sprintf("
+    COPY (
+      SELECT * FROM (VALUES
+        ('E36', 'Water Utilities',  'expenditure', 'operations', NULL),
+        ('E38', 'Water Utilities',  'expenditure', 'operations', NULL),
+        ('E05', 'Corrections',      'expenditure', 'operations', NULL),
+        ('E99', 'Other',            'expenditure', 'operations', NULL),
+        ('S74', 'Fund Balances',    'balance',     NULL,         NULL),
+        ('U11', 'Interest Earnings','revenue',     NULL,         'own_source'),
+        ('U10', 'Interest Earnings','revenue',     NULL,         'own_source'),
+        ('T29', 'Other Taxes',      'revenue',     NULL,         'own_source'),
+        ('T88', 'Other Taxes',      'revenue',     NULL,         'own_source'),
+        ('Z61', 'Fund Balances',    'balance',     NULL,         NULL)
+      ) AS t(item_code, category, category_type, spend_subtype, revenue_subtype)
+    ) TO %s (FORMAT PARQUET)
+  ", uscogdata:::.sql_lit_chr(file.path(tmp, "data", "summary_categories.parquet"))))
 
   sql_dir <- system.file("sql", package = "uscogdata")
   .read_view_sql <- function(filename) {
@@ -89,6 +109,7 @@ test_that("inst/sql/22- and 23- harmonized views enforce every WHERE predicate (
   con <- DBI::dbConnect(duckdb::duckdb())
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   DBI::dbExecute(con, .read_view_sql("10-long.sql"))
+  DBI::dbExecute(con, .read_view_sql("11-summary_categories.sql"))
   DBI::dbExecute(con, .read_view_sql("22-spending_long_harmonized.sql"))
   DBI::dbExecute(con, .read_view_sql("23-revenue_long_harmonized.sql"))
 
@@ -97,8 +118,8 @@ test_that("inst/sql/22- and 23- harmonized views enforce every WHERE predicate (
      GROUP BY item_code ORDER BY item_code"
   )
   # Exactly one surviving row: spend-C (aggregate), spend-D (NULL
-  # harmonized_code), and spend-E (wrong prefix family) must all be gone,
-  # and spend-A + spend-B must be folded together under E36.
+  # harmonized_code), and spend-E (balance, not an expenditure member) must
+  # all be gone, and spend-A + spend-B must be folded together under E36.
   expect_equal(nrow(spend), 1L)
   expect_equal(spend$item_code, "E36")
   expect_equal(spend$amt, 150)
@@ -138,11 +159,26 @@ test_that("inst/sql/24- and 25- IG views retain aggregates, COALESCE NULL harmon
         ('ig-A', 'M04', 100,   false, 'M04'), -- control: passes through as-is
         ('ig-B', 'M38', 50,    false, 'M36'), -- fold control: real SB012 rule, renamed to M36 under harmonized basis
         ('ig-C', 'M47', 99999, true,  NULL),  -- legacy aggregate, NO harmonized_code: must survive BOTH views
-        ('ig-D', 'L--', 55555, false, 'L--'), -- family total: excluded from BOTH views
-        ('ig-E', 'T29', 44444, false, 'T29')  -- wrong prefix (revenue, not M/L): excluded from BOTH views
+        ('ig-D', 'L--', 55555, false, 'L--'), -- family total: deliberately NOT a crosswalk member, excluded from BOTH views
+        ('ig-E', 'T29', 44444, false, 'T29')  -- revenue member, not intergovernmental: excluded from BOTH views
       ) AS t(canonical_govid, item_code, amt, is_aggregate, harmonized_code)
     ) TO %s (FORMAT PARQUET)
   ", uscogdata:::.sql_lit_chr(part_path)))
+
+  # The IG views classify by summary_categories membership
+  # (spend_subtype = 'intergovernmental'). L-- is deliberately absent --
+  # exactly as it is from the real crosswalk -- which is what excludes it.
+  DBI::dbExecute(write_con, sprintf("
+    COPY (
+      SELECT * FROM (VALUES
+        ('M04', 'Corrections', 'expenditure', 'intergovernmental', NULL),
+        ('M38', 'Health',      'expenditure', 'intergovernmental', NULL),
+        ('M36', 'Health',      'expenditure', 'intergovernmental', NULL),
+        ('M47', 'IG Other',    'expenditure', 'intergovernmental', NULL),
+        ('T29', 'Other Taxes', 'revenue',     NULL,                'own_source')
+      ) AS t(item_code, category, category_type, spend_subtype, revenue_subtype)
+    ) TO %s (FORMAT PARQUET)
+  ", uscogdata:::.sql_lit_chr(file.path(tmp, "data", "summary_categories.parquet"))))
 
   sql_dir <- system.file("sql", package = "uscogdata")
   .read_view_sql <- function(filename) {
@@ -153,6 +189,7 @@ test_that("inst/sql/24- and 25- IG views retain aggregates, COALESCE NULL harmon
   con <- DBI::dbConnect(duckdb::duckdb())
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   DBI::dbExecute(con, .read_view_sql("10-long.sql"))
+  DBI::dbExecute(con, .read_view_sql("11-summary_categories.sql"))
   DBI::dbExecute(con, .read_view_sql("24-ig_long.sql"))
   DBI::dbExecute(con, .read_view_sql("25-ig_long_harmonized.sql"))
 
@@ -160,8 +197,9 @@ test_that("inst/sql/24- and 25- IG views retain aggregates, COALESCE NULL harmon
     "SELECT item_code, SUM(amt) AS amt FROM ig_long
      GROUP BY item_code ORDER BY item_code"
   )
-  # L-- (family total) and T29 (wrong prefix) are gone; the aggregate row
-  # M47 survives -- proof `NOT is_aggregate` is absent from ig_long.
+  # L-- (family total, not a member) and T29 (revenue, not IG) are gone; the
+  # aggregate row M47 survives -- proof `NOT is_aggregate` is absent from
+  # ig_long.
   expect_equal(raw$item_code, c("M04", "M38", "M47"))
   expect_equal(raw$amt, c(100, 50, 99999))
 
@@ -322,14 +360,32 @@ test_that(".harmonization_view_files guard is necessary: registration against a 
   )
 })
 
-test_that("spending_long filters to E/F/G/K prefixes and excludes aggregates", {
+test_that("spending_long carries exactly the non-IG expenditure crosswalk codes and excludes aggregates", {
   skip_if_no_corpus()
   con <- cog_open()
   on.exit(cog_close())
-  prefixes <- DBI::dbGetQuery(con,
-    "SELECT DISTINCT LEFT(item_code, 1) AS pfx FROM spending_long"
-  )$pfx
-  expect_true(all(prefixes %in% c("E", "F", "G", "K")))
+
+  # Classification is crosswalk membership, not prefixes (uscogdata#11):
+  # every row's code must classify as expenditure and never as
+  # intergovernmental (which lives in ig_long).
+  stray <- DBI::dbGetQuery(con,
+    "SELECT DISTINCT s.item_code
+     FROM spending_long s
+     LEFT JOIN summary_categories c USING (item_code)
+     WHERE c.category_type IS DISTINCT FROM 'expenditure'
+        OR c.spend_subtype = 'intergovernmental'"
+  )$item_code
+  expect_length(stray, 0L)
+
+  # Balance codes are stocks, not flows -- they must never appear in a
+  # spending result (uscogdata#25). Prefix filtering could not guarantee
+  # this (W/X/Y/Z balance codes share letters with flow codes).
+  balance_n <- DBI::dbGetQuery(con,
+    "SELECT count(*) AS n FROM spending_long WHERE item_code IN (
+       SELECT item_code FROM summary_categories WHERE category_type = 'balance'
+     )"
+  )$n
+  expect_equal(balance_n, 0)
 
   agg_count <- DBI::dbGetQuery(con,
     "SELECT count(*) AS n FROM spending_long WHERE is_aggregate"
@@ -337,14 +393,29 @@ test_that("spending_long filters to E/F/G/K prefixes and excludes aggregates", {
   expect_equal(agg_count, 0)
 })
 
-test_that("revenue_long filters to T/A/U/B/C/D prefixes and excludes aggregates", {
+test_that("revenue_long carries exactly the general-revenue crosswalk codes and excludes aggregates", {
   skip_if_no_corpus()
   con <- cog_open()
   on.exit(cog_close())
-  prefixes <- DBI::dbGetQuery(con,
-    "SELECT DISTINCT LEFT(item_code, 1) AS pfx FROM revenue_long"
-  )$pfx
-  expect_true(all(prefixes %in% c("T", "A", "U", "B", "C", "D")))
+
+  # General Revenue scope: revenue crosswalk members minus insurance_trust
+  # (owner ruling 2026-07-30; an explicit wider concept is uscogdata#12).
+  stray <- DBI::dbGetQuery(con,
+    "SELECT DISTINCT s.item_code
+     FROM revenue_long s
+     LEFT JOIN summary_categories c USING (item_code)
+     WHERE c.category_type IS DISTINCT FROM 'revenue'
+        OR c.revenue_subtype = 'insurance_trust'"
+  )$item_code
+  expect_length(stray, 0L)
+
+  # No balance stock ever appears in a revenue result (uscogdata#25).
+  balance_n <- DBI::dbGetQuery(con,
+    "SELECT count(*) AS n FROM revenue_long WHERE item_code IN (
+       SELECT item_code FROM summary_categories WHERE category_type = 'balance'
+     )"
+  )$n
+  expect_equal(balance_n, 0)
 
   agg_count <- DBI::dbGetQuery(con,
     "SELECT count(*) AS n FROM revenue_long WHERE is_aggregate"

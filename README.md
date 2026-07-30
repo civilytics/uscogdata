@@ -46,20 +46,28 @@ than obviously wrong.
 - `USCOGDATA_CACHE_DIR` — optional override for the manifest cache directory
 - `USCOGDATA_MANIFEST_TTL_SECS` — optional manifest re-fetch TTL (default 3600)
 
-## Direct vs Total spending
+## Primary vs Direct vs Total spending
 
-`cog_spending(..., expenditure_concept = c("direct", "total"))` controls
-whose spending a result counts. `"direct"` (the default) is a government's
-own current operations, capital outlay, and other direct spending. `"total"`
-additionally adds in the intergovernmental legs — money it hands to other
-governments to spend on its behalf — which is meaningful for describing one
-government's own budget over time, but double-counts when summed across
-governments (a state's payment to a county is the same dollar the county
-reports as its own direct spending).
+`cog_spending(..., expenditure_concept = c("primary", "direct", "total"))`
+controls whose spending a result counts. Concepts are defined as sets of the
+crosswalk's `spend_subtype` values — never item-code first letters, which
+cannot classify correctly (the letter `Y` alone spans revenue, expenditure,
+and balance codes):
+
+- `"primary"` (the default) is the government's own service provision:
+  current operations, capital outlay, and assistance payments.
+- `"direct"` is Census's published Direct Expenditure: `primary` plus
+  interest on debt and insurance trust benefit payments (e.g. pensions).
+- `"total"` additionally adds the intergovernmental leg — money handed to
+  other governments to spend (`M`/`L` codes plus `Q11`/`Q12`/`Q18` state
+  payments to school systems) — which is meaningful for describing one
+  government's own budget over time, but double-counts when summed across
+  governments (a state's payment to a county is the same dollar the county
+  reports as its own direct spending).
 
 **Rule of thumb: any figure that spans more than one government uses
-`direct`.** `cog_geographic_rollup()` and `cog_peer_compare()` enforce this
-by refusing `expenditure_concept = "total"`. See
+`primary` or `direct`.** `cog_geographic_rollup()` and `cog_peer_compare()`
+enforce this by refusing `expenditure_concept = "total"`. See
 `vignette("total-spending", package = "uscogdata")` for the full
 explanation with worked examples.
 

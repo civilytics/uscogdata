@@ -176,10 +176,11 @@ cog_find_peers <- function(target_govid,
 #' @param per_capita Default `TRUE` — peer compare usually normalizes by
 #'   population.
 #' @param adjust_to_year Integer base year for CPI-U conversion or `NULL`.
-#' @param expenditure_concept `"direct"` (default) or `"total"`. Currently only
-#'   `"direct"` is accepted; the `"total"` option exists in [cog_spending()] for
-#'   single-government queries but cannot be used here because combining Total
-#'   across peer sets counts intergovernmental transfers twice.
+#' @param expenditure_concept `"primary"` (default), `"direct"`, or
+#'   `"total"` -- see [cog_spending()] for the three concepts. `"total"` is
+#'   refused here because combining Total across peer sets counts
+#'   intergovernmental transfers twice; `"primary"` and `"direct"` combine
+#'   safely.
 #' @param coverage How to handle the Census of Governments survey cycle,
 #'   which is a **complete census only in years ending in 2 and 7** -- every
 #'   other year is a sample, and the sample varies enormously (on the bundled
@@ -242,7 +243,7 @@ cog_find_peers <- function(target_govid,
 #' @export
 cog_peer_compare <- function(target_govid, peers, category, years,
                              per_capita = TRUE, adjust_to_year = NULL,
-                             expenditure_concept = c("direct", "total"),
+                             expenditure_concept = c("primary", "direct", "total"),
                              coverage = c("all", "census", "consistent")) {
   call <- match.call()
   expenditure_concept <- match.arg(expenditure_concept)
@@ -271,7 +272,8 @@ cog_peer_compare <- function(target_govid, peers, category, years,
 
   years <- .apply_census_years(years, coverage, "cog_peer_compare")
 
-  r <- cog_spending(all_govids, years, category, per_capita, adjust_to_year)
+  r <- cog_spending(all_govids, years, category, per_capita, adjust_to_year,
+                    expenditure_concept = expenditure_concept)
   r$role <- ifelse(r$canonical_govid == target_govid, "target", "peer")
 
   # The target is exempt from balancing: it is the subject of the comparison,

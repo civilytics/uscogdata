@@ -18,6 +18,10 @@ cog_revenue <- function(govid, years, category = NULL,
                         per_capita = FALSE, adjust_to_year = NULL,
                         basis = c("harmonized", "raw"), recipe = NULL,
                         complete = FALSE) {
+  # flow_prefixes no longer classifies rows (crosswalk revenue_subtype
+  # membership does -- General Revenue, i.e. everything except
+  # insurance_trust) -- it only scopes the recipe-suggestion machinery to
+  # this verb's recipe families (see R/suggestions.R).
   .verb_spendrev(
     verb           = "cog_revenue",
     view_base      = "revenue_annotated",
