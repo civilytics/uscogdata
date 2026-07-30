@@ -298,8 +298,16 @@ test_that("a mis-scoped cog_spending() call never attaches an M/L counterpart to
   # (M47/M94, same suffixes) -- a coincidence of reused digits, not a real
   # Direct/Total pairing. The flow-family gate in
   # .attach_ig_counterparts() must keep ig_recipe_id NULL here.
+  #
+  # Anchored on FL state government, not AL. Coverage is presence-based: a
+  # recipe is only suggested when its component codes have rows for the
+  # requested government-year. AL state's only FY2011 B47 cell was an
+  # explicit zero, which the corpus no longer stores after sparsification
+  # (SB194, cog_pipeline#64), so the recipe stopped being a candidate there.
+  # FL state carries a real FY2011 B47 amount, so this exercises the guard
+  # against a suggestion that genuinely fires.
   r <- suppressMessages(
-    cog_spending("010000226085", years = c(2005, 2011), category = "IG Federal")
+    cog_spending("120000226351", years = c(2005, 2011), category = "IG Federal")
   )
   sugg <- attr(r, "provenance")$suggestions
   expect_gt(length(sugg), 0L)

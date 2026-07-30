@@ -11,12 +11,14 @@
 #      Each partition is a full year (all states/govs) as published, so
 #      Broward County FL and every other previously-pinned government stay
 #      covered without any per-gov slicing logic.
-#   2. Copies the full canonical_fips_xwalk.parquet, canonical_alias.parquet,
-#      summary_categories.parquet, harmonization_map.parquet,
-#      harmonization_recipes.parquet, and series_breaks.parquet metadata
-#      tables as-is (these are small cross-vintage registries, not
-#      partitioned by year, so the fixture ships the complete tables rather
-#      than a year-scoped subset).
+#   2. Copies every metadata parquet the publish tree ships (see
+#      .FIXTURE_METADATA_FILES) as-is. These are small cross-vintage
+#      registries, not partitioned by year, so the fixture ships the complete
+#      tables rather than a year-scoped subset. representation.parquet and
+#      code_set.parquet are what make the sparse wide era interpretable --
+#      absence means "$0" in a dense_source year and "not reported" in a
+#      sparse_source one -- so a fixture without them cannot represent the
+#      published corpus.
 #   3. Resyncs the four reference docs (data_dictionary.md,
 #      reader-specification.md, README.md, series_breaks.md) from the
 #      publish tree's docs/.
@@ -37,6 +39,22 @@
 # Or from R:
 #   source("data-raw/regenerate_fixture_corpus.R")
 #   regenerate_fixture_corpus(publish_cache_dir = "/path/to/publish_cache")
+
+# Every metadata parquet the publish tree ships, in the order they appear in
+# the corpus manifest. Single source of truth for both the copy step and the
+# fixture manifest, so the two can never drift apart.
+.FIXTURE_METADATA_FILES <- c(
+  "canonical_alias.parquet",
+  "canonical_fips_xwalk.parquet",
+  "census_collection_coverage.parquet",
+  "code_set.parquet",
+  "harmonization_map.parquet",
+  "harmonization_recipes.parquet",
+  "lineage_events.parquet",
+  "representation.parquet",
+  "series_breaks.parquet",
+  "summary_categories.parquet"
+)
 
 regenerate_fixture_corpus <- function(
     publish_cache_dir = file.path(
@@ -100,20 +118,11 @@ regenerate_fixture_corpus <- function(
   invisible(NULL)
 }
 
-# Copy the full (not year-scoped) canonical_fips_xwalk, canonical_alias,
-# summary_categories, and (schema v5+) harmonization_map/
-# harmonization_recipes/series_breaks parquet tables.
+# Copy the full (not year-scoped) metadata tables listed in
+# .FIXTURE_METADATA_FILES.
 #' @noRd
 .copy_metadata_parquets <- function(publish_cache_dir, fixture_dir) {
-  files <- c(
-    "canonical_fips_xwalk.parquet",
-    "canonical_alias.parquet",
-    "summary_categories.parquet",
-    "harmonization_map.parquet",
-    "harmonization_recipes.parquet",
-    "series_breaks.parquet"
-  )
-  for (f in files) {
+  for (f in .FIXTURE_METADATA_FILES) {
     src <- file.path(publish_cache_dir, "data", f)
     dst <- file.path(fixture_dir, "data", f)
     if (!file.exists(src)) {
@@ -179,15 +188,7 @@ regenerate_fixture_corpus <- function(
     )
   })
 
-  metadata_files <- c(
-    "canonical_alias.parquet",
-    "canonical_fips_xwalk.parquet",
-    "summary_categories.parquet",
-    "harmonization_map.parquet",
-    "harmonization_recipes.parquet",
-    "series_breaks.parquet"
-  )
-  metadata <- lapply(metadata_files, function(f) {
+  metadata <- lapply(.FIXTURE_METADATA_FILES, function(f) {
     rel <- file.path("data", f)
     path <- file.path(fixture_dir, rel)
     list(
@@ -203,13 +204,16 @@ regenerate_fixture_corpus <- function(
     pipeline_commit = source_manifest$pipeline_commit,
     fixture_note = paste(
       "Four-year (2011, 2012, 2019, 2020) fixture for uscogdata tests. Full",
-      "corpus available via USCOGDATA_URL. Regenerated for Phase R2",
-      "(schema_version 5, harmonization_map/harmonization_recipes/",
-      "series_breaks parquet tables added). 2011/2012 straddle the",
-      "wide-aggregate -> modern-leaf format boundary exercised by basis=",
-      "\"harmonized\" and recipe= queries; 2019/2020 retain the prior",
-      "per-capita/CPI regression anchors. Full canonical_fips_xwalk master",
-      "and canonical_alias lookup table included via",
+      "corpus available via USCOGDATA_URL. Regenerated from the sparsified",
+      "schema-v6 corpus: the wide era (<= FY2011) no longer stores explicit",
+      "zeros, so FY2011 absence means Census published $0 while FY2012+",
+      "absence means not reported. representation.parquet and",
+      "code_set.parquet carry that rule and ship in full, as do every other",
+      "metadata table in the publish tree. 2011/2012 straddle both the",
+      "wide-aggregate -> modern-leaf format boundary (exercised by",
+      "basis=\"harmonized\" and recipe= queries) and the dense -> sparse",
+      "representation boundary (SB194); 2019/2020 retain the prior",
+      "per-capita/CPI regression anchors. Regenerated via",
       "data-raw/regenerate_fixture_corpus.R."
     ),
     data_vintage    = source_manifest$data_vintage,

@@ -1,8 +1,8 @@
 {
   "schema_version": 6,
-  "built_at": "2026-07-27T13:04:05Z",
-  "pipeline_commit": "6098baf",
-  "fixture_note": "Four-year (2011, 2012, 2019, 2020) fixture for uscogdata tests. Full corpus available via USCOGDATA_URL. Regenerated for Phase R2 (schema_version 5, harmonization_map/harmonization_recipes/ series_breaks parquet tables added). 2011/2012 straddle the wide-aggregate -> modern-leaf format boundary exercised by basis= \"harmonized\" and recipe= queries; 2019/2020 retain the prior per-capita/CPI regression anchors. Full canonical_fips_xwalk master and canonical_alias lookup table included via data-raw/regenerate_fixture_corpus.R.",
+  "built_at": "2026-07-30T14:07:36Z",
+  "pipeline_commit": "83f9715",
+  "fixture_note": "Four-year (2011, 2012, 2019, 2020) fixture for uscogdata tests. Full corpus available via USCOGDATA_URL. Regenerated from the sparsified schema-v6 corpus: the wide era (<= FY2011) no longer stores explicit zeros, so FY2011 absence means Census published $0 while FY2012+ absence means not reported. representation.parquet and code_set.parquet carry that rule and ship in full, as do every other metadata table in the publish tree. 2011/2012 straddle both the wide-aggregate -> modern-leaf format boundary (exercised by basis=\"harmonized\" and recipe= queries) and the dense -> sparse representation boundary (SB194); 2019/2020 retain the prior per-capita/CPI regression anchors. Regenerated via data-raw/regenerate_fixture_corpus.R.",
   "data_vintage": {
     "source_vintages": {
       "2012": "10162019",
@@ -36,9 +36,9 @@
       {
         "year": 2011,
         "path": "data/long/year=2011/part-0.parquet",
-        "sha256": "84302ab364dc9fc3b3fbbc3c3f8b826e3508b4d73ff7c42d094d3863cd1e37b5",
-        "row_count": 2864212,
-        "size_bytes": 3845911
+        "sha256": "7848e18497080c8980a4f89c5b386205b2c5bc90db6773827ea01ab3943d16b1",
+        "row_count": 496004,
+        "size_bytes": 2202455
       },
       {
         "year": 2012,
@@ -74,9 +74,14 @@
         "description": "canonical_fips_xwalk.parquet"
       },
       {
-        "path": "data/summary_categories.parquet",
-        "sha256": "0985b607f3f35a8dff62c0561261ab6922423b81d11c07b03bcb3e3461f85e33",
-        "description": "summary_categories.parquet"
+        "path": "data/census_collection_coverage.parquet",
+        "sha256": "143e025616cde684da7c4442bc00d07fbd1556fabb0ea96223931b737e5d10a4",
+        "description": "census_collection_coverage.parquet"
+      },
+      {
+        "path": "data/code_set.parquet",
+        "sha256": "4cffcb0198dd51e4ff2b694050bb371a5f9965cdac12f25521cb628fb8e118a9",
+        "description": "code_set.parquet"
       },
       {
         "path": "data/harmonization_map.parquet",
@@ -89,9 +94,24 @@
         "description": "harmonization_recipes.parquet"
       },
       {
+        "path": "data/lineage_events.parquet",
+        "sha256": "36c16acfbe621d61010984767f1c566993b8a5f481a2c1e134c4c0a600e4502f",
+        "description": "lineage_events.parquet"
+      },
+      {
+        "path": "data/representation.parquet",
+        "sha256": "31ec328a7dd505a321b45f97aafff12e53d68a1a986f63509863035b22a4360d",
+        "description": "representation.parquet"
+      },
+      {
         "path": "data/series_breaks.parquet",
-        "sha256": "b0b6794b6887a4f300079adfa10029c2a77109faa4952fbff1c5a270793cc02b",
+        "sha256": "5ae050dd7a76c4d25e5f99e7c2e81c1896482e3504e0443b47ab5d78ba148953",
         "description": "series_breaks.parquet"
+      },
+      {
+        "path": "data/summary_categories.parquet",
+        "sha256": "e71d6d70d767c26c983fe56213baf204355f879582aa94841e62d9aea1877f83",
+        "description": "summary_categories.parquet"
       }
     ]
   },
