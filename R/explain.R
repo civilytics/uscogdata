@@ -123,6 +123,14 @@ cog_explain <- function(result, format = c("print", "list")) {
     cli::cli_ul(.series_break_story_lines(prov$series_break_refs))
   }
 
+  # Kept in a section of its own: these qualify the whole result, so folding
+  # them in with the per-code breaks above would invite reading them as a
+  # caveat about one series.
+  if (length(prov$corpus_break_refs) > 0L) {
+    cli::cli_h2("Corpus-wide caveats")
+    cli::cli_ul(.series_break_story_lines(prov$corpus_break_refs))
+  }
+
   cli::cli_h2("Transformations")
   uc <- prov$transformations$units_conversion
   if (isTRUE(uc$applied)) {
