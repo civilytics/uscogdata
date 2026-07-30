@@ -30,7 +30,6 @@ wt_coverage <- function(x) {
 }
 
 test_that("multi-government aggregates disclose reporting coverage on every result", {
-  testthat::skip("Blocked on uscogdata#13 (findings F-020, F-023)")
 
   # -- F-020: geographic rollups -------------------------------------------
   # Wisconsin's city/village universe is 608 governments. On the bundled
@@ -49,10 +48,22 @@ test_that("multi-government aggregates disclose reporting coverage on every resu
   expect_equal(cov$n_units_reporting, c(152L, 597L, 112L, 114L))
   expect_equal(cov$is_census_year, c(FALSE, TRUE, FALSE, FALSE))
 
+  # Cross-check against the raw partitions, scoped to the SAME universe the
+  # rollup was given -- the 608 govids above. Scoping instead on the long
+  # table's own `type`/`fips_state` asks a different question and answers 595:
+  # VERNON VILLAGE and WAUKESHA VILLAGE carry type = 3 there (their as-of-year
+  # identity, when they were townships) while the xwalk lists them as
+  # govs_type = 2 (their present identity, as villages). Schema v6 made the
+  # long table's geography present-harmonized and moved as-of-year to the
+  # *_asof columns, but `type` still reads as-of-year -- see .validate_schema()
+  # in R/manifest.R. n_units_reporting counts against the requested universe,
+  # so 597 is the number that answers "how many of the governments I asked
+  # about reported".
   raw_2012 <- wt_raw_query(paste0(
     "SELECT COUNT(DISTINCT canonical_govid) n FROM read_parquet('", wt_corpus_glob(), "') ",
-    "WHERE type = 2 AND fips_state = 55 AND year = 2012 ",
-    "AND LEFT(item_code, 1) IN ('E','F','G') AND NOT is_aggregate"))
+    "WHERE year = 2012 AND LEFT(item_code, 1) IN ('E','F','G') AND NOT is_aggregate ",
+    "AND canonical_govid IN (",
+    paste0("'", wi$canonical_govid, "'", collapse = ","), ")"))
   expect_equal(cov$n_units_reporting[cov$year == 2012], as.integer(raw_2012$n[[1]]))
 
   # -- F-023: peer cohorts --------------------------------------------------

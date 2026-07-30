@@ -19,6 +19,13 @@
 #'   target's population at `year` to produce absolute bounds. If `FALSE`,
 #'   `pop_range` is interpreted as absolute population counts.
 #' @param max_peers Integer cap on the number of peers returned.
+#' @param coverage Survey-cycle handling; see [cog_peer_compare()]. Here it
+#'   governs the cohort VINTAGE when `year` is `NULL`: `"census"` snaps to the
+#'   most recent census year with an observed population, so a cohort is not
+#'   built from a sample year in which most of the candidate universe is
+#'   absent. `"consistent"` needs a year range, which cohort selection does not
+#'   have, so it selects like `"all"` and is carried on the result as
+#'   `attr(x, "coverage")` for [cog_peer_compare()].
 #' @return Tibble with columns `canonical_govid`, `gov_name`, `fips_state`,
 #'   `population`, `pop_ratio`, `rank`. The cohort year is attached as
 #'   `attr(x, "cohort_year")`.
@@ -29,7 +36,9 @@ cog_find_peers <- function(target_govid,
                            same_state = FALSE,
                            pop_range = c(0.7, 1.3),
                            is_ratio = TRUE,
-                           max_peers = 10L) {
+                           max_peers = 10L,
+                           coverage = c("all", "census", "consistent")) {
+  coverage <- .validate_coverage(coverage)
   if (!is.character(target_govid) || length(target_govid) != 1L) {
     cli::cli_abort("`target_govid` must be a length-1 character string.")
   }
@@ -59,7 +68,7 @@ cog_find_peers <- function(target_govid,
     ))
   }
 
-  cohort_year <- .resolve_cohort_year(con, target_govid, year)
+  cohort_year <- .resolve_cohort_year(con, target_govid, year, coverage)
 
   pop_sql <- sprintf(
     "SELECT population FROM gov_population_yearly
@@ -107,12 +116,34 @@ cog_find_peers <- function(target_govid,
   attr(peers, "cohort_year") <- as.integer(cohort_year)
   attr(peers, "pop_range")   <- as.numeric(pop_range)
   attr(peers, "is_ratio")    <- isTRUE(is_ratio)
+  attr(peers, "coverage")    <- coverage
+  attr(peers, "is_census_year") <- .is_census_year(cohort_year)
   peers
 }
 
+# `coverage` picks the cohort vintage when the caller did not name one.
+# "census" snaps to the most recent CENSUS year with an observed population,
+# so a cohort is not silently built from a sample year in which most of the
+# candidate universe is absent. "consistent" is a comparison-time concept --
+# it needs a year RANGE, which cohort selection does not have -- so it selects
+# like "all" here and is carried on the result for cog_peer_compare().
 #' @noRd
-.resolve_cohort_year <- function(con, target_govid, year) {
+.resolve_cohort_year <- function(con, target_govid, year,
+                                 coverage = "all") {
   if (!is.null(year)) return(as.integer(year))
+  if (identical(coverage, "census")) {
+    sql <- sprintf(
+      "SELECT MAX(year) AS y FROM gov_population_yearly
+       WHERE canonical_govid = %s AND year %% 10 IN (2, 7)",
+      .sql_lit_chr(target_govid)
+    )
+    y <- DBI::dbGetQuery(con, sql)$y
+    if (length(y) > 0L && !is.na(y)) return(as.integer(y))
+    cli::cli_abort(c(
+      "{.code coverage = \"census\"} found no census year with an observed population for {target_govid}.",
+      i = "Pass an explicit {.arg year}, or use {.code coverage = \"all\"}."
+    ), class = "uscogdata_no_census_years")
+  }
   sql <- sprintf(
     "SELECT MAX(year) AS y FROM gov_population_yearly
      WHERE canonical_govid = %s",
@@ -149,6 +180,31 @@ cog_find_peers <- function(target_govid,
 #'   `"direct"` is accepted; the `"total"` option exists in [cog_spending()] for
 #'   single-government queries but cannot be used here because combining Total
 #'   across peer sets counts intergovernmental transfers twice.
+#' @param coverage How to handle the Census of Governments survey cycle,
+#'   which is a **complete census only in years ending in 2 and 7** -- every
+#'   other year is a sample, and the sample varies enormously (on the bundled
+#'   fixture, Wisconsin's 608-city universe reports 597 governments in FY2012
+#'   and 112 in FY2019).
+#'
+#'   * `"all"` (default) -- every unit that reported that year. Unchanged
+#'     behaviour, so existing code keeps working.
+#'   * `"census"` -- census years only. Aborts if the requested range holds
+#'     none, rather than silently returning nothing.
+#'   * `"consistent"` -- only units reporting in *every* requested year, giving
+#'     a balanced panel.
+#'
+#'   Regardless of mode, `provenance$coverage` always carries per-year
+#'   `n_units_reporting`, `n_units_expected` and `is_census_year`, and
+#'   `provenance$coverage_mode` records the mode. `is_census_year` is a
+#'   statement about the **survey calendar**, never a claim of completeness:
+#'   FY1967 is a census year in which only 97 of Wisconsin's 608 cities
+#'   report. `n_units_reporting` is the number that tells the truth.
+#'
+#'   The comparison target is exempt from `"consistent"` balancing -- it is the
+#'   subject of the comparison, not a member of the cohort -- and the
+#'   `summary_*` quantiles are computed AFTER the filter, so they describe the
+#'   cohort actually returned. `n_units_reporting` counts peers only, against
+#'   the cohort size: "3 of your 15 peers reported in FY2019".
 #' @return Tibble matching [cog_spending()]'s columns, plus a `role`
 #'   column taking values `"target"`, `"peer"`, `"summary_p25"`,
 #'   `"summary_p50"`, or `"summary_p75"`, `target_rank` (target's rank
@@ -186,9 +242,11 @@ cog_find_peers <- function(target_govid,
 #' @export
 cog_peer_compare <- function(target_govid, peers, category, years,
                              per_capita = TRUE, adjust_to_year = NULL,
-                             expenditure_concept = c("direct", "total")) {
+                             expenditure_concept = c("direct", "total"),
+                             coverage = c("all", "census", "consistent")) {
   call <- match.call()
   expenditure_concept <- match.arg(expenditure_concept)
+  coverage <- .validate_coverage(coverage)
   if (identical(expenditure_concept, "total")) {
     .abort_concept_not_aggregatable("cog_peer_compare")
   }
@@ -211,8 +269,19 @@ cog_peer_compare <- function(target_govid, peers, category, years,
   peer_govids <- peer_govids[!is.na(peer_govids) & nzchar(peer_govids)]
   all_govids <- unique(c(target_govid, peer_govids))
 
+  years <- .apply_census_years(years, coverage, "cog_peer_compare")
+
   r <- cog_spending(all_govids, years, category, per_capita, adjust_to_year)
   r$role <- ifelse(r$canonical_govid == target_govid, "target", "peer")
+
+  # The target is exempt from balancing: it is the subject of the comparison,
+  # not a member of the cohort being balanced, and dropping it would leave a
+  # peer comparison with nothing to compare. Filtering happens BEFORE the
+  # quantiles below, so a "consistent" cohort's summary rows describe that
+  # cohort rather than the unbalanced one.
+  if (identical(coverage, "consistent")) {
+    r <- .filter_consistent(r, years, keep_ids = target_govid)
+  }
 
   value_col <- .peer_value_col(per_capita, adjust_to_year)
 
@@ -233,6 +302,14 @@ cog_peer_compare <- function(target_govid, peers, category, years,
   prov$target     <- list(
     canonical_govid = target_govid,
     gov_name        = unique(r$gov_name[r$role == "target"])
+  )
+  # Counted over PEER rows only, against the cohort size: "3 of your 15 peers
+  # reported in FY2019". Including the target would inflate every count by one
+  # and make a cohort that has entirely stopped reporting look non-empty.
+  prov$coverage_mode <- coverage
+  prov$coverage <- .coverage_table(
+    out, years, length(peer_govids),
+    rows = r[r$role == "peer", , drop = FALSE]
   )
   attr(out, "provenance") <- prov
   out

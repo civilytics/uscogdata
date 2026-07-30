@@ -31,6 +31,25 @@
 #'   across multiple layers of government double-counts intergovernmental
 #'   transfers (a state's payment to a school district is the same dollar the
 #'   district reports as its own Direct spending).
+#' @param coverage How to handle the Census of Governments survey cycle,
+#'   which is a **complete census only in years ending in 2 and 7** -- every
+#'   other year is a sample, and the sample varies enormously (on the bundled
+#'   fixture, Wisconsin's 608-city universe reports 597 governments in FY2012
+#'   and 112 in FY2019).
+#'
+#'   * `"all"` (default) -- every unit that reported that year. Unchanged
+#'     behaviour, so existing code keeps working.
+#'   * `"census"` -- census years only. Aborts if the requested range holds
+#'     none, rather than silently returning nothing.
+#'   * `"consistent"` -- only units reporting in *every* requested year, giving
+#'     a balanced panel.
+#'
+#'   Regardless of mode, `provenance$coverage` always carries per-year
+#'   `n_units_reporting`, `n_units_expected` and `is_census_year`, and
+#'   `provenance$coverage_mode` records the mode. `is_census_year` is a
+#'   statement about the **survey calendar**, never a claim of completeness:
+#'   FY1967 is a census year in which only 97 of Wisconsin's 608 cities
+#'   report. `n_units_reporting` is the number that tells the truth.
 #' @return Tibble with columns `year`, `layer`, `canonical_govid`, `gov_name`,
 #'   `spend_subtype`, `category`, `amt_nominal`, optional `amt_real` /
 #'   `amt_per_capita_nominal` / `amt_per_capita_real`, optional `pop_source`,
@@ -40,9 +59,11 @@
 #' @export
 cog_geographic_rollup <- function(govids, category, years,
                                   per_capita = FALSE, adjust_to_year = NULL,
-                                  expenditure_concept = c("direct", "total")) {
+                                  expenditure_concept = c("direct", "total"),
+                                  coverage = c("all", "census", "consistent")) {
   call <- match.call()
   expenditure_concept <- match.arg(expenditure_concept)
+  coverage <- .validate_coverage(coverage)
   if (identical(expenditure_concept, "total")) {
     .abort_concept_not_aggregatable("cog_geographic_rollup")
   }
@@ -59,10 +80,19 @@ cog_geographic_rollup <- function(govids, category, years,
     layer           = rep(layer_names, lengths(govids))
   )
 
+  # coverage = "census" drops non-census years BEFORE the query rather than
+  # after: a sample year's rows are not wanted at all, and fetching them only
+  # to discard them would also let them into the coverage table.
+  years <- .apply_census_years(years, coverage, "cog_geographic_rollup")
+
   r <- cog_spending(all_govids, years, category, per_capita, adjust_to_year)
   r <- dplyr::left_join(r, layer_map, by = "canonical_govid",
                         relationship = "many-to-many")
   r$scope_note <- .rollup_scope_note(r$layer)
+
+  if (identical(coverage, "consistent")) {
+    r <- .filter_consistent(r, years)
+  }
 
   excluded <- character(0)
   if (isTRUE(per_capita) && "pop_source" %in% names(r)) {
@@ -82,6 +112,11 @@ cog_geographic_rollup <- function(govids, category, years,
     included_govids = included,
     excluded_govids = excluded
   )
+  # n_units_expected is the universe the CALLER named -- the govids passed in
+  # -- not the national universe. That is what makes the ratio meaningful:
+  # "597 of the 608 Wisconsin cities you asked about reported in FY2012".
+  prov$coverage_mode <- coverage
+  prov$coverage <- .coverage_table(r, years, length(unique(all_govids)))
   attr(r, "provenance") <- prov
 
   r

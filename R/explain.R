@@ -118,6 +118,23 @@ cog_explain <- function(result, format = c("print", "list")) {
     cli::cli_ul(sugg_lines)
   }
 
+  if (!is.null(prov$coverage) && nrow(prov$coverage) > 0L) {
+    cli::cli_h2("Reporting coverage")
+    cli::cli_text("Mode: {prov$coverage_mode %||% 'all'}")
+    cov <- prov$coverage
+    cli::cli_ul(sprintf(
+      "%d: %d of %d units reporting (%.0f%%) -- %s year",
+      cov$year, cov$n_units_reporting, cov$n_units_expected,
+      100 * cov$n_units_reporting / pmax(cov$n_units_expected, 1L),
+      ifelse(cov$is_census_year, "census", "sample")
+    ))
+    if (any(!cov$is_census_year)) {
+      cli::cli_text(
+        "Note: the Census of Governments is a complete census only in years ending in 2 or 7; every other year is a sample."
+      )
+    }
+  }
+
   if (isTRUE(prov$completion$applied)) {
     cli::cli_h2("Completion")
     cli::cli_text(

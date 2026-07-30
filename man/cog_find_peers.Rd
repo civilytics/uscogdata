@@ -11,7 +11,8 @@ cog_find_peers(
   same_state = FALSE,
   pop_range = c(0.7, 1.3),
   is_ratio = TRUE,
-  max_peers = 10L
+  max_peers = 10L,
+  coverage = c("all", "census", "consistent")
 )
 }
 \arguments{
@@ -34,6 +35,14 @@ target's population at `year` to produce absolute bounds. If `FALSE`,
 `pop_range` is interpreted as absolute population counts.}
 
 \item{max_peers}{Integer cap on the number of peers returned.}
+
+\item{coverage}{Survey-cycle handling; see [cog_peer_compare()]. Here it
+governs the cohort VINTAGE when `year` is `NULL`: `"census"` snaps to the
+most recent census year with an observed population, so a cohort is not
+built from a sample year in which most of the candidate universe is
+absent. `"consistent"` needs a year range, which cohort selection does not
+have, so it selects like `"all"` and is carried on the result as
+`attr(x, "coverage")` for [cog_peer_compare()].}
 }
 \value{
 Tibble with columns `canonical_govid`, `gov_name`, `fips_state`,

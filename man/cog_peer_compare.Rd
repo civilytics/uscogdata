@@ -11,7 +11,8 @@ cog_peer_compare(
   years,
   per_capita = TRUE,
   adjust_to_year = NULL,
-  expenditure_concept = c("direct", "total")
+  expenditure_concept = c("direct", "total"),
+  coverage = c("all", "census", "consistent")
 )
 }
 \arguments{
@@ -33,6 +34,32 @@ population.}
 `"direct"` is accepted; the `"total"` option exists in [cog_spending()] for
 single-government queries but cannot be used here because combining Total
 across peer sets counts intergovernmental transfers twice.}
+
+\item{coverage}{How to handle the Census of Governments survey cycle,
+  which is a **complete census only in years ending in 2 and 7** -- every
+  other year is a sample, and the sample varies enormously (on the bundled
+  fixture, Wisconsin's 608-city universe reports 597 governments in FY2012
+  and 112 in FY2019).
+
+  * `"all"` (default) -- every unit that reported that year. Unchanged
+    behaviour, so existing code keeps working.
+  * `"census"` -- census years only. Aborts if the requested range holds
+    none, rather than silently returning nothing.
+  * `"consistent"` -- only units reporting in *every* requested year, giving
+    a balanced panel.
+
+  Regardless of mode, `provenance$coverage` always carries per-year
+  `n_units_reporting`, `n_units_expected` and `is_census_year`, and
+  `provenance$coverage_mode` records the mode. `is_census_year` is a
+  statement about the **survey calendar**, never a claim of completeness:
+  FY1967 is a census year in which only 97 of Wisconsin's 608 cities
+  report. `n_units_reporting` is the number that tells the truth.
+
+  The comparison target is exempt from `"consistent"` balancing -- it is the
+  subject of the comparison, not a member of the cohort -- and the
+  `summary_*` quantiles are computed AFTER the filter, so they describe the
+  cohort actually returned. `n_units_reporting` counts peers only, against
+  the cohort size: "3 of your 15 peers reported in FY2019".}
 }
 \value{
 Tibble matching [cog_spending()]'s columns, plus a `role`
