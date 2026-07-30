@@ -118,6 +118,24 @@ cog_explain <- function(result, format = c("print", "list")) {
     cli::cli_ul(sugg_lines)
   }
 
+  if (isTRUE(prov$completion$applied)) {
+    cli::cli_h2("Completion")
+    cli::cli_text(
+      "Filled {prov$completion$rows_filled} absent cell(s) from the corpus code set."
+    )
+    rules <- prov$completion$absence_means
+    if (length(rules) > 0L) {
+      cli::cli_ul(vapply(names(rules), function(y) {
+        sprintf("%s: an absent cell means %s", y,
+                if (identical(rules[[y]], "census_zero")) {
+                  "Census published $0 (filled as 0)"
+                } else {
+                  "the government did not report (filled as NA, not 0)"
+                })
+      }, character(1)))
+    }
+  }
+
   if (length(prov$series_break_refs) > 0L) {
     cli::cli_h2("Series breaks")
     cli::cli_ul(.series_break_story_lines(prov$series_break_refs))

@@ -33,6 +33,15 @@
     "aggregate_fallback": { "type": ["object", "null"] },
     "transformations":{ "type": "object" },
     "series_break_refs": { "type": "array", "items": { "type": "string" } },
+    "completion": {
+      "type": "object",
+      "description": "What `complete = TRUE` filled. `applied` is FALSE on an ordinary query. `rows_filled` counts cells added to the requested grid, and `absence_means` maps each requested year to the meaning of an absent cell there ('census_zero' in a dense_source year, 'not_reported' in a sparse_source one). Filled rows carry `value_source` in the result: 'reported', 'census_zero' (amount 0 -- Census published $0), or 'not_reported' (amount NA -- unknown).",
+      "properties": {
+        "applied": { "type": "boolean" },
+        "rows_filled": { "type": "integer" },
+        "absence_means": { "type": "object" }
+      }
+    },
     "corpus_break_refs": {
       "type": "array",
       "items": { "type": "string" },
