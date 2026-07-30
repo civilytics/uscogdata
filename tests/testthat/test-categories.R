@@ -15,7 +15,11 @@ test_that("cog_categories(type = 'spending') returns only expenditure rows", {
   skip_if_no_corpus()
   r <- cog_categories(type = "spending")
   expect_true(all(r$category_type == "expenditure"))
-  expect_true(all(r$subtype %in% c("operations", "capital", "intergovernmental")))
+  # "assistance" (the J-prefix aid/benefit codes) joined the vocabulary with
+  # the crosswalk completion in cog_pipeline#60/#65 -- every flow code
+  # carrying dollars now maps to a category.
+  expect_true(all(r$subtype %in%
+                  c("operations", "capital", "intergovernmental", "assistance")))
 })
 
 test_that("cog_categories surfaces the intergovernmental spending subtype", {

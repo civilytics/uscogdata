@@ -244,24 +244,42 @@ test_that("basis defaults to 'harmonized' when not passed", {
 test_that("provenance carries basis + harmonization block with na_rows_excluded", {
   skip_if_no_corpus()
   with_fixture_corpus({
-    r <- cog_spending("121011212191", 2011:2012, "Corrections")
+    # FL state government. The harmonization block is scoped by government,
+    # year and flow prefix -- NOT by category -- so a Corrections query still
+    # counts every E/F/G-prefixed row the harmonized basis drops for having
+    # no harmonized_code. The three that apply here are E21/F21/G21
+    # (Education NEC, SB184-186, "discontinued_na", wide-era window ending
+    # FY2011); the other discontinued_na rulings live outside E/F/G.
+    # See docs/phase_r_harmonization_review.md § 1.3/1.4 and cog_pipeline
+    # data/harmonization_map.csv.
+    r <- cog_spending("120000226351", 2011:2012, "Corrections")
     prov <- attr(r, "provenance")
     expect_equal(prov$basis, "harmonized")
     expect_true(prov$harmonization$applied)
-    expect_true(prov$harmonization$na_rows_excluded >= 0L)
-    expect_true(prov$harmonization$na_amount_excluded >= 0)
-    # Data-verified for the v6 fixture (corpus 2026-07-22). The Task 18 map
-    # extension added E/F/G-prefix discontinued_na rulings the earlier pin's
-    # comment predated: E21/F21/G21 (Education NEC local, SB184-186,
-    # "trivial; explicit-NA, full wide-era window"). Broward's 2011 legacy
-    # partition zero-pads exactly those three codes, so this query now
-    # excludes 3 NA-harmonized rows -- all with amt = 0, hence the excluded
-    # AMOUNT stays exactly zero. (The other discontinued_na rulings -- S74,
-    # Z61, X04, X06, the debt-detail family, L24 -- remain outside the
-    # E/F/G/K prefixes.) See docs/phase_r_harmonization_review.md § 1.3/1.4
-    # and cog_pipeline data/harmonization_map.csv E21/F21/G21 rows.
     expect_equal(prov$harmonization$na_rows_excluded, 3L)
-    expect_equal(prov$harmonization$na_amount_excluded, 0)
+    # $2,825,439 thousands of FY2011 E21 + F21 + G21, reported in full USD.
+    # Pinning a non-zero amount is the point: the earlier Broward anchor's
+    # three rows were all explicit zeros, so the AMOUNT accounting was
+    # asserted only against 0 and could not have caught a bug.
+    expect_equal(prov$harmonization$na_amount_excluded, 2825439 * 1000)
+  })
+})
+
+test_that("sparsification removed the wide era's zero-pads from the exclusion count", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    # Broward County FY2011 used to carry E21/F21/G21 rows of exactly $0 --
+    # the wide era stored every government x every code, zeros included. The
+    # published corpus no longer does (SB194, cog_pipeline#64), so there is
+    # now nothing for the harmonized basis to exclude. Absence in a
+    # dense_source year means Census published $0; it does not mean the
+    # exclusion machinery stopped working, which the FL state anchor above
+    # proves independently.
+    r <- cog_spending("121011212191", 2011:2012, "Corrections")
+    h <- attr(r, "provenance")$harmonization
+    expect_true(h$applied)
+    expect_equal(h$na_rows_excluded, 0L)
+    expect_equal(h$na_amount_excluded, 0)
   })
 })
 

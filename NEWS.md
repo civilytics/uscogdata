@@ -1,5 +1,31 @@
 # uscogdata 0.1.0 (development)
 
+## Bundled fixture regenerated against the sparsified corpus
+
+* `inst/extdata/fixture_corpus/` now tracks the corpus published on
+  2026-07-29 (`pipeline_commit 83f9715`, schema v6). The wide era no longer
+  stores explicit zeros: FY2011 fell from 2,864,212 rows to 496,004, of
+  which none are `$0`. **Absence now means two different things** — in a
+  `dense_source` year (≤ FY2011) an absent cell means Census published `$0`;
+  in a `sparse_source` year (≥ FY2012) it means not reported. The corpus
+  carries that rule in two new tables the fixture now ships,
+  `representation.parquet` and `code_set.parquet`, alongside
+  `census_collection_coverage.parquet` and `lineage_events.parquet`
+  (all ten publish-tree metadata tables, up from six). Catalogued upstream
+  as series break `SB194`.
+* `cog_categories()` gains an `assistance` spending subtype: the J-prefix
+  aid/benefit codes (`J19`, `J67`, `J68`, `J85`) are categorised now that
+  the upstream crosswalk covers every flow code carrying dollars.
+* Two consequences worth knowing about, both visible in provenance rather
+  than in returned dollars. The harmonization block's `na_rows_excluded`
+  counts only rows that exist, so wide-era codes that were zero-padded no
+  longer appear there. Coverage-gap `suggestions` are presence-based for the
+  same reason, so a recipe whose component codes were all `$0` for a given
+  government-year is no longer suggested for it.
+* `tests/testthat/test-fixture-vintage.R` pins these structural facts, so a
+  fixture left behind by a future publish fails loudly instead of letting the
+  suite pass against a corpus that no longer exists.
+
 ## Breaking: corpus schema_version 4 (Phase P canonical ids)
 
 * The package now requires corpus `schema_version = 4` (`MinCorpusSchema` /
