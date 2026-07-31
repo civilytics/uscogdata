@@ -11,7 +11,7 @@ cog_peer_compare(
   years,
   per_capita = TRUE,
   adjust_to_year = NULL,
-  expenditure_concept = c("direct", "total"),
+  expenditure_concept = c("primary", "direct", "total"),
   coverage = c("all", "census", "consistent")
 )
 }
@@ -30,10 +30,11 @@ population.}
 
 \item{adjust_to_year}{Integer base year for CPI-U conversion or `NULL`.}
 
-\item{expenditure_concept}{`"direct"` (default) or `"total"`. Currently only
-`"direct"` is accepted; the `"total"` option exists in [cog_spending()] for
-single-government queries but cannot be used here because combining Total
-across peer sets counts intergovernmental transfers twice.}
+\item{expenditure_concept}{`"primary"` (default), `"direct"`, or
+`"total"` -- see [cog_spending()] for the three concepts. `"total"` is
+refused here because combining Total across peer sets counts
+intergovernmental transfers twice; `"primary"` and `"direct"` combine
+safely.}
 
 \item{coverage}{How to handle the Census of Governments survey cycle,
   which is a **complete census only in years ending in 2 and 7** -- every

@@ -10,7 +10,7 @@ cog_geographic_rollup(
   years,
   per_capita = FALSE,
   adjust_to_year = NULL,
-  expenditure_concept = c("direct", "total"),
+  expenditure_concept = c("primary", "direct", "total"),
   coverage = c("all", "census", "consistent")
 )
 }
@@ -30,12 +30,12 @@ are excluded from the result.}
 
 \item{adjust_to_year}{Integer base year for CPI-U conversion, or `NULL`.}
 
-\item{expenditure_concept}{`"direct"` (default) or `"total"`. Currently only
-`"direct"` is accepted; the `"total"` option exists in [cog_spending()] for
-single-government queries but cannot be used here because combining Total
-across multiple layers of government double-counts intergovernmental
-transfers (a state's payment to a school district is the same dollar the
-district reports as its own Direct spending).}
+\item{expenditure_concept}{`"primary"` (default), `"direct"`, or
+`"total"` -- see [cog_spending()] for the three concepts. `"total"` is
+refused here because combining Total across multiple layers of
+government double-counts intergovernmental transfers (a state's payment
+to a school district is the same dollar the district reports as its own
+Direct spending); `"primary"` and `"direct"` combine safely.}
 
 \item{coverage}{How to handle the Census of Governments survey cycle,
   which is a **complete census only in years ending in 2 and 7** -- every

@@ -14,9 +14,11 @@
 
 # The (subtype, category) cells that SHOULD exist for one government-year:
 # every code in force for that government's type, mapped through
-# summary_categories, matching the verb's flow prefixes and excluding
-# aggregate-flagged codes (which spending_long/revenue_long drop).
-raw_expected_cells <- function(govid, year, prefixes, subtype_col) {
+# summary_categories, matching the verb's crosswalk subtype scope (the
+# default concept, `primary`, is operations/capital/assistance -- see
+# uscogdata#11) and excluding aggregate-flagged codes (which
+# spending_long/revenue_long drop).
+raw_expected_cells <- function(govid, year, subtypes, subtype_col) {
   fx <- sub("/$", "", Sys.getenv("USCOGDATA_URL"))
   q <- function(f) sprintf("read_parquet('%s/data/%s')", fx, f)
   wt_raw_query(sprintf(
@@ -27,14 +29,17 @@ raw_expected_cells <- function(govid, year, prefixes, subtype_col) {
      WHERE x.canonical_govid = '%s'
        AND cs.year = %d
        AND NOT cs.is_aggregate
-       AND LEFT(cs.item_code, 1) IN (%s)
        AND c.category IS NOT NULL
-       AND c.%s IS NOT NULL",
+       AND c.%s IN (%s)",
     subtype_col, q("code_set.parquet"), q("canonical_fips_xwalk.parquet"),
     q("summary_categories.parquet"), govid, year,
-    paste0("'", prefixes, "'", collapse = ","), subtype_col
+    subtype_col, paste0("'", subtypes, "'", collapse = ",")
   ))
 }
+
+# The default expenditure concept's subtype scope, mirrored from
+# R/spending.R's .spend_subtypes_primary.
+primary_subtypes <- c("operations", "capital", "assistance")
 
 test_that("complete = FALSE is the default and changes nothing", {
   skip_if_no_corpus()
@@ -54,7 +59,7 @@ test_that("complete = TRUE round-trips a dense-source year to the pre-sparsifica
     # reproduce that cell set exactly.
     r <- cog_spending("121011212191", 2011L, complete = TRUE)
     expected <- raw_expected_cells("121011212191", 2011L,
-                                   c("E", "F", "G"), "spend_subtype")
+                                   primary_subtypes, "spend_subtype")
 
     key <- function(sub, cat) paste(sub, cat, sep = "|")
     expect_setequal(key(r$spend_subtype, r$category),
@@ -108,7 +113,7 @@ test_that("the fill is scoped to each government's own type", {
     # code_set puts in force for type 1 (county) specifically.
     r <- cog_spending("121011212191", 2011L, complete = TRUE)
     county_cells <- raw_expected_cells("121011212191", 2011L,
-                                       c("E", "F", "G"), "spend_subtype")
+                                       primary_subtypes, "spend_subtype")
     expect_true(all(r$category %in% county_cells$category))
   })
 })
@@ -128,7 +133,7 @@ test_that("cog_revenue() completes on its own flow", {
   with_fixture_corpus({
     r <- cog_revenue("121011212191", 2011L, complete = TRUE)
     expected <- raw_expected_cells("121011212191", 2011L,
-                                   c("T", "A", "U", "B", "C", "D"),
+                                   c("own_source", "federal", "state", "local_aid"),
                                    "revenue_subtype")
     key <- function(sub, cat) paste(sub, cat, sep = "|")
     expect_setequal(key(r$revenue_subtype, r$category),

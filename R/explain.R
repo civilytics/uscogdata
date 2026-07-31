@@ -60,7 +60,15 @@ cog_explain <- function(result, format = c("print", "list")) {
     cli::cli_text("Basis: {prov$basis}{note}")
   }
 
-  if (!is.null(prov$expenditure_concept)) {
+  # Each verb reports its OWN concept. Both fields are always present (each
+  # defaults to its concept's default), so printing `expenditure_concept`
+  # unconditionally would tell a cog_revenue() caller "Concept: primary",
+  # which names a spending concept their result has nothing to do with.
+  if (identical(prov$verb, "cog_revenue")) {
+    if (!is.null(prov$revenue_concept)) {
+      cli::cli_text("Concept: {prov$revenue_concept} revenue")
+    }
+  } else if (!is.null(prov$expenditure_concept)) {
     concept_note <- if (!is.null(prov$expenditure_concept_note) &&
                          !is.na(prov$expenditure_concept_note)) {
       sprintf(" (%s)", prov$expenditure_concept_note)

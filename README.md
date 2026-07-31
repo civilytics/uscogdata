@@ -46,22 +46,62 @@ than obviously wrong.
 - `USCOGDATA_CACHE_DIR` — optional override for the manifest cache directory
 - `USCOGDATA_MANIFEST_TTL_SECS` — optional manifest re-fetch TTL (default 3600)
 
-## Direct vs Total spending
+## Primary vs Direct vs Total spending
 
-`cog_spending(..., expenditure_concept = c("direct", "total"))` controls
-whose spending a result counts. `"direct"` (the default) is a government's
-own current operations, capital outlay, and other direct spending. `"total"`
-additionally adds in the intergovernmental legs — money it hands to other
-governments to spend on its behalf — which is meaningful for describing one
-government's own budget over time, but double-counts when summed across
-governments (a state's payment to a county is the same dollar the county
-reports as its own direct spending).
+`cog_spending(..., expenditure_concept = c("primary", "direct", "total"))`
+controls whose spending a result counts. Concepts are defined as sets of the
+crosswalk's `spend_subtype` values — never item-code first letters, which
+cannot classify correctly (the letter `Y` alone spans revenue, expenditure,
+and balance codes):
+
+- `"primary"` (the default) is the government's own service provision:
+  current operations, capital outlay, and assistance payments.
+- `"direct"` is Census's published Direct Expenditure: `primary` plus
+  interest on debt and insurance trust benefit payments (e.g. pensions).
+- `"total"` additionally adds the intergovernmental leg — money handed to
+  other governments to spend (`M`/`L` codes plus `Q11`/`Q12`/`Q18` state
+  payments to school systems) — which is meaningful for describing one
+  government's own budget over time, but double-counts when summed across
+  governments (a state's payment to a county is the same dollar the county
+  reports as its own direct spending).
 
 **Rule of thumb: any figure that spans more than one government uses
-`direct`.** `cog_geographic_rollup()` and `cog_peer_compare()` enforce this
-by refusing `expenditure_concept = "total"`. See
+`primary` or `direct`.** `cog_geographic_rollup()` and `cog_peer_compare()`
+enforce this by refusing `expenditure_concept = "total"`. See
 `vignette("total-spending", package = "uscogdata")` for the full
 explanation with worked examples.
+
+## General vs Total revenue
+
+`cog_revenue(..., revenue_concept = c("general", "total"))` selects between
+Census's two published revenue concepts, again defined as crosswalk
+`revenue_subtype` sets rather than item-code prefixes:
+
+- `"general"` (the default) is Census **General Revenue**: own-source
+  (taxes, charges, miscellaneous) plus federal, state and local
+  intergovernmental aid.
+- `"total"` is Census **Total Revenue**: `general` plus utility revenue
+  (`A91`–`A94`), liquor store revenue (`A90`), and insurance trust revenue
+  (unemployment and workers' compensation `Y` codes plus the
+  employee-retirement `X` codes).
+
+The manual defines the first by subtracting the other three from the second,
+so the two are related by Census's own identity:
+
+```
+Total Revenue = General + Utility + Liquor Store + Insurance Trust
+```
+
+Two things worth knowing before switching to `"total"`:
+
+- **Utility revenue is large for cities.** Measured on the bundled fixture,
+  utility plus liquor store revenue is 15.9% of city (type 2) revenue, versus
+  1.2% for states and 1.7% for counties. `general` excludes it by definition.
+- **The employee-retirement (`X`) codes stop at FY2016**, when those systems
+  moved out of the annual finance file into the separate Annual Survey of
+  Public Pensions. A `"total"` series therefore steps down at the
+  FY2016/FY2017 seam for reasons of collection scope, not revenue (series
+  breaks `SB197`–`SB202`, in the corpus's `series_breaks` table).
 
 ## Developer notes
 

@@ -1,4 +1,6 @@
--- Intergovernmental expenditure rows (M = to local govts, L = to state govts).
+-- Intergovernmental expenditure rows: crosswalk spend_subtype =
+-- 'intergovernmental' (M = to local govts, L = to state govts, Q11/Q12/Q18
+-- = state payments to school systems -- uscogdata#11, finding F-017).
 --
 -- Deliberately does NOT filter `NOT is_aggregate`, unlike spending_long. In the
 -- wide era (<= FY2011) the IG families M05/M12/M47/M89/L47/L89 are published
@@ -9,10 +11,15 @@
 -- from 2012 alongside M91-93), so no row is ever counted twice. Same argument
 -- the pipeline's recipe joins use.
 --
--- `L--` IS excluded: it is the IG-to-state FAMILY TOTAL and genuinely rolls up
--- the L-NN codes, so including it would double-count.
+-- `L--` stays excluded: it is the IG-to-state FAMILY TOTAL and genuinely
+-- rolls up the L-NN codes, so including it would double-count. The crosswalk
+-- deliberately carries no `--` family-total codes, so membership excludes it
+-- (guarded by "the IG leg never includes the L-- family total" in
+-- tests/testthat/test-expenditure-concept.R).
 CREATE OR REPLACE VIEW ig_long AS
 SELECT *
 FROM long
-WHERE LEFT(item_code, 1) IN ('M', 'L')
-  AND item_code NOT LIKE '%--';
+WHERE item_code IN (
+    SELECT item_code FROM summary_categories
+    WHERE spend_subtype = 'intergovernmental'
+  );

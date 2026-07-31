@@ -6,9 +6,10 @@
                               per_capita, adjust_to_year, result, sql,
                               subtype_col, basis = NA_character_,
                               basis_note = NA_character_,
-                              expenditure_concept = "direct",
+                              expenditure_concept = "primary",
                               expenditure_concept_note = NA_character_,
                               expenditure_concept_direct_suppressed = FALSE,
+                              revenue_concept = "general",
                               harmonization = NULL, recipe = NULL,
                               suggestions = list(),
                               completion = NULL) {
@@ -67,6 +68,7 @@
     expenditure_concept = expenditure_concept,
     expenditure_concept_note = expenditure_concept_note,
     expenditure_concept_direct_suppressed = isTRUE(expenditure_concept_direct_suppressed),
+    revenue_concept = revenue_concept,
     harmonization = harmonization %||% list(
       applied = FALSE, na_rows_excluded = 0L, na_amount_excluded = 0,
       note = NA_character_

@@ -1,7 +1,7 @@
 {
   "schema_version": 6,
-  "built_at": "2026-07-30T20:01:56Z",
-  "pipeline_commit": "e64a046",
+  "built_at": "2026-07-31T00:47:27Z",
+  "pipeline_commit": "aadb46b",
   "fixture_note": "Four-year (2011, 2012, 2019, 2020) fixture for uscogdata tests. Full corpus available via USCOGDATA_URL. Regenerated from the sparsified schema-v6 corpus: the wide era (<= FY2011) no longer stores explicit zeros, so FY2011 absence means Census published $0 while FY2012+ absence means not reported. representation.parquet and code_set.parquet carry that rule and ship in full, as do every other metadata table in the publish tree. 2011/2012 straddle both the wide-aggregate -> modern-leaf format boundary (exercised by basis=\"harmonized\" and recipe= queries) and the dense -> sparse representation boundary (SB194); 2019/2020 retain the prior per-capita/CPI regression anchors. Regenerated via data-raw/regenerate_fixture_corpus.R.",
   "data_vintage": {
     "source_vintages": {
@@ -105,12 +105,12 @@
       },
       {
         "path": "data/series_breaks.parquet",
-        "sha256": "381090660c8b8a1bee852e7f63d29b9ecaf10f71870f41c63de92017c83b6f1f",
+        "sha256": "06dcc995ff533e57cc65fa25086cc9bf83ba592c58bf7cc99269dc2576f69944",
         "description": "series_breaks.parquet"
       },
       {
         "path": "data/summary_categories.parquet",
-        "sha256": "e4918abf8e9e6d1372d7ddc255dc199f9c303e250f4106449241b48c68abee67",
+        "sha256": "e3b0efa00ce713b8f45829b89cfde24b55333f26101f0495df82d85997d18d8e",
         "description": "summary_categories.parquet"
       }
     ]

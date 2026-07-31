@@ -83,7 +83,7 @@ test_that("cog_explain prints the expenditure concept (I1)", {
     capture.output(cog_explain(t)),
     capture.output(cog_explain(t), type = "message")
   ), collapse = "\n")
-  expect_true(grepl("Concept: direct", txt_d))
+  expect_true(grepl("Concept: primary", txt_d))
   expect_true(grepl("Concept: total", txt_t))
 })
 

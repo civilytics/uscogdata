@@ -13,9 +13,13 @@ test_that("the corpus contains no K-prefix rows, so the Direct leg omits K", {
   }
 })
 
-test_that("expenditure_concept defaults to direct and preserves today's numbers", {
+test_that("expenditure_concept defaults to primary; direct matches it on a pure operations/capital category", {
   gov <- "010000226085"                      # Alabama state government
   base <- cog_spending(gov, years = 2019, category = "Police")
+  expect_equal(attr(base, "provenance")$expenditure_concept, "primary")
+  # Police maps only to operations/capital codes (E62/F62/G62), so the
+  # direct concept's extra subtypes (interest, insurance_benefits) cannot
+  # contribute and the two concepts must agree exactly here.
   expl <- cog_spending(gov, years = 2019, category = "Police",
                        expenditure_concept = "direct")
   expect_equal(base$amt_nominal, expl$amt_nominal)
@@ -59,7 +63,9 @@ test_that("the IG leg never includes the L-- family total", {
   codes <- DBI::dbGetQuery(con,
     "SELECT DISTINCT item_code FROM ig_long")$item_code
   expect_false(any(grepl("--$", codes)))
-  expect_true(all(substr(codes, 1, 1) %in% c("M", "L")))
+  # Q joined the IG family with the crosswalk-membership rewrite
+  # (uscogdata#11 / F-017: Q11/Q12/Q18 are state payments to school systems).
+  expect_true(all(substr(codes, 1, 1) %in% c("M", "L", "Q")))
 })
 
 test_that("expenditure_concept rejects unknown values", {
@@ -246,9 +252,12 @@ test_that("both cross-government verbs still accept the direct default", {
 })
 
 test_that("provenance always records the expenditure concept", {
-  d <- cog_spending("010000226085", years = 2019, category = "Police")
+  p <- cog_spending("010000226085", years = 2019, category = "Police")
+  d <- cog_spending("010000226085", years = 2019, category = "Police",
+                    expenditure_concept = "direct")
   t <- cog_spending("010000226085", years = 2019, category = "Police",
                     expenditure_concept = "total")
+  expect_equal(attr(p, "provenance")$expenditure_concept, "primary")
   expect_equal(attr(d, "provenance")$expenditure_concept, "direct")
   expect_equal(attr(t, "provenance")$expenditure_concept, "total")
   # The note explains the non-obvious part: how legacy IG was assembled.

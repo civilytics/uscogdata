@@ -25,12 +25,12 @@
 #'   population from `gov_population_yearly`. Govs with missing population
 #'   are excluded from the result.
 #' @param adjust_to_year Integer base year for CPI-U conversion, or `NULL`.
-#' @param expenditure_concept `"direct"` (default) or `"total"`. Currently only
-#'   `"direct"` is accepted; the `"total"` option exists in [cog_spending()] for
-#'   single-government queries but cannot be used here because combining Total
-#'   across multiple layers of government double-counts intergovernmental
-#'   transfers (a state's payment to a school district is the same dollar the
-#'   district reports as its own Direct spending).
+#' @param expenditure_concept `"primary"` (default), `"direct"`, or
+#'   `"total"` -- see [cog_spending()] for the three concepts. `"total"` is
+#'   refused here because combining Total across multiple layers of
+#'   government double-counts intergovernmental transfers (a state's payment
+#'   to a school district is the same dollar the district reports as its own
+#'   Direct spending); `"primary"` and `"direct"` combine safely.
 #' @param coverage How to handle the Census of Governments survey cycle,
 #'   which is a **complete census only in years ending in 2 and 7** -- every
 #'   other year is a sample, and the sample varies enormously (on the bundled
@@ -59,7 +59,7 @@
 #' @export
 cog_geographic_rollup <- function(govids, category, years,
                                   per_capita = FALSE, adjust_to_year = NULL,
-                                  expenditure_concept = c("direct", "total"),
+                                  expenditure_concept = c("primary", "direct", "total"),
                                   coverage = c("all", "census", "consistent")) {
   call <- match.call()
   expenditure_concept <- match.arg(expenditure_concept)
@@ -85,7 +85,8 @@ cog_geographic_rollup <- function(govids, category, years,
   # to discard them would also let them into the coverage table.
   years <- .apply_census_years(years, coverage, "cog_geographic_rollup")
 
-  r <- cog_spending(all_govids, years, category, per_capita, adjust_to_year)
+  r <- cog_spending(all_govids, years, category, per_capita, adjust_to_year,
+                    expenditure_concept = expenditure_concept)
   r <- dplyr::left_join(r, layer_map, by = "canonical_govid",
                         relationship = "many-to-many")
   r$scope_note <- .rollup_scope_note(r$layer)

@@ -44,7 +44,9 @@
 
 #' The cells a government-year COULD carry: every code in force for that
 #' government's own type, mapped through `summary_categories`, restricted to
-#' the calling verb's flow prefixes and (when given) its category filter.
+#' the calling verb's crosswalk subtype scope (the same subtype-membership
+#' classification the verb SQL itself uses -- e.g. the `primary` concept's
+#' operations/capital/assistance) and (when given) its category filter.
 #'
 #' Scoped by `govs_type` deliberately. Filling against the union of all types
 #' would invent cells that the government can never report -- a county row for
@@ -56,7 +58,7 @@
 #' never returns, so every one of them would fill as a phantom $0.
 #' @noRd
 .completion_grid_sql <- function(subtype_col, govid, years, category,
-                                 flow_prefixes) {
+                                 subtype_scope) {
   category_pred <- if (is.null(category)) {
     ""
   } else {
@@ -77,13 +79,12 @@
      WHERE x.canonical_govid IN (%2$s)
        AND cs.year IN (%3$s)
        AND NOT cs.is_aggregate
-       AND LEFT(cs.item_code, 1) IN (%4$s)
        AND c.category IS NOT NULL
-       AND c.%1$s IS NOT NULL
+       AND c.%1$s IN (%4$s)
        %5$s",
     subtype_col, .sql_lit_chr(govid),
     paste(as.integer(years), collapse = ","),
-    .sql_lit_chr(flow_prefixes), category_pred
+    .sql_lit_chr(subtype_scope), category_pred
   )
 }
 
@@ -94,9 +95,9 @@
 #' must never alter or drop what the corpus actually published.
 #' @noRd
 .complete_result <- function(result, con, subtype_col, govid, years, category,
-                             flow_prefixes) {
+                             subtype_scope) {
   grid <- tibble::as_tibble(DBI::dbGetQuery(
-    con, .completion_grid_sql(subtype_col, govid, years, category, flow_prefixes)
+    con, .completion_grid_sql(subtype_col, govid, years, category, subtype_scope)
   ))
 
   result$value_source <- rep("reported", nrow(result))
