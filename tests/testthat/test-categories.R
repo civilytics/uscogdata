@@ -49,12 +49,14 @@ test_that("cog_categories(type = 'revenue') returns only revenue rows", {
   skip_if_no_corpus()
   r <- cog_categories(type = "revenue")
   expect_true(all(r$category_type == "revenue"))
-  # `insurance_trust` (Y01/Y02/Y04/Y11/Y12/Y51/Y52) is deliberately NOT
-  # own_source: Census's "General Revenue" excludes insurance trust revenue,
-  # and Y01 alone is $1.31T corpus-wide.
+  # The four non-general subtypes are deliberately NOT own_source: Census's
+  # General Revenue excludes insurance trust (Y01 alone is $1.31T corpus-wide,
+  # plus the employee-retirement X codes), utility (A91-A94) and liquor store
+  # (A90) revenue by definition, which is what makes both of its published
+  # revenue concepts computable -- see `revenue_concept` in `?cog_revenue`.
   expect_true(all(r$subtype %in%
                   c("own_source", "federal", "state", "local_aid",
-                    "insurance_trust")))
+                    "insurance_trust", "utility", "liquor_store")))
 })
 
 test_that("cog_categories(pattern = ...) filters case-insensitively", {

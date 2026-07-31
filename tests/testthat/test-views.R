@@ -393,19 +393,19 @@ test_that("spending_long carries exactly the non-IG expenditure crosswalk codes 
   expect_equal(agg_count, 0)
 })
 
-test_that("revenue_long carries exactly the general-revenue crosswalk codes and excludes aggregates", {
+test_that("revenue_long carries exactly the revenue crosswalk codes and excludes aggregates", {
   skip_if_no_corpus()
   con <- cog_open()
   on.exit(cog_close())
 
-  # General Revenue scope: revenue crosswalk members minus insurance_trust
-  # (owner ruling 2026-07-30; an explicit wider concept is uscogdata#12).
+  # The view carries EVERY revenue subtype; which of Census's two published
+  # concepts a query returns is decided per `revenue_concept` in R
+  # (uscogdata#12), exactly as `expenditure_concept` narrows spending_long.
   stray <- DBI::dbGetQuery(con,
     "SELECT DISTINCT s.item_code
      FROM revenue_long s
      LEFT JOIN summary_categories c USING (item_code)
-     WHERE c.category_type IS DISTINCT FROM 'revenue'
-        OR c.revenue_subtype = 'insurance_trust'"
+     WHERE c.category_type IS DISTINCT FROM 'revenue'"
   )$item_code
   expect_length(stray, 0L)
 

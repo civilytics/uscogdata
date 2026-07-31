@@ -25,6 +25,12 @@
       "type": "boolean",
       "description": "TRUE when expenditure_concept = 'total' and at least one requested (year, category) has intergovernmental rows but NO Direct rows in this corpus (typically a legacy aggregate-only family) -- those result rows report the intergovernmental leg alone, not Direct + IG. Always FALSE for expenditure_concept = 'primary' or 'direct'. See the affected rows' `notes` for the recovering recipe, if any."
     },
+    "revenue_concept": {
+      "type": "string",
+      "enum": ["general", "total"],
+      "description": "Which revenue concept produced this result, defined as crosswalk revenue_subtype sets (never item-code prefixes). 'general' (the default) is Census General Revenue: own_source + federal + state + local_aid. 'total' is Census Total Revenue: general plus utility, liquor store and insurance trust revenue. Census defines the first by subtracting the other three from the second (manual section 4.3). Meaningful for cog_revenue() results; spending results carry the default.",
+      "$comment": "The employee-retirement (X) codes inside insurance_trust stop at FY2016, so a 'total' series steps at the FY2016/FY2017 seam for collection-scope reasons (series breaks SB197-SB202)."
+    },
     "harmonization":  { "type": "object" },
     "recipe":         { "type": ["object", "null"] },
     "suggestions":    { "type": "array" },

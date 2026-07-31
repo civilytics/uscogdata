@@ -31,9 +31,26 @@
   )
 }
 
-# cog_revenue()'s single concept (until uscogdata#12 adds more): Census
-# General Revenue -- every crosswalk revenue subtype except insurance_trust.
+# The two revenue concepts (uscogdata#12), again as crosswalk subtype sets.
+# Census's manual section 4.3 defines the first by SUBTRACTING from the second
+# -- "General revenue comprises all revenue except that classified as liquor
+# store, utility, or insurance trust revenue" -- giving the identity
+#
+#   Total Revenue = General + Utility + Liquor Store + Insurance Trust
+#
+# Verified against Census's own computed concept fields (IndFin FY2012,
+# Wisconsin state): 31,410,686 + 0 + 0 + 4,469,906 = 35,880,592, exact.
 .revenue_subtypes_general <- c("own_source", "federal", "state", "local_aid")
+.revenue_subtypes_total   <- c(.revenue_subtypes_general, "utility",
+                               "liquor_store", "insurance_trust")
+
+#' @noRd
+.revenue_concept_subtypes <- function(concept) {
+  switch(concept,
+    general = .revenue_subtypes_general,
+    total   = .revenue_subtypes_total
+  )
+}
 
 #' Summarized spending by category
 #'
@@ -198,6 +215,7 @@ cog_spending <- function(govid, years, category = NULL,
                            per_capita, adjust_to_year,
                            basis = c("harmonized", "raw"), recipe = NULL,
                            expenditure_concept = c("primary", "direct", "total"),
+                           revenue_concept = c("general", "total"),
                            complete = FALSE) {
   basis_explicit <- length(basis) == 1L
   basis <- match.arg(basis, c("harmonized", "raw"))
@@ -215,16 +233,27 @@ cog_spending <- function(govid, years, category = NULL,
     }
   )
 
+  revenue_concept <- tryCatch(
+    match.arg(revenue_concept, c("general", "total")),
+    error = function(e) {
+      cli::cli_abort(
+        "`revenue_concept` must be one of {.val general} or {.val total}.",
+        class = "uscogdata_invalid_revenue_concept",
+        parent = e
+      )
+    }
+  )
+
   # The concept's subtype scope. Every code path below -- the verb SQL, the
   # harmonization exclusion count, and the complete = TRUE grid -- is scoped
-  # by crosswalk subtype membership, never by item-code prefix. For revenue
-  # there is a single concept today (General Revenue; uscogdata#12 will add
-  # more). "total"'s extra intergovernmental leg travels through the ig_*
-  # views, not through this scope.
+  # by crosswalk subtype membership, never by item-code prefix. The
+  # expenditure "total" concept's extra intergovernmental leg is the one
+  # exception: it travels through the ig_* views rather than this scope,
+  # because its legacy rows are aggregate-flagged.
   subtype_scope <- if (identical(subtype_col, "spend_subtype")) {
     .expenditure_concept_subtypes(expenditure_concept)
   } else {
-    .revenue_subtypes_general
+    .revenue_concept_subtypes(revenue_concept)
   }
 
   govid <- .coerce_govid_input(govid, arg = "govid")
@@ -427,6 +456,7 @@ cog_spending <- function(govid, years, category = NULL,
     expenditure_concept = expenditure_concept,
     expenditure_concept_note = expenditure_concept_note_for_prov,
     expenditure_concept_direct_suppressed = direct_suppressed_flag,
+    revenue_concept = revenue_concept,
     harmonization  = harmonization,
     recipe         = recipe_block,
     suggestions    = suggestions,
