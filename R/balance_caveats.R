@@ -17,16 +17,7 @@
 #' truncated relative to the requested span.
 #' @noRd
 .balance_caveats <- function(con, codes_observed, years) {
-  windows <- DBI::dbGetQuery(con,
-    "SELECT c.balance_subtype AS subtype,
-            MIN(l.year) AS year_min,
-            MAX(l.year) AS year_max
-     FROM balance_long l
-     JOIN summary_categories c USING (item_code)
-     WHERE c.balance_subtype IS NOT NULL
-     GROUP BY 1
-     ORDER BY 1"
-  )
+  cw <- .balance_coverage_windows(con)
 
   observed_subtypes <- if (length(codes_observed) == 0L) {
     character(0)
@@ -37,12 +28,6 @@
       .sql_lit_chr(codes_observed)
     ))$balance_subtype
   }
-
-  cw <- stats::setNames(
-    lapply(seq_len(nrow(windows)),
-           function(i) as.integer(c(windows$year_min[i], windows$year_max[i]))),
-    windows$subtype
-  )
 
   # A family is "truncated" when the caller asked for years outside the span
   # that family actually covers -- the FY2016 employee-retirement termination
@@ -66,6 +51,44 @@
     coverage_window = cw,
     truncated = sort(unique(truncated))
   )
+}
+
+#' Per-subtype [min year, max year] extents for EVERY balance subtype in the
+#' mounted corpus, memoised for the session.
+#'
+#' The query carries no govid and no year predicate -- its answer is a property
+#' of the mounted corpus alone and cannot change between calls -- but it scans
+#' the whole of `balance_long`, which measured 35% of `cog_balances()` runtime
+#' on the bundled fixture and would be a per-request throughput ceiling once
+#' cog-api#26 serves this verb over HTTP. Memoised in `.uscogdata_env` and
+#' invalidated by `cog_close()`, the same pattern as `.uscogdata_env$manifest`.
+#'
+#' Scope is deliberately corpus-wide rather than query-scoped: a caller asking
+#' "is there a family I missed?" needs every window. The observed-scoped field
+#' is `truncated`. Documented as such in inst/schemas/provenance-v1.json.
+#' @noRd
+.balance_coverage_windows <- function(con) {
+  cached <- .uscogdata_env$balance_coverage_windows
+  if (!is.null(cached)) return(cached)
+
+  windows <- DBI::dbGetQuery(con,
+    "SELECT c.balance_subtype AS subtype,
+            MIN(l.year) AS year_min,
+            MAX(l.year) AS year_max
+     FROM balance_long l
+     JOIN summary_categories c USING (item_code)
+     WHERE c.balance_subtype IS NOT NULL
+     GROUP BY 1
+     ORDER BY 1"
+  )
+
+  cw <- stats::setNames(
+    lapply(seq_len(nrow(windows)),
+           function(i) as.integer(c(windows$year_min[i], windows$year_max[i]))),
+    windows$subtype
+  )
+  .uscogdata_env$balance_coverage_windows <- cw
+  cw
 }
 
 #' TRUE the first time `key` is seen this session, FALSE thereafter.

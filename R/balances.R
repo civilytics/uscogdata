@@ -44,14 +44,17 @@
 #' @return Tibble with columns `year`, `canonical_govid`, `gov_name`,
 #'   `balance_subtype`, `category`, `amt_nominal`, `codes_included`,
 #'   `aggregate_fallback`, plus optional `amt_per_capita_nominal` and
-#'   `pop_source` (when `per_capita = TRUE`), and optional `amt_real` and
-#'   `amt_per_capita_real` (when `adjust_to_year` is set). Amounts are full
-#'   US dollars.
+#'   `pop_source` (when `per_capita = TRUE`), optional `amt_real` (when
+#'   `adjust_to_year` is set), and optional `amt_per_capita_real` (only when
+#'   **both** `per_capita = TRUE` and `adjust_to_year` are set -- there is no
+#'   nominal per-capita column to deflate otherwise). Amounts are full US
+#'   dollars.
 #'
 #'   Carries a `provenance` attribute matching
 #'   `inst/schemas/provenance-v1.json`, whose `balance_caveats` block reports
-#'   `not_gaap`, `not_gaap_note`, `coverage_window` (measured per-subtype year
-#'   extents) and `truncated` (subtypes whose coverage falls short of the
+#'   `not_gaap`, `not_gaap_note`, `coverage_window` (measured year extents for
+#'   every balance subtype in the mounted corpus, not only the observed ones)
+#'   and `truncated` (the observed subtypes whose coverage falls short of the
 #'   requested years). `expenditure_concept`/`revenue_concept` are `NA` --
 #'   holdings are a stock, not a flow, so neither concept vocabulary applies.
 #' @export
@@ -60,8 +63,19 @@ cog_balances <- function(govid, years, category = NULL,
                          basis = c("harmonized", "raw"), recipe = NULL) {
   call <- match.call()
   basis <- match.arg(basis, c("harmonized", "raw"))
-  .validate_balance_inputs(per_capita, adjust_to_year)
+  # Coerce FIRST, validate second: .validate_verb_inputs() asserts
+  # is.character(govid), and a data-frame govid (cog_gov_search() output) has
+  # not been unwrapped yet at this point.
   govid <- .coerce_govid_input(govid)
+  # The money verbs' validator, reused rather than re-implemented (R/spending.R).
+  # It covers the exact superset cog_balances() needs -- including the
+  # recipe/category mutual-exclusivity guard -- so a second local copy would
+  # only be a place for the two to drift apart. This is the same kind of
+  # helper reuse as .build_verb_sql()/.attach_per_capita() below; it does NOT
+  # route the verb through .verb_spendrev(), which stays deliberately unused
+  # here because its flow vocabulary is meaningless for a stock.
+  .validate_verb_inputs(govid, years, category, per_capita, adjust_to_year,
+                        recipe)
   years <- as.integer(years)
   if (!is.null(adjust_to_year)) adjust_to_year <- as.integer(adjust_to_year)
 
@@ -127,24 +141,6 @@ cog_balances <- function(govid, years, category = NULL,
 
   attr(result, "provenance") <- prov
   result
-}
-
-#' Cheap type validation for the two arguments cog_balances() shares with the
-#' money verbs. Mirrors the per_capita/adjust_to_year checks in
-#' .validate_verb_inputs() (R/spending.R) -- category/recipe validation is
-#' deliberately out of scope here (uscogdata#25 Task 3 review note).
-#' @noRd
-.validate_balance_inputs <- function(per_capita, adjust_to_year) {
-  if (!is.logical(per_capita) || length(per_capita) != 1L) {
-    cli::cli_abort("`per_capita` must be a length-1 logical.")
-  }
-  if (!is.null(adjust_to_year)) {
-    if (!(is.integer(adjust_to_year) || is.numeric(adjust_to_year)) ||
-        length(adjust_to_year) != 1L) {
-      cli::cli_abort("`adjust_to_year` must be NULL or a length-1 integer.")
-    }
-  }
-  invisible(TRUE)
 }
 
 #' Abort unless the mounted corpus classifies balance codes.

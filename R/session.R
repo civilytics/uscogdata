@@ -96,4 +96,6 @@ cog_close <- function() {
   .uscogdata_env$con      <- NULL
   .uscogdata_env$manifest <- NULL
   .uscogdata_env$balance_caveats_shown <- NULL
+  # Memoised corpus-constant; a different corpus may be mounted next.
+  .uscogdata_env$balance_coverage_windows <- NULL
 }

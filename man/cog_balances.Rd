@@ -49,14 +49,17 @@ wide era to the modern one.}
 Tibble with columns `year`, `canonical_govid`, `gov_name`,
   `balance_subtype`, `category`, `amt_nominal`, `codes_included`,
   `aggregate_fallback`, plus optional `amt_per_capita_nominal` and
-  `pop_source` (when `per_capita = TRUE`), and optional `amt_real` and
-  `amt_per_capita_real` (when `adjust_to_year` is set). Amounts are full
-  US dollars.
+  `pop_source` (when `per_capita = TRUE`), optional `amt_real` (when
+  `adjust_to_year` is set), and optional `amt_per_capita_real` (only when
+  **both** `per_capita = TRUE` and `adjust_to_year` are set -- there is no
+  nominal per-capita column to deflate otherwise). Amounts are full US
+  dollars.
 
   Carries a `provenance` attribute matching
   `inst/schemas/provenance-v1.json`, whose `balance_caveats` block reports
-  `not_gaap`, `not_gaap_note`, `coverage_window` (measured per-subtype year
-  extents) and `truncated` (subtypes whose coverage falls short of the
+  `not_gaap`, `not_gaap_note`, `coverage_window` (measured year extents for
+  every balance subtype in the mounted corpus, not only the observed ones)
+  and `truncated` (the observed subtypes whose coverage falls short of the
   requested years). `expenditure_concept`/`revenue_concept` are `NA` --
   holdings are a stock, not a flow, so neither concept vocabulary applies.
 }
