@@ -131,12 +131,18 @@ test_that("no flow code can reach cog_balances", {
 
     # The expected set is read from the RAW corpus, never from the verb --
     # verifying an absence through the filter that creates it proves nothing.
-    ds <- arrow::open_dataset(file.path(fixture_corpus_path(), "data", "long"))
-    sc <- arrow::read_parquet(
-      file.path(fixture_corpus_path(), "data", "summary_categories.parquet"))
-    sc <- as.data.frame(sc)
-    balance_codes <- sc$item_code[sc$category_type == "balance"]
+    # A fresh, direct DuckDB connection against the raw parquet files (never
+    # cog_open()'s session, never balance_long/balance_annotated) reads
+    # parquet natively -- no arrow dependency needed (see CLAUDE.md).
+    con2 <- DBI::dbConnect(duckdb::duckdb())
+    on.exit(DBI::dbDisconnect(con2, shutdown = TRUE), add = TRUE)
+    cats_path <- file.path(fixture_corpus_path(), "data", "summary_categories.parquet")
+    balance_codes <- DBI::dbGetQuery(con2, sprintf(
+      "SELECT item_code FROM read_parquet(%s) WHERE category_type = 'balance'",
+      uscogdata:::.sql_lit_chr(cats_path)
+    ))$item_code
 
+    expect_true(length(got) > 0L)
     expect_true(all(got %in% balance_codes))
     expect_true(length(setdiff(got, balance_codes)) == 0L)
   })
@@ -146,10 +152,16 @@ test_that("every balance_subtype maps to exactly one category", {
   skip_if_no_corpus()
   # Dropping the `subtype` argument is only safe while this tree holds. If the
   # pipeline ever gives a balance subtype a second category, `category` becomes
-  # a lossy filter -- fail HERE rather than in a user's analysis.
-  sc <- as.data.frame(arrow::read_parquet(
-    file.path(fixture_corpus_path(), "data", "summary_categories.parquet")))
-  b <- sc[sc$category_type == "balance", ]
+  # a lossy filter -- fail HERE rather than in a user's analysis. Read via a
+  # fresh direct DuckDB connection against the raw parquet file, not through
+  # any registered view.
+  con2 <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(DBI::dbDisconnect(con2, shutdown = TRUE), add = TRUE)
+  cats_path <- file.path(fixture_corpus_path(), "data", "summary_categories.parquet")
+  b <- DBI::dbGetQuery(con2, sprintf(
+    "SELECT category, balance_subtype FROM read_parquet(%s) WHERE category_type = 'balance'",
+    uscogdata:::.sql_lit_chr(cats_path)
+  ))
   per_subtype <- tapply(b$category, b$balance_subtype,
                         function(x) length(unique(x)))
   expect_true(all(per_subtype == 1L))
