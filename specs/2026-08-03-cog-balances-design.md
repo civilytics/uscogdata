@@ -84,9 +84,6 @@ see Out of scope.)
 
 ```r
 cog_balances(govid, years,
-             subtype        = NULL,   # general | employee_retirement |
-                                      # unemployment_trust | workers_comp_trust |
-                                      # other_insurance_trust
              category       = NULL,   # Fund Balances | Insurance Trust Balances |
                                       # Retirement System Holdings
              per_capita     = FALSE,
@@ -96,7 +93,8 @@ cog_balances(govid, years,
 
 Returns a `tbl_df` with a `provenance` attribute, like every other verb.
 
-**Absent by design:** `expenditure_concept`, `revenue_concept`, `complete`.
+**Absent by design:** `expenditure_concept`, `revenue_concept`, `complete`,
+and `subtype` — see below.
 
 **`per_capita` is offered.** Holdings per resident is a real measure (pension
 assets per capita, fund balance per resident). The roxygen `@param` states
@@ -109,6 +107,47 @@ with the money verbs (the API would otherwise special-case), and
 `provenance$basis_note` says so outright rather than letting it look meaningful.
 
 **`recipe` is deliberately omitted from v1.** See below.
+
+### No `subtype` argument: `category` is a strict coarsening
+
+`balance` is the only `category_type` in which `category` and the subtype column
+are **not** orthogonal. Measured against the published crosswalk:
+
+| `category_type` | subtypes spanning more than one category |
+|---|---|
+| expenditure | 5 of 6 (`operations`, `capital`, `interest`, `assistance`, `intergovernmental`) |
+| revenue | 1 of 7 (`own_source`) |
+| **balance** | **0 of 5** |
+
+For expenditure the two axes are a genuine cross-tab — *function* (Police, Fire)
+× *economic character* (operations, capital) — so both earn their place. For
+balance the relation is a strict tree:
+
+```
+Fund Balances              = {general}                                W01 W31 W61
+Retirement System Holdings = {employee_retirement}                    X21 X30 X42 X44 X47 Z77 Z78
+Insurance Trust Balances   = {unemployment_trust,
+                              workers_comp_trust,
+                              other_insurance_trust}                  Y07 Y08 Y21 Y61
+```
+
+Exposing both would therefore admit no useful combination. Of the 15 possible
+pairs, 3 are redundant (the subtype already implies its category) and **12 are
+guaranteed empty for every government in every year** — and an impossible query
+would fail by returning an empty tibble, which reads as "this government holds
+none" rather than "you asked a contradiction."
+
+Dropping `subtype` also keeps the verb aligned with the rest of the package: no
+uscogdata verb exposes a subtype argument. `subtype_col` is internal plumbing in
+`.verb_spendrev()`, and the API layers its own `subtype` row filter on top
+(`api/R/handlers_governments.R`). `cog-api#26` can do exactly that for
+`/balances`.
+
+`#25`'s hard requirement is still met — `category = "Fund Balances"` *is* the
+`general` family, precisely `W01`/`W31`/`W61`, in one filter. The only loss is
+isolating one of the three insurance funds in a single argument;
+`balance_subtype` remains a returned column, so that is one `dplyr::filter()`
+away.
 
 ## Decision point: `recipe=` deferred to v2
 
@@ -168,6 +207,13 @@ throughout — so every test below runs offline.
   measured table above; the FY2002 valuation caveat fires only when the year
   range crosses 2002 *and* touches `employee_retirement`.
 - **`per_capita`.** `amt_per_capita_nominal == amt_nominal / population`.
+- **`category = "Fund Balances"` is the `general` family.** Returns exactly
+  `W01`/`W31`/`W61` and nothing else — `#25`'s one-filter requirement, asserted
+  rather than assumed.
+- **The hierarchy holds.** Every `balance_subtype` in the crosswalk maps to
+  exactly one `category`. Asserted against the crosswalk so that an upstream
+  change breaking the tree — which would silently make `category` lossy —
+  fails here rather than in a user's analysis.
 - **`recipe` rejection.** Passing `recipe` errors with a message naming the
   blocking issue.
 - **Gating.** `.require_balance_support()` errors cleanly on a corpus whose
