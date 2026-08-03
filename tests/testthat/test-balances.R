@@ -17,18 +17,70 @@ test_that("balance views register and carry only balance codes", {
   )$n
   expect_identical(as.integer(leak), 0L)
 
-  # And no aggregate row survives, mirroring revenue_long.
-  agg <- DBI::dbGetQuery(con,
-    "SELECT COUNT(*) AS n FROM balance_long WHERE is_aggregate"
-  )$n
-  expect_identical(as.integer(agg), 0L)
-
   # balance_annotated exposes the subtype column the verb groups on.
   cols <- DBI::dbGetQuery(con,
     "SELECT column_name FROM information_schema.columns
      WHERE table_name = 'balance_annotated'"
   )$column_name
   expect_true(all(c("category", "category_type", "balance_subtype") %in% cols))
+})
+
+test_that("inst/sql/26-balance_long.sql enforces NOT is_aggregate (real SQL text, synthetic parquet)", {
+  # Every category_type = 'balance' item_code in the bundled fixture has
+  # is_aggregate = FALSE for every row of every year -- there is no real row
+  # that would be excluded ONLY by the `AND NOT is_aggregate` predicate. An
+  # assertion against the live fixture (`WHERE is_aggregate` returns 0) is
+  # therefore vacuous: it passes identically whether or not the view's
+  # predicate is present. As with the 22-/23- and 24-/25- tests above, this
+  # reads the real inst/sql/26-balance_long.sql text off disk and executes it
+  # -- plus its 10-long.sql / 11-summary_categories.sql dependencies -- against
+  # a synthetic hive-partitioned parquet tree that DOES contain an aggregate
+  # row under a real balance item_code (W01), so a regression that drops the
+  # predicate changes which rows survive.
+  skip_if_no_corpus()
+
+  tmp <- withr::local_tempdir()
+  part_dir <- file.path(tmp, "data", "long", "year=2004")
+  dir.create(part_dir, recursive = TRUE)
+  part_path <- file.path(part_dir, "part-0.parquet")
+
+  write_con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(DBI::dbDisconnect(write_con, shutdown = TRUE), add = TRUE)
+  DBI::dbExecute(write_con, sprintf("
+    COPY (
+      SELECT * FROM (VALUES
+        ('bal-A', 'W01', 100,    false), -- control: ordinary balance row, survives
+        ('bal-B', 'W01', 999999, true)   -- excluded ONLY by `NOT is_aggregate`
+      ) AS t(canonical_govid, item_code, amt, is_aggregate)
+    ) TO %s (FORMAT PARQUET)
+  ", uscogdata:::.sql_lit_chr(part_path)))
+
+  DBI::dbExecute(write_con, sprintf("
+    COPY (
+      SELECT * FROM (VALUES
+        ('W01', 'Fund Balances', 'balance', NULL, NULL, 'general')
+      ) AS t(item_code, category, category_type, spend_subtype, revenue_subtype, balance_subtype)
+    ) TO %s (FORMAT PARQUET)
+  ", uscogdata:::.sql_lit_chr(file.path(tmp, "data", "summary_categories.parquet"))))
+
+  sql_dir <- system.file("sql", package = "uscogdata")
+  .read_view_sql <- function(filename) {
+    txt <- paste(readLines(file.path(sql_dir, filename), warn = FALSE), collapse = "\n")
+    gsub("\\{url\\}", paste0(tmp, "/"), txt, fixed = FALSE)
+  }
+
+  con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  DBI::dbExecute(con, .read_view_sql("10-long.sql"))
+  DBI::dbExecute(con, .read_view_sql("11-summary_categories.sql"))
+  DBI::dbExecute(con, .read_view_sql("26-balance_long.sql"))
+
+  rows <- DBI::dbGetQuery(con,
+    "SELECT canonical_govid, item_code, amt FROM balance_long ORDER BY canonical_govid"
+  )
+  expect_equal(nrow(rows), 1L)
+  expect_equal(rows$canonical_govid, "bal-A")
+  expect_equal(rows$amt, 100)
 })
 
 test_that("balance views are skipped on a corpus without balance_subtype", {
