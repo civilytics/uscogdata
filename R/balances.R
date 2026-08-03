@@ -63,10 +63,29 @@ cog_balances <- function(govid, years, category = NULL,
     "balance-code rows, so harmonized and raw space are identical here."
   )
 
-  sql <- .build_verb_sql("balance_annotated", "balance_subtype",
-                         govid, years, category,
-                         ig_view = NULL, subtype_scope = NULL)
-  result <- tibble::as_tibble(DBI::dbGetQuery(con, sql))
+  manifest <- .uscogdata_env$manifest
+  recipe_block <- NULL
+  category_for_prov <- category
+
+  if (!is.null(recipe)) {
+    .require_schema_v5(con, manifest, "recipe =")
+    .validate_recipe_id(con, recipe)
+    comps <- .recipe_components(con, recipe)
+    recipe_label <- comps$label[[1]]
+    result <- .run_recipe(con, recipe, govid, years)
+    sql <- attr(result, "sql_query")
+    result <- .shape_recipe_result(result, "balance_subtype", recipe_label)
+    recipe_block <- list(
+      recipe_id = recipe, label = recipe_label,
+      components = .df_to_row_list(comps)
+    )
+    category_for_prov <- recipe_label
+  } else {
+    sql <- .build_verb_sql("balance_annotated", "balance_subtype",
+                           govid, years, category,
+                           ig_view = NULL, subtype_scope = NULL)
+    result <- tibble::as_tibble(DBI::dbGetQuery(con, sql))
+  }
 
   # Order matters (matches .verb_spendrev()): per-capita first, so
   # .attach_real_dollars() deflates the nominal per-capita column into
@@ -78,13 +97,14 @@ cog_balances <- function(govid, years, category = NULL,
 
   prov <- .build_provenance(
     verb = "cog_balances", call = call, govid = govid, years = years,
-    category = category, per_capita = per_capita,
+    category = category_for_prov, per_capita = per_capita,
     adjust_to_year = adjust_to_year, result = result, sql = sql,
     subtype_col = "balance_subtype",
     basis = basis, basis_note = basis_note,
     # Neither concept vocabulary applies to a stock.
     expenditure_concept = NA_character_,
-    revenue_concept = NA_character_
+    revenue_concept = NA_character_,
+    recipe = recipe_block
   )
   prov$scope$govids_found   <- scope$found
   prov$scope$govids_missing <- scope$missing

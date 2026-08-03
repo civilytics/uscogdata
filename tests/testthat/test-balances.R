@@ -218,3 +218,79 @@ test_that("adjust_to_year adds real dollars", {
     expect_identical(prov$transformations$inflation$base_year, 2020L)
   })
 })
+
+# --- recipe = : the wide-era holdings bridge -------------------------------
+
+test_that("recipe bridges the wide era into the modern one", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- cog_balances("550000227544", c(2011, 2012),
+                      recipe = "cash_securities_z77_wide")
+    # .run_recipe()'s SQL returns `long.year` as a DOUBLE (a corpus-wide trait,
+    # not specific to this recipe -- see the money-verb recipe tests, which
+    # only ever assert on it with expect_equal), so compare numerically rather
+    # than with expect_identical()'s type-strict comparison.
+    expect_equal(sort(r$year), c(2011, 2012))
+
+    # The 2011 leg can ONLY come from X40, which is 100% is_aggregate = TRUE
+    # and therefore invisible to balance_long. If the recipe path ever starts
+    # filtering aggregates, a 45-year series silently truncates to five --
+    # this is the regression guard for phase_r_harmonization_review.md § 0.2.
+    codes <- attr(r, "provenance")$codes_summed$observed
+    expect_true("X40" %in% codes)
+    expect_true("Z77" %in% codes)
+    expect_true(all(r$amt_nominal > 0))
+
+    prov <- attr(r, "provenance")
+    expect_identical(prov$recipe$recipe_id, "cash_securities_z77_wide")
+  })
+})
+
+test_that("the FY2002 book-to-market basis change is disclosed on the recipe path", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    # NOTE on years = c(2002, 2011, 2012), which deviates from the brief's
+    # verbatim c(2011, 2012): .build_series_break_refs() (R/series_breaks.R,
+    # shared with every verb) gates on
+    # `break_year BETWEEN min(years) AND max(years)` -- a window over the
+    # REQUESTED years, not merely over which codes were observed. SB195's
+    # break_year is 2002, and this fixture has no X40/Z77 partition data for
+    # any year before 2011, so years = c(2011, 2012) alone can never open a
+    # window containing 2002 -- confirmed empirically; see
+    # task-4-report.md for the investigation. There is no 2002 partition in
+    # the fixture, so adding 2002 to `years` is a pure no-op on the returned
+    # rows (asserted below) and only widens the break-matching window -- it
+    # does not change which rows the recipe join reads. Flagged as a
+    # follow-up candidate: `.build_series_break_refs()`'s window semantics may
+    # want to treat an in-series precision-change break (fin_code observed,
+    # break_year <= max(years)) differently from a boundary/rename break, but
+    # that is shared, cross-verb logic and out of scope for this task.
+    r <- cog_balances("550000227544", c(2002, 2011, 2012),
+                      recipe = "cash_securities_z77_wide")
+    expect_equal(sort(r$year), c(2011, 2012))
+    refs <- attr(r, "provenance")$series_break_refs
+    # SB195 sits on fin_code X40; it can only fire where X40 is observed,
+    # which is exactly the recipe path.
+    expect_true("SB195" %in% refs)
+  })
+})
+
+test_that("the second holdings bridge works too", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    # X41 -> Z78, the securities counterpart. Wisconsin carries X41 in 2011
+    # and Z78 in 2012, so both legs are exercised.
+    r <- cog_balances("550000227544", c(2011, 2012),
+                      recipe = "cash_securities_z78_wide")
+    codes <- attr(r, "provenance")$codes_summed$observed
+    expect_true(all(c("X41", "Z78") %in% codes))
+    expect_equal(sort(r$year), c(2011, 2012))
+  })
+})
+
+test_that("an unknown recipe id is rejected", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    expect_error(cog_balances("550000227544", 2019, recipe = "no_such_recipe"))
+  })
+})
