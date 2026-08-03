@@ -23,16 +23,30 @@
 
 ## The test government
 
-`010000226085` — ALABAMA STATE GOVT. One government covers every case:
+`550000227544` — **WISCONSIN STATE GOVT**. Use this govid and no other. It is
+the identifier other agents have standardised on for state governments, it is
+stable across corpus vintages, and it is the same id used against the live API
+(`/api/v1/governments/550000227544/...`). Verified present in the bundled
+fixture:
 
 | year | codes present |
 |---|---|
-| 2011 | `X21`, **`X40`**, `Y07`, `Y08` |
-| 2012 | `W01`, `W31`, `W61`, `X21`, `Y07`, `Y08`, `Z77` |
+| 2011 | `X21`, **`X40`**, **`X41`**, `X42`, `X44`, `Y07`, `Y08` |
+| 2012 | `W01`, `W31`, `W61`, `X21`, `X30`, `X47`, `Y07`, `Y08`, `Y21`, **`Z77`**, **`Z78`** |
 | 2019 | `W01`, `W31`, `W61`, `Y07`, `Y08` |
-| 2020 | `W01`, `W31`, `W61`, `Y07`, `Y08` |
+| 2020 | `W01`, `W31`, `W61`, `Y07`, `Y08`, `Y21` |
 
-`X40` in 2011 + `Z77` in 2012 is what makes the recipe bridge testable in the fixture.
+This reaches four of the five subtypes — `general` (W), `employee_retirement`
+(X/Z), `unemployment_trust` (Y07/Y08) and `workers_comp_trust` (Y21) — and
+carries **both** wide→modern recipe bridges (`X40`→`Z77` and `X41`→`Z78`), so
+the whole plan is testable offline.
+
+`other_insurance_trust` (`Y61`) is not present for Wisconsin in the fixture. No
+test below depends on it; do not substitute a different government to reach it.
+
+Do **not** assert on `gov_name`. The fixture carries both `"WISCONSIN"` (from
+`long`) and `"WISCONSIN STATE GOVT"` (from the xwalk), and the verb resolves
+`COALESCE(xwalk_gov_name, gov_name)`.
 
 ## File Structure
 
@@ -301,7 +315,7 @@ Add to `tests/testthat/test-balances.R`:
 test_that("cog_balances returns holdings for a government that has them", {
   skip_if_no_corpus()
   with_fixture_corpus({
-    r <- cog_balances("010000226085", 2019)
+    r <- cog_balances("550000227544", 2019)
     expect_s3_class(r, "tbl_df")
     expect_true(nrow(r) > 0L)
     expect_true(all(c("year", "canonical_govid", "gov_name", "balance_subtype",
@@ -316,7 +330,7 @@ test_that("cog_balances returns holdings for a government that has them", {
 test_that('category = "Fund Balances" is exactly the general family', {
   skip_if_no_corpus()
   with_fixture_corpus({
-    r <- cog_balances("010000226085", 2019, category = "Fund Balances")
+    r <- cog_balances("550000227544", 2019, category = "Fund Balances")
     expect_identical(unique(r$balance_subtype), "general")
     codes <- sort(unlist(strsplit(paste(r$codes_included, collapse = ","), ",")))
     expect_identical(codes, c("W01", "W31", "W61"))
@@ -326,7 +340,7 @@ test_that('category = "Fund Balances" is exactly the general family', {
 test_that("no flow code can reach cog_balances", {
   skip_if_no_corpus()
   with_fixture_corpus({
-    r <- cog_balances("010000226085", c(2011, 2012, 2019, 2020))
+    r <- cog_balances("550000227544", c(2011, 2012, 2019, 2020))
     got <- unique(unlist(strsplit(paste(r$codes_included, collapse = ","), ",")))
 
     # The expected set is read from the RAW corpus, never from the verb --
@@ -514,8 +528,8 @@ git commit -m "feat: cog_balances() core verb (#25)"
 test_that("per_capita divides holdings by population", {
   skip_if_no_corpus()
   with_fixture_corpus({
-    plain <- cog_balances("010000226085", 2019, category = "Fund Balances")
-    pc    <- cog_balances("010000226085", 2019, category = "Fund Balances",
+    plain <- cog_balances("550000227544", 2019, category = "Fund Balances")
+    pc    <- cog_balances("550000227544", 2019, category = "Fund Balances",
                           per_capita = TRUE)
     expect_true("amt_per_capita_nominal" %in% names(pc))
     expect_true("pop_source" %in% names(pc))
@@ -527,7 +541,7 @@ test_that("per_capita divides holdings by population", {
     pop <- DBI::dbGetQuery(cog_open(), sprintf(
       "SELECT population FROM gov_population_yearly
        WHERE canonical_govid = %s AND year = 2019",
-      uscogdata:::.sql_lit_chr("010000226085")
+      uscogdata:::.sql_lit_chr("550000227544")
     ))$population
     expect_length(pop, 1L)
     expect_equal(pc$amt_per_capita_nominal, pc$amt_nominal / pop,
@@ -541,7 +555,7 @@ test_that("per_capita divides holdings by population", {
 test_that("adjust_to_year adds real dollars", {
   skip_if_no_corpus()
   with_fixture_corpus({
-    r <- cog_balances("010000226085", 2012, category = "Fund Balances",
+    r <- cog_balances("550000227544", 2012, category = "Fund Balances",
                       adjust_to_year = 2020)
     expect_true("amt_real" %in% names(r))
     # 2012 dollars inflated to 2020 must exceed nominal.
@@ -609,7 +623,7 @@ git commit -m "feat: per_capita and adjust_to_year for cog_balances() (#25)"
 test_that("recipe bridges the wide era into the modern one", {
   skip_if_no_corpus()
   with_fixture_corpus({
-    r <- cog_balances("010000226085", c(2011, 2012),
+    r <- cog_balances("550000227544", c(2011, 2012),
                       recipe = "cash_securities_z77_wide")
     expect_identical(sort(r$year), c(2011L, 2012L))
 
@@ -630,7 +644,7 @@ test_that("recipe bridges the wide era into the modern one", {
 test_that("the FY2002 book-to-market basis change is disclosed on the recipe path", {
   skip_if_no_corpus()
   with_fixture_corpus({
-    r <- cog_balances("010000226085", c(2011, 2012),
+    r <- cog_balances("550000227544", c(2011, 2012),
                       recipe = "cash_securities_z77_wide")
     refs <- attr(r, "provenance")$series_break_refs
     # SB195 sits on fin_code X40; it can only fire where X40 is observed,
@@ -639,10 +653,23 @@ test_that("the FY2002 book-to-market basis change is disclosed on the recipe pat
   })
 })
 
+test_that("the second holdings bridge works too", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    # X41 -> Z78, the securities counterpart. Wisconsin carries X41 in 2011
+    # and Z78 in 2012, so both legs are exercised.
+    r <- cog_balances("550000227544", c(2011, 2012),
+                      recipe = "cash_securities_z78_wide")
+    codes <- attr(r, "provenance")$codes_summed$observed
+    expect_true(all(c("X41", "Z78") %in% codes))
+    expect_identical(sort(r$year), c(2011L, 2012L))
+  })
+})
+
 test_that("an unknown recipe id is rejected", {
   skip_if_no_corpus()
   with_fixture_corpus({
-    expect_error(cog_balances("010000226085", 2019, recipe = "no_such_recipe"))
+    expect_error(cog_balances("550000227544", 2019, recipe = "no_such_recipe"))
   })
 })
 ```
@@ -735,7 +762,7 @@ git commit -m "feat: recipe= bridges the wide-era holdings series (#25)"
 test_that("balance_caveats is always present and flags the GAAP distinction", {
   skip_if_no_corpus()
   with_fixture_corpus({
-    r <- cog_balances("010000226085", 2019)
+    r <- cog_balances("550000227544", 2019)
     cav <- attr(r, "provenance")$balance_caveats
     expect_false(is.null(cav))
     expect_true(cav$not_gaap)
@@ -745,7 +772,7 @@ test_that("balance_caveats is always present and flags the GAAP distinction", {
 test_that("coverage_window is computed from the corpus, not hardcoded", {
   skip_if_no_corpus()
   with_fixture_corpus({
-    r <- cog_balances("010000226085", c(2011, 2012, 2019, 2020))
+    r <- cog_balances("550000227544", c(2011, 2012, 2019, 2020))
     cav <- attr(r, "provenance")$balance_caveats
 
     ds <- arrow::open_dataset(
@@ -768,7 +795,7 @@ test_that("a request past a family's coverage window is flagged", {
   skip_if_no_corpus()
   with_fixture_corpus({
     # employee_retirement stops at FY2016; 2019/2020 are past it.
-    r <- cog_balances("010000226085", c(2012, 2019))
+    r <- cog_balances("550000227544", c(2012, 2019))
     cav <- attr(r, "provenance")$balance_caveats
     expect_true("employee_retirement" %in% cav$truncated)
   })
@@ -777,8 +804,8 @@ test_that("a request past a family's coverage window is flagged", {
 test_that("the caveat message fires once per session", {
   skip_if_no_corpus()
   with_fixture_corpus({
-    expect_message(cog_balances("010000226085", 2019), "not.*GAAP")
-    expect_no_message(cog_balances("010000226085", 2020))
+    expect_message(cog_balances("550000227544", 2019), "not.*GAAP")
+    expect_no_message(cog_balances("550000227544", 2020))
   })
 })
 ```
