@@ -260,6 +260,22 @@ throughout — so every test below runs offline.
    are the documented § 1 decision, and the recipe path reaches them by design.
 2. **`cog-api#26`.** Adds `/balances` in all three required places — handler,
    `param_contract`, and the `plumber.R` route signature. Lands after this.
+
+   **Two contract facts the API must carry forward**, both settled during
+   implementation and easy to get wrong from the outside:
+
+   - `provenance$balance_caveats$coverage_window` is **corpus-scoped, not
+     result-scoped**. It reports the observed year extent of *every* balance
+     subtype in the corpus, not only the subtypes a given query returned — so a
+     `category = "Fund Balances"` query still returns all five windows. That is
+     deliberate: the windows describe what the corpus holds, which is what a
+     consumer needs in order to know what it did *not* ask for. The sibling
+     field `truncated` is the result-scoped one. Documented in
+     `inst/schemas/provenance-v1.json` and mutation-guarded against silent
+     inversion.
+   - `balance_caveats` appears **only** on `cog_balances()` results. It is
+     absent from `cog_spending()`/`cog_revenue()` provenance, and the schema
+     says so — an API layer that assumes it is universal will read `NULL`.
 3. **`uscogdata/CLAUDE.md` refresh.** Separate commit. It is stale: it claims 7
    SQL views (there are 21), 181 tests (716), a two-year fixture (four years),
    and a "never inline SQL" rule the verb layer does not follow.
