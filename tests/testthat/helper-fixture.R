@@ -154,3 +154,36 @@ with_corpus_missing_ig_categories <- function(code) {
   }, add = TRUE)
   force(code)
 }
+
+# Copy the bundled fixture to a temp dir with summary_categories.parquet
+# rewritten to DROP the balance_subtype column, then run `code` against it.
+# Models a corpus published before cog_pipeline #76/#77. schema_version is
+# left untouched deliberately: that change shipped without a version bump, so
+# column presence is the only honest signal -- this helper is what proves the
+# package keys off it. Mirrors with_corpus_missing_ig_categories().
+with_corpus_missing_balance_subtype <- function(code) {
+  src <- fixture_corpus_path()
+  tmp <- withr::local_tempdir(.local_envir = parent.frame())
+  file.copy(list.files(src, full.names = TRUE), tmp, recursive = TRUE)
+
+  cats_path <- file.path(tmp, "data", "summary_categories.parquet")
+  filtered_path <- file.path(tmp, "data", "summary_categories_filtered.parquet")
+  write_con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(DBI::dbDisconnect(write_con, shutdown = TRUE), add = TRUE)
+  DBI::dbExecute(write_con, sprintf(
+    "COPY (SELECT * EXCLUDE (balance_subtype) FROM read_parquet(%s))
+     TO %s (FORMAT PARQUET)",
+    uscogdata:::.sql_lit_chr(cats_path), uscogdata:::.sql_lit_chr(filtered_path)
+  ))
+  file.remove(cats_path)
+  file.rename(filtered_path, cats_path)
+
+  old_url <- Sys.getenv("USCOGDATA_URL", unset = NA)
+  uscogdata:::cog_close()
+  Sys.setenv(USCOGDATA_URL = paste0(tmp, "/"))
+  on.exit({
+    uscogdata:::cog_close()
+    if (is.na(old_url)) Sys.unsetenv("USCOGDATA_URL") else Sys.setenv(USCOGDATA_URL = old_url)
+  }, add = TRUE)
+  force(code)
+}

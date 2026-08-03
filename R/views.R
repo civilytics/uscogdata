@@ -45,6 +45,29 @@
   "37-code_set.sql"       = "code_set.parquet"
 )
 
+# Cash and security holdings (uscogdata#25). 46- selects
+# `c.balance_subtype`, a column that arrived with cog_pipeline #76/#77 and
+# WITHOUT a schema_version bump -- so neither existing gate applies:
+# .harmonization_view_files keys on schema_version, .representation_view_files
+# on the presence of a FILE. Here the discriminator is a COLUMN on a table
+# that exists either way. CREATE VIEW resolves its source schema eagerly, so
+# on an older corpus 46- would fail at registration with "Binder Error:
+# Referenced column balance_subtype not found" rather than at query time.
+.balance_view_files <- c("26-balance_long.sql", "46-balance_annotated.sql")
+
+#' Does the mounted corpus's `summary_categories` carry `balance_subtype`?
+#' Probed against the live connection rather than the manifest, because the
+#' manifest describes files, not columns.
+#' @noRd
+.corpus_has_balance_subtype <- function(con) {
+  n <- DBI::dbGetQuery(con,
+    "SELECT COUNT(*) AS n FROM information_schema.columns
+     WHERE table_name = 'summary_categories'
+       AND column_name = 'balance_subtype'"
+  )$n
+  isTRUE(as.integer(n) > 0L)
+}
+
 #' Does the mounted corpus publish `file` (e.g. "code_set.parquet")?
 #' Reads the manifest's metadata list rather than stat-ing the URL, so it
 #' works identically for a local fixture and a remote share.
@@ -66,6 +89,7 @@
     if (base %in% .harmonization_view_files && schema_version < 5L) next
     if (base %in% names(.representation_view_files) &&
         !.corpus_has_table(manifest, .representation_view_files[[base]])) next
+    if (base %in% .balance_view_files && !.corpus_has_balance_subtype(con)) next
     sql <- paste(readLines(f, warn = FALSE), collapse = "\n")
     sql <- gsub("\\{url\\}", url, sql, fixed = FALSE)
     DBI::dbExecute(con, sql)
