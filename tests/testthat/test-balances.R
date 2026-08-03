@@ -344,9 +344,15 @@ test_that("coverage_window is computed from the corpus, not hardcoded", {
 test_that("a request past a family's coverage window is flagged", {
   skip_if_no_corpus()
   with_fixture_corpus({
-    # The employee_retirement family (X21/X30/X47/Z77/Z78) is corpus-wide
-    # truncated relative to 2019 in this fixture; 2012 observes it, 2019 does
-    # not, so the requested span extends past what it actually covers.
+    # employee_retirement (X21/X30/X47/Z77/Z78) genuinely ends at FY2016 in
+    # the LIVE corpus -- Census moved employee retirement reporting to the
+    # Annual Survey of Public Pensions after that year. This bundled FIXTURE
+    # doesn't carry 2013-2016 at all (only 2011/2012/2019/2020 are present),
+    # so the family's *observed* max here is 2012, not 2016. Either way the
+    # requested span (2012, 2019) reaches past what the family covers in
+    # THIS corpus, which is what makes .balance_caveats() flag it -- the
+    # assertion below is about the fixture's measured window, not the FY2016
+    # live-corpus cutoff.
     r <- cog_balances("550000227544", c(2012, 2019))
     cav <- attr(r, "provenance")$balance_caveats
     expect_true("employee_retirement" %in% cav$truncated)
