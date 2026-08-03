@@ -55,7 +55,7 @@
     },
     "balance_caveats": {
       "type": ["object", "null"],
-      "description": "Present only on cog_balances() results (null/absent for cog_spending()/cog_revenue()). `not_gaap` is always TRUE and `not_gaap_note` explains that Census holdings are gross -- no liabilities are netted -- so they are NOT comparable to a GAAP fund balance. `coverage_window` maps each observed balance_subtype to its measured [min year, max year] in the mounted corpus (never hardcoded). `truncated` lists the subtypes whose coverage_window does not fully span the requested years.",
+      "description": "Present only on cog_balances() results (null/absent for cog_spending()/cog_revenue()). `not_gaap` is always TRUE and `not_gaap_note` explains that Census holdings are gross -- no liabilities are netted -- so they are NOT comparable to a GAAP fund balance. `coverage_window` maps EVERY balance_subtype present in the mounted corpus -- not only the ones this query observed -- to its measured [min year, max year] there (never hardcoded), so a caller can see which families exist and over what span before deciding they missed one. `truncated` is the query-scoped field: it lists only the subtypes this result actually observed whose coverage_window does not fully span the requested years.",
       "properties": {
         "not_gaap": { "type": "boolean" },
         "not_gaap_note": { "type": "string" },

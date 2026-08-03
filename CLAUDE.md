@@ -60,19 +60,20 @@ USCOGDATA_URL (local path or https://)
 Any value without `://` is treated as a local path by `.is_local_path()` and reads
 `manifest.json` directly from disk (no HTTP, no TTL cache).
 
-## Current State (2026-04-27)
+## Current State (2026-08-03)
 
 **Version:** 0.1.0 (pre-release)  
-**Branch:** `main`, commit `d65e9fe`  
-**Tests:** 764 PASS / 0 FAIL / 0 SKIP (measured `testthat::test_local()`, 2026-08-03, on the tree including the balance_caveats schema test)  
+**Branch:** `feat/cog-balances-25`, commit `fde62eb`  
+**Tests:** 788 PASS / 0 FAIL / 0 SKIP / 0 WARN (measured `testthat::test_local()`, 2026-08-03, after the final-review fix wave)  
 **CI:** Gitea Actions green (`.gitea/workflows/ci.yml`)
 
 ### Completed (Tasks 2.1–2.7)
 
-All 10 exported verbs implemented and tested:
+All **14** exports implemented and tested (measured from `NAMESPACE`):
 `cog_spending`, `cog_revenue`, `cog_balances`, `cog_explain`,
 `cog_geographic_rollup`, `cog_find_peers`, `cog_peer_compare`,
-`cog_gov_search`, `cog_mirror`, plus `cog_categories`.
+`cog_gov_search`, `cog_mirror`, `cog_categories`, `cog_recipes`,
+`cog_manifest`, `cog_basket_resolution`, `cog_basket_unresolved`.
 
 Bundled fixture corpus at `inst/extdata/fixture_corpus/` (years
 2011, 2012, 2019, 2020 — measured via DuckDB `read_parquet(hive_partitioning=1)`,
@@ -80,9 +81,10 @@ Bundled fixture corpus at `inst/extdata/fixture_corpus/` (years
 
 ### Remaining to v0.1 release
 
-1. **Task 2.8 — Docs:** roxygen `@param`/`@return`/`@examples` on all exports;
-   full `README.md`; `_pkgdown.yml`; `devtools::document()` + `pkgdown::build_site()`.
-   Vignettes can be stubbed for v0.1.
+1. **Task 2.8 — Docs:** mostly done — all 14 exports have a `man/*.Rd`,
+   `README.md` and `_pkgdown.yml` exist, and `vignettes/` carries
+   `total-spending.Rmd` + `population-denominators.Rmd`. Outstanding:
+   `pkgdown::build_site()` has never been run (no `docs/`).
 
 2. **Phase 3 — cog_explorer bridge:** create
    `cog_explorer/examples/hello_world_uscogdata.Rmd` (installs from Gitea, runs
