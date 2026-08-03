@@ -95,6 +95,16 @@ test_that("balance views are skipped on a corpus without balance_subtype", {
     # Registration must SKIP them, not error -- an older corpus stays usable.
     expect_false(any(c("balance_long", "balance_annotated") %in% views))
     expect_true("revenue_long" %in% views)
+
+    # ...and calling the verb on such a corpus must hit
+    # .require_balance_support()'s curated abort (spec § Testing: "Gating"),
+    # not a DuckDB binder error naming a view that was never registered.
+    # Asserted on the CLASS: removing the guard still errors, so a bare
+    # expect_error() would pass on the regression.
+    expect_error(
+      cog_balances("550000227544", 2019),
+      class = "uscogdata_no_balance_support"
+    )
   })
 })
 
@@ -219,6 +229,73 @@ test_that("adjust_to_year adds real dollars", {
   })
 })
 
+test_that("per_capita and adjust_to_year compose", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- cog_balances("550000227544", 2012, category = "Fund Balances",
+                      per_capita = TRUE, adjust_to_year = 2020)
+    expect_true("amt_per_capita_real" %in% names(r))
+    # The per-capita column must be deflated by the SAME factor as the level
+    # column -- this is what the ordering at R/balances.R:101-103 guarantees.
+    # .attach_real_dollars() silently no-ops on the per-capita leg when
+    # amt_per_capita_nominal does not exist yet (R/spending.R:664), so
+    # reversing those two calls drops this column with no error at all.
+    expect_equal(r$amt_per_capita_real / r$amt_per_capita_nominal,
+                 r$amt_real / r$amt_nominal, tolerance = 1e-8)
+
+    # And the documented condition is a conjunction: adjust_to_year ALONE
+    # must not produce amt_per_capita_real (pins the @return wording).
+    r2 <- cog_balances("550000227544", 2012, category = "Fund Balances",
+                       adjust_to_year = 2020)
+    expect_true("amt_real" %in% names(r2))
+    expect_false("amt_per_capita_real" %in% names(r2))
+  })
+})
+
+# --- input validation ------------------------------------------------------
+
+test_that("cog_balances validates its inputs like the money verbs", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    G <- "550000227544"
+    # Pinned to the message, not bare expect_error(): every one of these
+    # already produces *some* error or *some* quiet wrong answer today --
+    # years = integer(0) leaks `Parser Error ... AND year IN ()` with the
+    # generated SQL, recipe = c("a","b") throws "the condition has length > 1",
+    # and the govid/category cases return 0 rows with no error at all.
+    expect_error(cog_balances(G, integer(0)), "non-empty integer vector")
+    expect_error(cog_balances(character(0), 2019), "non-empty character vector")
+    expect_error(cog_balances(G, 2019, category = 5), "must be character or NULL")
+    expect_error(cog_balances(G, 2019, recipe = c("a", "b")),
+                 "length-1 character string")
+  })
+})
+
+test_that("validation runs after govid coercion, so a data frame still works", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    # .validate_verb_inputs() asserts is.character(govid); it must therefore
+    # run AFTER .coerce_govid_input(), never before, or the documented
+    # data-frame input (cog_gov_search() output) would abort.
+    df <- data.frame(canonical_govid = "550000227544", stringsAsFactors = FALSE)
+    r <- suppressMessages(cog_balances(df, 2019))
+    expect_true(nrow(r) > 0L)
+    expect_identical(unique(r$canonical_govid), "550000227544")
+  })
+})
+
+test_that("recipe and category are mutually exclusive", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    expect_error(
+      cog_balances("550000227544", c(2011, 2012),
+                   category = "Fund Balances",
+                   recipe   = "cash_securities_z77_wide"),
+      class = "uscogdata_recipe_category_conflict"
+    )
+  })
+})
+
 # --- recipe = : the wide-era holdings bridge -------------------------------
 
 test_that("recipe bridges the wide era into the modern one", {
@@ -295,7 +372,15 @@ test_that("the second holdings bridge works too", {
 test_that("an unknown recipe id is rejected", {
   skip_if_no_corpus()
   with_fixture_corpus({
-    expect_error(cog_balances("550000227544", 2019, recipe = "no_such_recipe"))
+    # Asserted on the CLASS .validate_recipe_id() sets (R/recipes.R:84).
+    # Without it the test is non-discriminating: deleting the validation call
+    # leaves .recipe_components() returning 0 rows and comps$label[[1]]
+    # throwing "subscript out of bounds", which a bare expect_error() accepts
+    # while the user loses the curated "valid recipe ids are ..." message.
+    expect_error(
+      cog_balances("550000227544", 2019, recipe = "no_such_recipe"),
+      class = "uscogdata_unknown_recipe"
+    )
   })
 })
 
@@ -341,6 +426,51 @@ test_that("coverage_window is computed from the corpus, not hardcoded", {
   })
 })
 
+test_that("coverage_window covers every corpus subtype, not just observed ones", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    # Deliberate contract (provenance-v1.json): the window block is corpus-
+    # scoped so a caller can ask "is there a family I missed?", while
+    # `truncated` is the observed-scoped field. A single-category query must
+    # therefore still report every balance family in the mounted corpus.
+    r <- cog_balances("550000227544", 2019, category = "Fund Balances")
+    expect_identical(unique(r$balance_subtype), "general")
+
+    con2 <- DBI::dbConnect(duckdb::duckdb())
+    on.exit(DBI::dbDisconnect(con2, shutdown = TRUE), add = TRUE)
+    cats_path <- file.path(fixture_corpus_path(), "data", "summary_categories.parquet")
+    all_subtypes <- DBI::dbGetQuery(con2, sprintf(
+      "SELECT DISTINCT balance_subtype FROM read_parquet(%s)
+       WHERE balance_subtype IS NOT NULL",
+      uscogdata:::.sql_lit_chr(cats_path)
+    ))$balance_subtype
+
+    cav <- attr(r, "provenance")$balance_caveats
+    expect_setequal(names(cav$coverage_window), all_subtypes)
+    expect_true(length(all_subtypes) > 1L)
+    # ...while `truncated` stays scoped to what this query actually observed.
+    expect_true(all(cav$truncated %in% unique(r$balance_subtype)))
+  })
+})
+
+test_that("the corpus-constant coverage windows are memoised per session", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    # The windows query has no govid/year predicate: its answer depends only
+    # on which corpus is mounted, so re-running the full balance_long scan on
+    # every call is pure waste (35% of verb runtime on the fixture). Same
+    # memoise-and-invalidate pattern as .uscogdata_env$manifest.
+    expect_null(uscogdata:::.uscogdata_env$balance_coverage_windows)
+    suppressMessages(cog_balances("550000227544", 2019))
+    memo <- uscogdata:::.uscogdata_env$balance_coverage_windows
+    expect_false(is.null(memo))
+    expect_true("general" %in% names(memo))
+
+    uscogdata:::cog_close()
+    expect_null(uscogdata:::.uscogdata_env$balance_coverage_windows)
+  })
+})
+
 test_that("a request past a family's coverage window is flagged", {
   skip_if_no_corpus()
   with_fixture_corpus({
@@ -365,6 +495,39 @@ test_that("the provenance schema documents balance_caveats", {
     simplifyVector = FALSE
   )
   expect_true("balance_caveats" %in% names(sch$properties))
+})
+
+test_that("cog_explain surfaces the balance caveats", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    # Asserted on the RENDERED text, not on prov$balance_caveats: the field
+    # is already covered above, and the once-per-session cli_inform() means
+    # cog_explain() is the only surface a caller who missed (or suppressed)
+    # the first message can still audit.
+    r <- suppressMessages(cog_balances("550000227544", c(2012, 2019)))
+    # Both streams: cli routes most of its output through conditions that
+    # land on stderr, so a stdout-only capture would be empty (the pattern
+    # used throughout test-explain.R).
+    out <- paste(c(capture.output(cog_explain(r)),
+                   capture.output(cog_explain(r), type = "message")),
+                 collapse = "\n")
+    expect_match(out, "GAAP")
+    expect_match(out, "employee_retirement")
+  })
+})
+
+test_that("cog_explain on a money-verb result has no balance caveat section", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- suppressMessages(cog_spending("550000227544", 2019))
+    out <- paste(c(capture.output(cog_explain(r)),
+                   capture.output(cog_explain(r), type = "message")),
+                 collapse = "\n")
+    # Guard against the capture itself being vacuous: the section must be
+    # absent from output that demonstrably contains the rest of the report.
+    expect_match(out, "Data vintage")
+    expect_false(grepl("GAAP", out))
+  })
 })
 
 test_that("the caveat message fires once per session", {
