@@ -249,22 +249,26 @@ test_that("recipe bridges the wide era into the modern one", {
 test_that("the FY2002 book-to-market basis change is disclosed on the recipe path", {
   skip_if_no_corpus()
   with_fixture_corpus({
-    # NOTE on years = c(2002, 2011, 2012), which deviates from the brief's
-    # verbatim c(2011, 2012): .build_series_break_refs() (R/series_breaks.R,
-    # shared with every verb) gates on
-    # `break_year BETWEEN min(years) AND max(years)` -- a window over the
-    # REQUESTED years, not merely over which codes were observed. SB195's
-    # break_year is 2002, and this fixture has no X40/Z77 partition data for
-    # any year before 2011, so years = c(2011, 2012) alone can never open a
-    # window containing 2002 -- confirmed empirically; see
-    # task-4-report.md for the investigation. There is no 2002 partition in
-    # the fixture, so adding 2002 to `years` is a pure no-op on the returned
-    # rows (asserted below) and only widens the break-matching window -- it
-    # does not change which rows the recipe join reads. Flagged as a
-    # follow-up candidate: `.build_series_break_refs()`'s window semantics may
-    # want to treat an in-series precision-change break (fin_code observed,
-    # break_year <= max(years)) differently from a boundary/rename break, but
-    # that is shared, cross-verb logic and out of scope for this task.
+    # 2002 is in the year vector deliberately, and must stay -- do not
+    # "simplify" this back to c(2011, 2012).
+    #
+    # .build_series_break_refs() (R/series_breaks.R, shared with every verb)
+    # matches breaks with `break_year BETWEEN min(years) AND max(years)`, and
+    # SB195's break_year is 2002. A c(2011, 2012) span never crosses the
+    # FY2002 book -> market change -- that whole span sits after it, on one
+    # consistent basis -- so NOT disclosing SB195 there is correct behaviour,
+    # not a gap (same reasoning as the "a request that never crosses the
+    # boundary is not affected by it" comment on .build_corpus_break_refs()).
+    #
+    # The property actually worth testing is: a recipe query that observes
+    # X40 AND spans FY2002 discloses SB195. This fixture has no 2002
+    # partition data for X40/Z77 (confirmed: only 2011/2012/2019/2020
+    # partitions exist), so including 2002 in `years` widens the
+    # break-matching window without changing which rows the recipe join
+    # returns -- verified empirically: r$year below is exactly {2011, 2012}
+    # whether or not 2002 is in the request (see task-4-report.md).
+    # Removing 2002 would silently turn this back into the non-crossing case
+    # above and destroy the test's purpose.
     r <- cog_balances("550000227544", c(2002, 2011, 2012),
                       recipe = "cash_securities_z77_wide")
     expect_equal(sort(r$year), c(2011, 2012))
