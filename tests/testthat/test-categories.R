@@ -93,3 +93,40 @@ test_that("cog_categories sorted by category_type, category, subtype", {
 test_that("cog_categories rejects invalid type", {
   expect_error(cog_categories(type = "both"), "type")
 })
+
+test_that("cog_categories() surfaces balance subtypes", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    cc <- cog_categories()
+    b <- cc[cc$category_type == "balance", ]
+    expect_true(nrow(b) > 0L)
+
+    # Every balance row must carry its subtype. Before the COALESCE included
+    # balance_subtype these were all NA, which silently made the balance
+    # taxonomy undiscoverable -- cog-api derives its subtype vocabulary from
+    # this function, so an NA here becomes an unusable API parameter.
+    expect_false(any(is.na(b$subtype)))
+
+    # The exact set, read independently from the crosswalk rather than from
+    # the function under test.
+    con2 <- DBI::dbConnect(duckdb::duckdb())
+    on.exit(DBI::dbDisconnect(con2, shutdown = TRUE), add = TRUE)
+    p <- file.path(fixture_corpus_path(), "data", "summary_categories.parquet")
+    want <- DBI::dbGetQuery(con2, sprintf(
+      "SELECT DISTINCT balance_subtype FROM read_parquet(%s)
+       WHERE category_type = 'balance' AND balance_subtype IS NOT NULL
+       ORDER BY 1", uscogdata:::.sql_lit_chr(p)))$balance_subtype
+    expect_true(length(want) > 1L)
+    expect_identical(sort(unique(b$subtype)), sort(want))
+  })
+})
+
+test_that('cog_categories(type = "balance") filters to holdings', {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    b <- cog_categories(type = "balance")
+    expect_true(nrow(b) > 0L)
+    expect_identical(unique(b$category_type), "balance")
+    expect_false(any(is.na(b$subtype)))
+  })
+})

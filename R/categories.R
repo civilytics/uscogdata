@@ -5,12 +5,19 @@
 #' Returns the category taxonomy exposed by the corpus's
 #' `summary_categories` view, grouped to one row per
 #' `(category, subtype)` pair. Use this to discover valid `category`
-#' values for [cog_spending()] / [cog_revenue()] /
+#' values for [cog_spending()] / [cog_revenue()] / [cog_balances()] /
 #' [cog_geographic_rollup()] and to audit which Census item codes feed
 #' each category.
 #'
-#' @param type Either `NULL` (default, return both spending and revenue
-#'   rows), `"spending"`, or `"revenue"`.
+#' `subtype` COALESCEs the crosswalk's three subtype columns, so it carries
+#' `spend_subtype` on expenditure rows, `revenue_subtype` on revenue rows and
+#' `balance_subtype` on balance rows. Note that [cog_balances()] itself takes
+#' no `subtype` argument — for holdings, `category` is a strict coarsening of
+#' `balance_subtype` — but the value is surfaced here because it is the
+#' discovery surface downstream consumers build their vocabulary from.
+#'
+#' @param type Either `NULL` (default, every row: expenditure, revenue and
+#'   balance), `"spending"`, `"revenue"`, or `"balance"`.
 #' @param pattern Optional regex matched case-insensitively against the
 #'   `category` column (e.g. `"Police"` or `"Tax"`).
 #' @return Tibble with columns `category`, `category_type`, `subtype`,
@@ -20,8 +27,8 @@
 cog_categories <- function(type = NULL, pattern = NULL) {
   if (!is.null(type)) {
     if (!is.character(type) || length(type) != 1L ||
-        !type %in% c("spending", "revenue")) {
-      cli::cli_abort('`type` must be NULL, "spending", or "revenue".')
+        !type %in% c("spending", "revenue", "balance")) {
+      cli::cli_abort('`type` must be NULL, "spending", "revenue", or "balance".')
     }
   }
   if (!is.null(pattern) &&
@@ -48,7 +55,7 @@ cog_categories <- function(type = NULL, pattern = NULL) {
 
   sql <- paste(
     "SELECT category, category_type,
-            COALESCE(spend_subtype, revenue_subtype) AS subtype,
+            COALESCE(spend_subtype, revenue_subtype, balance_subtype) AS subtype,
             COUNT(DISTINCT item_code) AS n_codes,
             string_agg(DISTINCT item_code, ',' ORDER BY item_code) AS item_codes
      FROM summary_categories",
