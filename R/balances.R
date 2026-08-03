@@ -55,7 +55,7 @@ cog_balances <- function(govid, years, category = NULL,
 
   con <- .ensure_session()
   .require_balance_support(con)
-  .check_govids_in_scope(govid)
+  scope <- .check_govids_in_scope(govid)
 
   basis_note <- paste0(
     "`basis` has no effect on holdings: harmonization_map carries no ",
@@ -77,6 +77,8 @@ cog_balances <- function(govid, years, category = NULL,
     expenditure_concept = NA_character_,
     revenue_concept = NA_character_
   )
+  prov$scope$govids_found   <- scope$found
+  prov$scope$govids_missing <- scope$missing
 
   attr(result, "provenance") <- prov
   result

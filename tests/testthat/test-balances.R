@@ -144,7 +144,6 @@ test_that("no flow code can reach cog_balances", {
 
     expect_true(length(got) > 0L)
     expect_true(all(got %in% balance_codes))
-    expect_true(length(setdiff(got, balance_codes)) == 0L)
   })
 })
 
@@ -165,4 +164,16 @@ test_that("every balance_subtype maps to exactly one category", {
   per_subtype <- tapply(b$category, b$balance_subtype,
                         function(x) length(unique(x)))
   expect_true(all(per_subtype == 1L))
+})
+
+test_that("cog_balances records found + missing govids in provenance", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    suppressMessages(
+      r <- cog_balances(c("550000227544", "XXXINVALID"), 2019)
+    )
+    prov <- attr(r, "provenance")
+    expect_equal(sort(prov$scope$govids_found), "550000227544")
+    expect_equal(sort(prov$scope$govids_missing), "XXXINVALID")
+  })
 })
