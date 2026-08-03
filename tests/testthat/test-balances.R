@@ -97,3 +97,60 @@ test_that("balance views are skipped on a corpus without balance_subtype", {
     expect_true("revenue_long" %in% views)
   })
 })
+
+test_that("cog_balances returns holdings for a government that has them", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- cog_balances("550000227544", 2019)
+    expect_s3_class(r, "tbl_df")
+    expect_true(nrow(r) > 0L)
+    expect_true(all(c("year", "canonical_govid", "gov_name", "balance_subtype",
+                      "category", "amt_nominal") %in% names(r)))
+    expect_identical(sort(unique(r$category)),
+                     c("Fund Balances", "Insurance Trust Balances"))
+    expect_false(is.null(attr(r, "provenance")))
+    expect_identical(attr(r, "provenance")$verb, "cog_balances")
+  })
+})
+
+test_that('category = "Fund Balances" is exactly the general family', {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- cog_balances("550000227544", 2019, category = "Fund Balances")
+    expect_identical(unique(r$balance_subtype), "general")
+    codes <- sort(unlist(strsplit(paste(r$codes_included, collapse = ","), ",")))
+    expect_identical(codes, c("W01", "W31", "W61"))
+  })
+})
+
+test_that("no flow code can reach cog_balances", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- cog_balances("550000227544", c(2011, 2012, 2019, 2020))
+    got <- unique(unlist(strsplit(paste(r$codes_included, collapse = ","), ",")))
+
+    # The expected set is read from the RAW corpus, never from the verb --
+    # verifying an absence through the filter that creates it proves nothing.
+    ds <- arrow::open_dataset(file.path(fixture_corpus_path(), "data", "long"))
+    sc <- arrow::read_parquet(
+      file.path(fixture_corpus_path(), "data", "summary_categories.parquet"))
+    sc <- as.data.frame(sc)
+    balance_codes <- sc$item_code[sc$category_type == "balance"]
+
+    expect_true(all(got %in% balance_codes))
+    expect_true(length(setdiff(got, balance_codes)) == 0L)
+  })
+})
+
+test_that("every balance_subtype maps to exactly one category", {
+  skip_if_no_corpus()
+  # Dropping the `subtype` argument is only safe while this tree holds. If the
+  # pipeline ever gives a balance subtype a second category, `category` becomes
+  # a lossy filter -- fail HERE rather than in a user's analysis.
+  sc <- as.data.frame(arrow::read_parquet(
+    file.path(fixture_corpus_path(), "data", "summary_categories.parquet")))
+  b <- sc[sc$category_type == "balance", ]
+  per_subtype <- tapply(b$category, b$balance_subtype,
+                        function(x) length(unique(x)))
+  expect_true(all(per_subtype == 1L))
+})
