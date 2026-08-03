@@ -42,10 +42,10 @@
 #'   wide era to the modern one.
 #'
 #' @return Tibble with columns `year`, `canonical_govid`, `gov_name`,
-#'   `balance_subtype`, `category`, `amt_nominal`, optional
-#'   `amt_per_capita_nominal` and `pop_source` (when `per_capita = TRUE`),
-#'   optional `amt_real` and `amt_per_capita_real` (when `adjust_to_year` is
-#'   set), `codes_included`, `aggregate_fallback`, `notes`. Amounts are full
+#'   `balance_subtype`, `category`, `amt_nominal`, `codes_included`,
+#'   `aggregate_fallback`, plus optional `amt_per_capita_nominal` and
+#'   `pop_source` (when `per_capita = TRUE`), and optional `amt_real` and
+#'   `amt_per_capita_real` (when `adjust_to_year` is set). Amounts are full
 #'   US dollars.
 #'
 #'   Carries a `provenance` attribute matching

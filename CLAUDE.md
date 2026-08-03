@@ -64,7 +64,7 @@ Any value without `://` is treated as a local path by `.is_local_path()` and rea
 
 **Version:** 0.1.0 (pre-release)  
 **Branch:** `main`, commit `d65e9fe`  
-**Tests:** 763 PASS / 0 FAIL / 0 SKIP (measured `testthat::test_local()`, 2026-08-03)  
+**Tests:** 764 PASS / 0 FAIL / 0 SKIP (measured `testthat::test_local()`, 2026-08-03, on the tree including the balance_caveats schema test)  
 **CI:** Gitea Actions green (`.gitea/workflows/ci.yml`)
 
 ### Completed (Tasks 2.1–2.7)
