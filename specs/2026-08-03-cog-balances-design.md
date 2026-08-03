@@ -187,7 +187,15 @@ Verified against `series_breaks.csv`, not assumed:
 | 1 | Gross holdings, **not GAAP fund balance**; no liabilities netted | No — a constant, new field `not_gaap = TRUE` |
 | 2 | `W` is FY2012–2021 only | No — new `coverage_window`, **computed** from the corpus |
 | 3 | `X`/`Z` holdings end FY2016 | **Not yet.** No `series_breaks` row exists at 2016/2017 for `Z77`/`Z78`/`X30`. Reader surfaces it via `coverage_window`; flows through `series_break_refs` once the upstream entry lands (see Out of scope) |
-| 4 | `X40`/`X41` book → market at FY2002 | **Yes**, via `SB195`/`SB196` on `fin_code` `X40`/`X41` — but only on a `recipe` query, which is the only path that observes those codes. Asserted in the tests rather than assumed |
+| 4 | `X40`/`X41` book → market at FY2002 | **Yes**, via `SB195`/`SB196` on `fin_code` `X40`/`X41`, under **two** conditions: a `recipe` query (the only path that observes those codes) **and** a year span that crosses FY2002. Asserted in the tests rather than assumed |
+
+On caveat 4's second condition: `.build_series_break_refs()` matches
+`break_year BETWEEN min(years) AND max(years)`, so a request spanning only
+2011–2012 does **not** surface `SB195`. That is correct, not a gap — such a
+series sits entirely after the change, on one consistent basis, and flagging a
+break it never crosses would be noise. The same rule is applied deliberately in
+`.build_corpus_break_refs()`. An earlier draft of this row omitted the span
+condition and overclaimed.
 
 `coverage_window` is derived per observed subtype family from the corpus, never
 hardcoded, so it stays correct as the corpus grows.
