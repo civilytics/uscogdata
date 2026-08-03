@@ -177,3 +177,44 @@ test_that("cog_balances records found + missing govids in provenance", {
     expect_equal(sort(prov$scope$govids_missing), "XXXINVALID")
   })
 })
+
+test_that("per_capita divides holdings by population", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    plain <- cog_balances("550000227544", 2019, category = "Fund Balances")
+    pc    <- cog_balances("550000227544", 2019, category = "Fund Balances",
+                          per_capita = TRUE)
+    expect_true("amt_per_capita_nominal" %in% names(pc))
+    expect_true("pop_source" %in% names(pc))
+    expect_identical(pc$amt_nominal, plain$amt_nominal)
+
+    # Assert against the denominator read from the corpus, NOT against a
+    # quantity derived from amt_per_capita_nominal itself -- dividing the
+    # column back out would be tautological and would pass on any value.
+    pop <- DBI::dbGetQuery(cog_open(), sprintf(
+      "SELECT population FROM gov_population_yearly
+       WHERE canonical_govid = %s AND year = 2019",
+      uscogdata:::.sql_lit_chr("550000227544")
+    ))$population
+    expect_length(pop, 1L)
+    expect_equal(pc$amt_per_capita_nominal, pc$amt_nominal / pop,
+                 tolerance = 1e-8)
+
+    prov <- attr(pc, "provenance")
+    expect_true(prov$transformations$per_capita$applied)
+  })
+})
+
+test_that("adjust_to_year adds real dollars", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- cog_balances("550000227544", 2012, category = "Fund Balances",
+                      adjust_to_year = 2020)
+    expect_true("amt_real" %in% names(r))
+    # 2012 dollars inflated to 2020 must exceed nominal.
+    expect_true(all(r$amt_real > r$amt_nominal))
+    prov <- attr(r, "provenance")
+    expect_true(prov$transformations$inflation$applied)
+    expect_identical(prov$transformations$inflation$base_year, 2020L)
+  })
+})

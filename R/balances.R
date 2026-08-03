@@ -49,6 +49,7 @@ cog_balances <- function(govid, years, category = NULL,
                          basis = c("harmonized", "raw"), recipe = NULL) {
   call <- match.call()
   basis <- match.arg(basis, c("harmonized", "raw"))
+  .validate_balance_inputs(per_capita, adjust_to_year)
   govid <- .coerce_govid_input(govid)
   years <- as.integer(years)
   if (!is.null(adjust_to_year)) adjust_to_year <- as.integer(adjust_to_year)
@@ -67,6 +68,14 @@ cog_balances <- function(govid, years, category = NULL,
                          ig_view = NULL, subtype_scope = NULL)
   result <- tibble::as_tibble(DBI::dbGetQuery(con, sql))
 
+  # Order matters (matches .verb_spendrev()): per-capita first, so
+  # .attach_real_dollars() deflates the nominal per-capita column into
+  # amt_per_capita_real rather than needing amt_per_capita_nominal recomputed.
+  if (isTRUE(per_capita)) result <- .attach_per_capita(result, con, govid)
+  if (!is.null(adjust_to_year)) {
+    result <- .attach_real_dollars(result, adjust_to_year, per_capita)
+  }
+
   prov <- .build_provenance(
     verb = "cog_balances", call = call, govid = govid, years = years,
     category = category, per_capita = per_capita,
@@ -82,6 +91,24 @@ cog_balances <- function(govid, years, category = NULL,
 
   attr(result, "provenance") <- prov
   result
+}
+
+#' Cheap type validation for the two arguments cog_balances() shares with the
+#' money verbs. Mirrors the per_capita/adjust_to_year checks in
+#' .validate_verb_inputs() (R/spending.R) -- category/recipe validation is
+#' deliberately out of scope here (uscogdata#25 Task 3 review note).
+#' @noRd
+.validate_balance_inputs <- function(per_capita, adjust_to_year) {
+  if (!is.logical(per_capita) || length(per_capita) != 1L) {
+    cli::cli_abort("`per_capita` must be a length-1 logical.")
+  }
+  if (!is.null(adjust_to_year)) {
+    if (!(is.integer(adjust_to_year) || is.numeric(adjust_to_year)) ||
+        length(adjust_to_year) != 1L) {
+      cli::cli_abort("`adjust_to_year` must be NULL or a length-1 integer.")
+    }
+  }
+  invisible(TRUE)
 }
 
 #' Abort unless the mounted corpus classifies balance codes.
