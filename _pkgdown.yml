@@ -3,6 +3,12 @@ template:
   bootstrap: 5
 
 reference:
+  - title: Financial data
+    desc: Spending, revenue and balance-sheet holdings for one or more governments.
+    contents:
+      - cog_spending
+      - cog_revenue
+      - cog_balances
   - title: Search & basket
     desc: Resolve place names into canonical govids.
     contents:

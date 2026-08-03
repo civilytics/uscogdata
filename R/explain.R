@@ -68,6 +68,11 @@ cog_explain <- function(result, format = c("print", "list")) {
     if (!is.null(prov$revenue_concept)) {
       cli::cli_text("Concept: {prov$revenue_concept} revenue")
     }
+  } else if (identical(prov$verb, "cog_balances")) {
+    # Both concept fields are deliberately NA here (a stock has no flow
+    # concept). Printing the raw NA reads as a missing value rather than an
+    # intentional one, so say what it means instead.
+    cli::cli_text("Concept: not applicable (holdings are a stock, not a flow)")
   } else if (!is.null(prov$expenditure_concept)) {
     concept_note <- if (!is.null(prov$expenditure_concept_note) &&
                          !is.na(prov$expenditure_concept_note)) {
@@ -172,6 +177,31 @@ cog_explain <- function(result, format = c("print", "list")) {
   if (length(prov$corpus_break_refs) > 0L) {
     cli::cli_h2("Corpus-wide caveats")
     cli::cli_ul(.series_break_story_lines(prov$corpus_break_refs))
+  }
+
+  # Balance results only (NULL on money-verb provenance, so they are
+  # unaffected). This is the ONLY on-demand surface for the GAAP disclosure:
+  # .emit_balance_caveats() fires at most once per session, and is routinely
+  # consumed by a suppressMessages() call or by a knitted chunk nobody reads,
+  # so a caller who deliberately audits a result with cog_explain() must still
+  # be told.
+  bc <- prov$balance_caveats
+  if (!is.null(bc)) {
+    cli::cli_h2("Holdings caveats")
+    if (!is.null(bc$not_gaap_note)) cli::cli_alert_warning(bc$not_gaap_note)
+    if (length(bc$truncated) > 0L) {
+      cli::cli_text(
+        "Requested years extend beyond what these families actually cover:"
+      )
+      cli::cli_ul(vapply(bc$truncated, function(s) {
+        w <- bc$coverage_window[[s]]
+        if (length(w) == 2L) {
+          sprintf("%s: covered %s-%s in this corpus", s, w[1], w[2])
+        } else {
+          s
+        }
+      }, character(1)))
+    }
   }
 
   cli::cli_h2("Transformations")

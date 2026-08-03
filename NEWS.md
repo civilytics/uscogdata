@@ -1,5 +1,18 @@
 # uscogdata 0.1.0 (development)
 
+## New: `cog_balances()` for cash-and-security holdings
+
+* New `cog_balances()` exposes the 14 cash-and-security holding codes
+  (`category_type = "balance"`): fund balances, retirement system holdings and
+  insurance trust balances (#25). Holdings are a stock, not a flow, so the verb
+  has no `expenditure_concept` / `revenue_concept` / `complete` arguments, and
+  no `subtype` argument either -- for holdings, `category` is a strict
+  coarsening of `balance_subtype`, so `category = "Fund Balances"` is exactly
+  the `general` family (`W01`/`W31`/`W61`).
+* `cog_balances()` results carry `provenance$balance_caveats`, recording that
+  Census holdings are gross rather than GAAP fund balance, and the measured
+  coverage window of each subtype family.
+
 ## Multi-government aggregates now disclose their reporting coverage
 
 * The Census of Governments is a **complete census only in years ending in 2
