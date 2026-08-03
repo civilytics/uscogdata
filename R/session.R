@@ -95,4 +95,5 @@ cog_close <- function() {
   }
   .uscogdata_env$con      <- NULL
   .uscogdata_env$manifest <- NULL
+  .uscogdata_env$balance_caveats_shown <- NULL
 }

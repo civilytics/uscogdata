@@ -109,6 +109,11 @@ cog_balances <- function(govid, years, category = NULL,
   prov$scope$govids_found   <- scope$found
   prov$scope$govids_missing <- scope$missing
 
+  prov$balance_caveats <- .balance_caveats(
+    con, prov$codes_summed$observed, years
+  )
+  .emit_balance_caveats(prov$balance_caveats)
+
   attr(result, "provenance") <- prov
   result
 }

@@ -298,3 +298,65 @@ test_that("an unknown recipe id is rejected", {
     expect_error(cog_balances("550000227544", 2019, recipe = "no_such_recipe"))
   })
 })
+
+# --- balance_caveats: GAAP disclosure + measured coverage windows ----------
+
+test_that("balance_caveats is always present and flags the GAAP distinction", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- cog_balances("550000227544", 2019)
+    cav <- attr(r, "provenance")$balance_caveats
+    expect_false(is.null(cav))
+    expect_true(cav$not_gaap)
+  })
+})
+
+test_that("coverage_window is computed from the corpus, not hardcoded", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    r <- cog_balances("550000227544", c(2011, 2012, 2019, 2020))
+    cav <- attr(r, "provenance")$balance_caveats
+
+    # Read the "general" family's true year extent independently, via a
+    # fresh DuckDB connection against the raw parquet files (never through
+    # balance_long/.balance_caveats() itself, and never via arrow -- this
+    # package reads parquet through DuckDB only, see CLAUDE.md). Replicates
+    # the same predicates 26-balance_long.sql applies (category_type =
+    # 'balance', NOT is_aggregate) so this is a faithful, independent
+    # measurement rather than a re-statement of the view under test.
+    con2 <- DBI::dbConnect(duckdb::duckdb())
+    on.exit(DBI::dbDisconnect(con2, shutdown = TRUE), add = TRUE)
+    long_glob <- file.path(fixture_corpus_path(), "data", "long", "**", "*.parquet")
+    cats_path <- file.path(fixture_corpus_path(), "data", "summary_categories.parquet")
+    obs <- DBI::dbGetQuery(con2, sprintf(
+      "SELECT MIN(l.year) AS y0, MAX(l.year) AS y1
+       FROM read_parquet(%s, hive_partitioning = true) l
+       JOIN read_parquet(%s) c USING (item_code)
+       WHERE c.balance_subtype = 'general' AND NOT l.is_aggregate",
+      uscogdata:::.sql_lit_chr(long_glob), uscogdata:::.sql_lit_chr(cats_path)
+    ))
+
+    expect_identical(as.integer(cav$coverage_window$general),
+                     c(as.integer(obs$y0), as.integer(obs$y1)))
+  })
+})
+
+test_that("a request past a family's coverage window is flagged", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    # The employee_retirement family (X21/X30/X47/Z77/Z78) is corpus-wide
+    # truncated relative to 2019 in this fixture; 2012 observes it, 2019 does
+    # not, so the requested span extends past what it actually covers.
+    r <- cog_balances("550000227544", c(2012, 2019))
+    cav <- attr(r, "provenance")$balance_caveats
+    expect_true("employee_retirement" %in% cav$truncated)
+  })
+})
+
+test_that("the caveat message fires once per session", {
+  skip_if_no_corpus()
+  with_fixture_corpus({
+    expect_message(cog_balances("550000227544", 2019), "not.*GAAP")
+    expect_no_message(cog_balances("550000227544", 2020))
+  })
+})
