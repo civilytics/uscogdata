@@ -359,6 +359,14 @@ test_that("a request past a family's coverage window is flagged", {
   })
 })
 
+test_that("the provenance schema documents balance_caveats", {
+  sch <- jsonlite::fromJSON(
+    system.file("schemas", "provenance-v1.json", package = "uscogdata"),
+    simplifyVector = FALSE
+  )
+  expect_true("balance_caveats" %in% names(sch$properties))
+})
+
 test_that("the caveat message fires once per session", {
   skip_if_no_corpus()
   with_fixture_corpus({

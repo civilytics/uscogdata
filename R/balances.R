@@ -41,8 +41,19 @@
 #'   `"cash_securities_z77_wide"` and `"cash_securities_z78_wide"` bridge the
 #'   wide era to the modern one.
 #'
-#' @return A `tbl_df` with a `provenance` attribute. Amounts are full US
-#'   dollars.
+#' @return Tibble with columns `year`, `canonical_govid`, `gov_name`,
+#'   `balance_subtype`, `category`, `amt_nominal`, optional
+#'   `amt_per_capita_nominal` and `pop_source` (when `per_capita = TRUE`),
+#'   optional `amt_real` and `amt_per_capita_real` (when `adjust_to_year` is
+#'   set), `codes_included`, `aggregate_fallback`, `notes`. Amounts are full
+#'   US dollars.
+#'
+#'   Carries a `provenance` attribute matching
+#'   `inst/schemas/provenance-v1.json`, whose `balance_caveats` block reports
+#'   `not_gaap`, `not_gaap_note`, `coverage_window` (measured per-subtype year
+#'   extents) and `truncated` (subtypes whose coverage falls short of the
+#'   requested years). `expenditure_concept`/`revenue_concept` are `NA` --
+#'   holdings are a stock, not a flow, so neither concept vocabulary applies.
 #' @export
 cog_balances <- function(govid, years, category = NULL,
                          per_capita = FALSE, adjust_to_year = NULL,
