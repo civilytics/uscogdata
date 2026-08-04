@@ -138,7 +138,7 @@
 #' year, matching canonical_fips_xwalk) rather than as-of-year; as-of-year
 #' moved to the *_asof columns. This package's own geography always came from
 #' the xwalk (already present-based), so behaviour is unchanged.
-.validate_schema <- function(manifest, supported = c(4L, 5L, 6L)) {
+.validate_schema <- function(manifest, supported = c(4L, 5L, 6L, 7L)) {
   if (!manifest$schema_version %in% supported) {
     cli::cli_abort(c(
       "Corpus schema version mismatch.",
