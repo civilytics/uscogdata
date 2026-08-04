@@ -11,6 +11,21 @@ jobs:
     steps:
       - name: Install system libraries and Node.js (required by actions/checkout)
         run: |
+          # Switch apt to HTTPS mirrors. Measured from this runner on
+          # 2026-08-04: the SAME index file takes 20.1s over http:// and 3.1s
+          # over https://. apt fetches many indexes serially, so http:// does
+          # not read as "slow" -- it reads as a hang (zero bytes in
+          # /var/cache/apt/archives after 3+ minutes, apt's http workers parked
+          # in S state). rocker/r-ver:4.4 already ships ca-certificates and
+          # apt 2.8.3 has the https method built in, so nothing needs to be
+          # installed over http first to bootstrap this.
+          # `|| true` because the step runs under `sh -e`: on an image whose
+          # sources live in the other location, the missing-file sed must not
+          # kill the job.
+          sed -i -E 's#http://(archive|security)\.ubuntu\.com#https://\1.ubuntu.com#g' \
+            /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
+          sed -i -E 's#http://(archive|security)\.ubuntu\.com#https://\1.ubuntu.com#g' \
+            /etc/apt/sources.list 2>/dev/null || true
           apt-get update -qq
           apt-get install -y --no-install-recommends \
             nodejs git \
