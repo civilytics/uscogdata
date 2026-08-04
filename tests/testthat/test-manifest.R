@@ -111,7 +111,7 @@ test_that("cog_manifest returns the active session's parsed manifest", {
   })
 })
 
-test_that(".validate_schema accepts schema_version 4, 5 and 6, rejects others", {
+test_that(".validate_schema accepts schema_version 4 through 7, rejects others", {
   expect_silent(uscogdata:::.validate_schema(list(schema_version = 4L)))
   expect_silent(uscogdata:::.validate_schema(list(schema_version = 5L)))
   # v6 = FIPS geography harmonization (2026-07-22): _code -> _asof rename +
@@ -119,12 +119,22 @@ test_that(".validate_schema accepts schema_version 4, 5 and 6, rejects others", 
   # renamed columns and its geography comes from the xwalk, so v6 is accepted
   # without behavioural change -- see .validate_schema()'s note.
   expect_silent(uscogdata:::.validate_schema(list(schema_version = 6L)))
+  # v7 = `data_year` APPENDED as column 29 (cog_pipeline #80, 2026-08-03), the
+  # most recent fiscal year contributing to a collapsed key. Appended, never
+  # inserted: canonical_govid stays at position 26, so nothing this package
+  # reads shifts. Verified against the real v7 corpus before widening the
+  # allow-list -- cog_spending()/cog_balances() return correctly for FY2024 AND
+  # for FY2012, so the new column is inert here.
+  expect_silent(uscogdata:::.validate_schema(list(schema_version = 7L)))
   expect_error(
     uscogdata:::.validate_schema(list(schema_version = 3L)),
     "schema_version"
   )
+  # The upper bound still has to be ENFORCED, not just moved. Without this the
+  # test would no longer prove that an unknown future schema is refused, and a
+  # v8 corpus with a genuinely breaking change would sail through.
   expect_error(
-    uscogdata:::.validate_schema(list(schema_version = 7L)),
+    uscogdata:::.validate_schema(list(schema_version = 8L)),
     "schema_version"
   )
 })
