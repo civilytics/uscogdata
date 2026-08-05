@@ -71,7 +71,15 @@
 #' @param govid Character vector of `canonical_govid` values.
 #' @param years Integer vector of years.
 #' @param category Character vector of category names (from
-#'   `summary_categories.category`), or `NULL` for all categories.
+#'   `summary_categories.category`), or `NULL` for all categories broken out
+#'   one row each. The reserved value `"All Categories"` instead returns a
+#'   single summed row per `(year, canonical_govid, subtype)`, covering every
+#'   category inside the requested concept's subtype scope. It cannot be
+#'   combined with other category names, and it is not the same thing as
+#'   `expenditure_concept = "total"`: the concept chooses which subtypes are in
+#'   scope, `"All Categories"` chooses whether rows inside that scope are
+#'   broken out or summed. Combine with `subtype = "operations"` for an
+#'   operating-expenditure total.
 #' @param per_capita If `TRUE`, adds `amt_per_capita_nominal` (and
 #'   `amt_per_capita_real` when `adjust_to_year` is set) using the per-year
 #'   Census F-33 population from `gov_population_yearly`. Result also gains
@@ -268,6 +276,17 @@ cog_spending <- function(govid, years, category = NULL,
   .validate_verb_inputs(govid, years, category, per_capita, adjust_to_year,
                         recipe)
 
+  # Recognize the reserved pseudo-category. Detected after type validation so a
+  # non-character `category` still fails with the ordinary type error.
+  all_categories <- !is.null(category) && .ALL_CATEGORIES %in% category
+  if (all_categories && length(category) > 1L) {
+    cli::cli_abort(c(
+      "{.val {(.ALL_CATEGORIES)}} cannot be combined with other categories.",
+      "i" = "It already sums every category in the requested concept's scope.",
+      "*" = "Ask for it alone, or list the specific categories you want."
+    ), class = "uscogdata_all_categories_not_combinable")
+  }
+
   if (!is.null(recipe) && identical(expenditure_concept, "total")) {
     cli::cli_abort(c(
       "`recipe` and `expenditure_concept = \"total\"` are mutually exclusive.",
@@ -341,8 +360,10 @@ cog_spending <- function(govid, years, category = NULL,
     } else {
       NULL
     }
-    sql <- .build_verb_sql(view, subtype_col, govid, years, category, ig_view,
-                           subtype_scope)
+    sql <- .build_verb_sql(view, subtype_col, govid, years,
+                           if (all_categories) NULL else category,
+                           ig_view, subtype_scope,
+                           all_categories = all_categories)
     result <- tibble::as_tibble(DBI::dbGetQuery(con, sql))
   }
 
