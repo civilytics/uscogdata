@@ -38,3 +38,21 @@ test_that('cog_geographic_rollup() still refuses expenditure_concept = "total" w
                           expenditure_concept = "total")
   )
 })
+
+test_that("n_units_reporting is category-conditional, not a response rate", {
+  skip_if_no_corpus()
+  govs <- cog_gov_search(name = NULL, state = "WI", type = 2L)
+  ids  <- list(city = govs$canonical_govid)
+
+  police <- cog_geographic_rollup(ids, category = "Police", years = 2012L)
+  allcat <- cog_geographic_rollup(ids, category = "All Categories", years = 2012L)
+
+  cov_police <- cog_explain(police, format = "list")$coverage
+  cov_all    <- cog_explain(allcat, format = "list")$coverage
+
+  # Same year, same requested govids, same collection -- yet a single category
+  # reports fewer units than the all-categories query. That gap is real zeros,
+  # not non-response, which is exactly why the ratio is not a response rate.
+  expect_lte(cov_police$n_units_reporting, cov_all$n_units_reporting)
+  expect_identical(cov_police$n_units_expected, cov_all$n_units_expected)
+})
