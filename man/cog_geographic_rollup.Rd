@@ -20,7 +20,11 @@ cog_geographic_rollup(
 `canonical_govid` values. At least one layer required.}
 
 \item{category}{Single category name or character vector (passed through
-to [cog_spending()]).}
+to [cog_spending()]), or the reserved `"All Categories"` for one summed
+row per `(year, canonical_govid, subtype)` covering every category in the
+concept's scope. `"All Categories"` is the efficient way to build a
+geographic total: without it a caller must issue one rollup per category
+and sum the results themselves.}
 
 \item{years}{Integer vector of years.}
 
