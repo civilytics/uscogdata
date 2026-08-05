@@ -19,6 +19,14 @@
 .spend_subtypes_primary <- c("operations", "capital", "assistance")
 .spend_subtypes_direct  <- c(.spend_subtypes_primary, "interest", "insurance_benefits")
 
+# The reserved pseudo-category. Deliberately NOT "Total": `category = "Total"`
+# would sit one argument away from `expenditure_concept = "total"` and mean
+# something different -- the concept selects WHICH SUBTYPES are in scope, this
+# selects whether the rows inside that scope are broken out by category or
+# summed. "All Categories" states the operation and cannot be misread as the
+# concept.
+.ALL_CATEGORIES <- "All Categories"
+
 #' @noRd
 .expenditure_concept_subtypes <- function(concept) {
   switch(concept,
@@ -570,10 +578,16 @@ cog_spending <- function(govid, years, category = NULL,
 
 #' @noRd
 .build_verb_sql <- function(view, subtype_col, govid, years, category,
-                            ig_view = NULL, subtype_scope = NULL) {
+                            ig_view = NULL, subtype_scope = NULL,
+                            all_categories = FALSE) {
   govid_lit <- .sql_lit_chr(govid)
   years_lit <- paste(as.integer(years), collapse = ",")
-  category_pred <- if (is.null(category)) {
+  # In all-categories mode there is no category filter: the sum is defined by
+  # the concept's SUBTYPE allowlist (subtype_pred below), which is the real
+  # concept boundary. Filtering by category as well would be a no-op at best
+  # and, if the crosswalk ever gained an uncategorized code, a silent
+  # under-count of the very total this mode exists to guarantee.
+  category_pred <- if (all_categories || is.null(category)) {
     ""
   } else {
     sprintf("AND category IN (%s)", .sql_lit_chr(category))
@@ -612,13 +626,24 @@ cog_spending <- function(govid, years, category = NULL,
   # though its dollars came entirely from an aggregate row, silently
   # suppressing the "Aggregate fallback applied" note on exactly the rows
   # this feature exists to surface.
+
+  # Collapse the category dimension. subtype is deliberately KEPT: it is what
+  # makes `subtype = "operations"` + all-categories mean "operating
+  # expenditure", the measure a fiscal comparison actually wants.
+  category_select <- if (all_categories) {
+    sprintf("%s AS category", .sql_lit_chr(.ALL_CATEGORIES))
+  } else {
+    "category"
+  }
+  category_group <- if (all_categories) "" else ", category"
+
   sprintf(
     "SELECT
        year,
        canonical_govid,
        COALESCE(xwalk_gov_name, gov_name) AS gov_name,
        %1$s,
-       category,
+       %7$s,
        SUM(amt) * 1000.0 AS amt_nominal,
        string_agg(DISTINCT item_code, ',' ORDER BY item_code) AS codes_included,
        bool_or(is_aggregate) AS aggregate_fallback
@@ -627,9 +652,10 @@ cog_spending <- function(govid, years, category = NULL,
        AND year IN (%4$s)
        %5$s
        %6$s
-     GROUP BY year, canonical_govid, gov_name, xwalk_gov_name, %1$s, category
-     ORDER BY year, canonical_govid, %1$s, category",
-    subtype_col, source_expr, govid_lit, years_lit, category_pred, subtype_pred
+     GROUP BY year, canonical_govid, gov_name, xwalk_gov_name, %1$s%8$s
+     ORDER BY year, canonical_govid, %1$s%8$s",
+    subtype_col, source_expr, govid_lit, years_lit, category_pred, subtype_pred,
+    category_select, category_group
   )
 }
 
