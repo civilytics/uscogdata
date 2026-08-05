@@ -512,6 +512,18 @@ cog_spending <- function(govid, years, category = NULL,
   if (identical(basis, "harmonized")) paste0(view_base, "_harmonized") else view_base
 }
 
+#' The `*_long`/`*_long_harmonized` view behind an annotated view base --
+#' `"spending_annotated"` -> `"spending_long_harmonized"`. `.build_suggestions()`
+#' anti-joins the LONG view rather than the annotated one: they have identical
+#' row membership (the annotated views are the long views plus LEFT JOINs, see
+#' inst/sql/42-spending_annotated_harmonized.sql), but the long view is the
+#' one that actually owns the `NOT is_aggregate` + crosswalk-membership rule
+#' the suppression test is asking about.
+#' @noRd
+.select_long_view <- function(view_base, basis) {
+  .select_view(sub("_annotated$", "_long", view_base), basis)
+}
+
 #' @noRd
 .select_ig_view <- function(basis) {
   if (identical(basis, "harmonized")) "ig_annotated_harmonized" else "ig_annotated"

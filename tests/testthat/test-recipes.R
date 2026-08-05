@@ -214,3 +214,71 @@ test_that("no signposting under basis = 'raw'", {
   prov <- attr(r, "provenance")
   expect_length(prov$suggestions, 0L)
 })
+
+# --- uscogdata#9: partial-coverage signposting ------------------------------
+
+test_that("no recipe component is ever renamed by harmonization", {
+  # The suppression trigger anti-joins the verb's long view on item_code.
+  # That is only sound because harmonization never rewrites a recipe
+  # component's code -- every component whose harmonized_code differs has
+  # harmonized_code IS NULL (and is aggregate-flagged). If this ever fails,
+  # .suppressed_components() would report reachable dollars as suppressed.
+  skip_if_no_corpus()
+  con <- uscogdata:::.ensure_session()
+  n <- DBI::dbGetQuery(con,
+    "SELECT COUNT(*) AS renamed FROM long
+     WHERE item_code IN (SELECT DISTINCT component_code FROM harmonization_recipes)
+       AND harmonized_code IS NOT NULL
+       AND harmonized_code <> item_code")$renamed
+  expect_equal(as.integer(n), 0L)
+})
+
+test_that(".select_long_view maps annotated view bases to their long views", {
+  expect_equal(
+    uscogdata:::.select_long_view("spending_annotated", "harmonized"),
+    "spending_long_harmonized")
+  expect_equal(
+    uscogdata:::.select_long_view("revenue_annotated", "harmonized"),
+    "revenue_long_harmonized")
+  expect_equal(
+    uscogdata:::.select_long_view("spending_annotated", "raw"),
+    "spending_long")
+})
+
+test_that(".suppressed_components measures the E67/E68 dollars Public Welfare drops", {
+  skip_if_no_corpus()
+  con <- uscogdata:::.ensure_session()
+  s <- uscogdata:::.suppressed_components(
+    con,
+    candidates = c("welfare_cash_e67_wide", "welfare_cash_e68_wide"),
+    govid = "061037123085", years = 2011L,
+    long_view = "spending_long_harmonized")
+
+  expect_s3_class(s, "tbl_df")
+  expect_equal(nrow(s), 2L)
+  s <- s[order(s$recipe_id), ]
+  expect_equal(s$recipe_id, c("welfare_cash_e67_wide", "welfare_cash_e68_wide"))
+  expect_equal(s$suppressed_amount, c(1803872000, 271589000))
+  expect_equal(s$suppressed_codes, c("E67", "E68"))
+})
+
+test_that(".suppressed_components finds nothing in a modern year", {
+  skip_if_no_corpus()
+  con <- uscogdata:::.ensure_session()
+  s <- uscogdata:::.suppressed_components(
+    con,
+    candidates = c("welfare_cash_e67_wide", "welfare_cash_e68_wide"),
+    govid = "061037123085", years = 2019L,
+    long_view = "spending_long_harmonized")
+  expect_equal(nrow(s), 0L)
+})
+
+test_that(".suppressed_components rejects a long_view outside the allowlist", {
+  skip_if_no_corpus()
+  con <- uscogdata:::.ensure_session()
+  expect_error(
+    uscogdata:::.suppressed_components(
+      con, candidates = "welfare_cash_e67_wide", govid = "061037123085",
+      years = 2011L, long_view = "long; DROP TABLE x"),
+    class = "uscogdata_internal_error")
+})
