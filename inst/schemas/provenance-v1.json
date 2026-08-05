@@ -33,7 +33,48 @@
     },
     "harmonization":  { "type": "object" },
     "recipe":         { "type": ["object", "null"] },
-    "suggestions":    { "type": "array" },
+    "suggestions": {
+      "type": "array",
+      "description": "Harmonization recipes that would fill incomplete coverage in the requested years for this government. Empty on a healthy query, on an un-scoped (category = NULL) query, on basis = 'raw', and on a recipe = query (which resolves its own coverage).",
+      "items": {
+        "type": "object",
+        "required": ["recipe_id", "label", "available_years", "hint", "trigger",
+                     "suppressed_amount", "suppressed_years", "suppressed_codes"],
+        "properties": {
+          "recipe_id": { "type": "string" },
+          "label": { "type": "string" },
+          "available_years": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "description": "[year_min, year_max] of the recipe's component coverage."
+          },
+          "hint": { "type": "string" },
+          "ig_recipe_id": {
+            "type": ["string", "null"],
+            "description": "The intergovernmental (M/L) counterpart recipe covering the same function suffixes, or null. Never set for revenue recipes."
+          },
+          "trigger": {
+            "type": "string",
+            "enum": ["empty_year", "suppressed_component"],
+            "description": "Why this fired. 'empty_year': the result has no rows at all in a requested year. 'suppressed_component': the result HAS rows, but a component code carries dollars the verb's long view structurally excludes -- aggregate-published, or absent from summary_categories. 'empty_year' wins when both apply, being the stronger claim; the suppressed_* fields are populated either way."
+          },
+          "suppressed_amount": {
+            "type": "number",
+            "description": "Full US dollars this government holds in the recipe's component codes that the result excludes, summed across the requested years. 0 when nothing is suppressed."
+          },
+          "suppressed_years": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "description": "The requested years contributing to suppressed_amount."
+          },
+          "suppressed_codes": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "The excluded component item codes, sorted."
+          }
+        }
+      }
+    },
     "scope":          { "type": "object" },
     "codes_summed":   { "type": "object" },
     "aggregate_fallback": { "type": ["object", "null"] },

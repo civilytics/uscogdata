@@ -1,5 +1,27 @@
 # uscogdata 0.1.0 (development)
 
+## Signposting now catches partially-suppressed categories
+
+* A coverage suggestion used to fire only when a category returned **no rows
+  at all** in a requested year. That missed the more dangerous case: a
+  category that still returns rows while silently dropping component codes
+  the wide era publishes only as aggregates (#9). `cog_spending(category =
+  "Public Welfare")` for FY2011 returned a plausible figure that omitted
+  `E67`/`E68` entirely -- for Los Angeles County, $2,075,461,000 of a true
+  $5,261,404,000, a 39% understatement, with `provenance$suggestions` empty.
+* Suggestions now also fire on **partial** coverage, and every suggestion
+  carries `trigger` (`"empty_year"` or `"suppressed_component"`),
+  `suppressed_amount`, `suppressed_years` and `suppressed_codes`, so a caller
+  can see how much is missing and decide whether to re-run with the recipe.
+* `cog_revenue()` gets the same fix through the shared verb path. Alaska's
+  FY2011 `Miscellaneous Revenue` reported $943,842,000 while dropping
+  $1,899,995,000 of aggregate-published `U4-` rents and royalties.
+* The trigger stays recipe-driven, so it only fires where a harmonization
+  recipe actually exists to name the fix. Measured on the bundled fixture,
+  every fire lands in the wide era; `higher_ed_e18_wide` and
+  `general_gov_e89_wide` stay silent, because their components are ordinary
+  classified leaves even pre-2012.
+
 ## New: `cog_balances()` for cash-and-security holdings
 
 * New `cog_balances()` exposes the 14 cash-and-security holding codes

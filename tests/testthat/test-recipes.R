@@ -404,3 +404,14 @@ test_that("uscogdata#9: cog_explain() reports the suppressed dollars", {
   out <- paste(testthat::capture_messages(cog_explain(r)), collapse = "")
   expect_match(out, "271,589,000", fixed = TRUE)
 })
+
+test_that("the provenance schema documents the suggestion trigger fields", {
+  sch <- jsonlite::fromJSON(
+    system.file("schemas", "provenance-v1.json", package = "uscogdata"),
+    simplifyVector = FALSE)
+  props <- sch$properties$suggestions$items$properties
+  expect_true(all(c("trigger", "suppressed_amount", "suppressed_years",
+                    "suppressed_codes") %in% names(props)))
+  expect_setequal(unlist(props$trigger$enum),
+                  c("empty_year", "suppressed_component"))
+})
