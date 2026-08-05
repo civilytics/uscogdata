@@ -1,7 +1,7 @@
 Package: uscogdata
 Type: Package
 Title: Curated Reader for the Civilytics US Census of Governments Finance Corpus
-Version: 0.1.0
+Version: 0.2.0
 Authors@R:
     person("Civilytics", , , "jknowles@gmail.com", role = c("aut", "cre"))
 Description: Curated R verbs over the Civilytics US Census of Governments

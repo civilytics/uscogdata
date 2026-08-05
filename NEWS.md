@@ -1,3 +1,31 @@
+# uscogdata 0.2.0
+
+## New features
+
+* `cog_spending()` and `cog_revenue()` accept the reserved category
+  `"All Categories"`, returning one summed row per
+  `(year, canonical_govid, subtype)` across every category inside the
+  requested concept's subtype scope. Combine with `subtype = "operations"`
+  for an operating-expenditure total. `cog_geographic_rollup()` inherits it,
+  which is the efficient way to build a geographic total — previously a
+  caller had to issue one rollup per category and sum the results
+  (cog-api#37).
+
+  `"All Categories"` is not the same thing as `expenditure_concept = "total"`.
+  The concept chooses which subtypes are in scope; `"All Categories"` chooses
+  whether the rows inside that scope are broken out or summed.
+
+* `cog_categories()` advertises `"All Categories"` for the expenditure and
+  revenue vocabularies, so the reserved value is discoverable.
+
+## Documentation
+
+* `cog_geographic_rollup()` and `cog_peer_compare()` now document that
+  `provenance$coverage`'s `n_units_reporting` is **category-conditional** and
+  is not a response rate: a government that was surveyed and genuinely spends
+  nothing in the requested category is indistinguishable from one never
+  surveyed (uscogdata#36).
+
 # uscogdata 0.1.0 (development)
 
 ## Signposting now catches partially-suppressed categories
