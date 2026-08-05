@@ -395,7 +395,8 @@ cog_spending <- function(govid, years, category = NULL,
     }
     suggestions <- .build_suggestions(con, govid, years, category,
                                        direct_leg_result,
-                                       resolved$basis, flow_prefixes)
+                                       resolved$basis, flow_prefixes,
+                                       .select_long_view(view_base, resolved$basis))
   }
 
   # C1(b): when expenditure_concept = "total", flag any row where the IG

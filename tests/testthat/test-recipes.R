@@ -282,3 +282,99 @@ test_that(".suppressed_components rejects a long_view outside the allowlist", {
       years = 2011L, long_view = "long; DROP TABLE x"),
     class = "uscogdata_internal_error")
 })
+
+test_that("uscogdata#9: Public Welfare signposts its suppressed E67/E68 dollars", {
+  # The bug: E74/E79 return rows for FY2011, so there is no row-absence gap,
+  # so nothing fired -- while E67 ($1,803,872,000) and E68 ($271,589,000) were
+  # dropped for being aggregate-published. LA County reports $3,185,943,000
+  # and omits $2,075,461,000, a 39% understatement, silently.
+  skip_if_no_corpus()
+  r <- suppressMessages(
+    cog_spending("061037123085", years = 2011L, category = "Public Welfare"))
+  sugg <- attr(r, "provenance")$suggestions
+
+  expect_length(sugg, 2L)
+  ids <- vapply(sugg, function(s) s$recipe_id, character(1))
+  expect_setequal(ids, c("welfare_cash_e67_wide", "welfare_cash_e68_wide"))
+
+  e67 <- sugg[[which(ids == "welfare_cash_e67_wide")]]
+  expect_equal(e67$trigger, "suppressed_component")
+  expect_equal(e67$suppressed_amount, 1803872000)
+  expect_equal(e67$suppressed_years, 2011L)
+  expect_equal(e67$suppressed_codes, "E67")
+  expect_equal(e67$hint, "re-run with recipe = 'welfare_cash_e67_wide'")
+
+  e68 <- sugg[[which(ids == "welfare_cash_e68_wide")]]
+  expect_equal(e68$trigger, "suppressed_component")
+  expect_equal(e68$suppressed_amount, 271589000)
+  expect_equal(e68$suppressed_codes, "E68")
+})
+
+test_that("uscogdata#9: an empty_year fire keeps its trigger and gains the dollars", {
+  # Corrections is the case that already worked: zero rows in FY2011, so the
+  # row-absence path fires. It must keep firing, keep trigger = "empty_year",
+  # keep its IG counterpart -- and now also report what was suppressed.
+  skip_if_no_corpus()
+  r <- suppressMessages(
+    cog_spending("061037123085", years = 2011L, category = "Corrections"))
+  sugg <- attr(r, "provenance")$suggestions
+
+  expect_length(sugg, 3L)
+  ids <- vapply(sugg, function(s) s$recipe_id, character(1))
+  expect_setequal(ids, c("corrections_combined", "corrections_capital_combined",
+                         "corrections_other_capital_combined"))
+  expect_true(all(vapply(sugg, function(s) s$trigger, character(1)) == "empty_year"))
+
+  cc <- sugg[[which(ids == "corrections_combined")]]
+  expect_equal(cc$suppressed_amount, 1371460000)
+  expect_equal(cc$suppressed_codes, "E05")
+  expect_equal(cc$ig_recipe_id, "corrections_ig_local_combined")
+})
+
+test_that("uscogdata#9: the revenue verb inherits the same trigger", {
+  # Alaska state FY2011 Miscellaneous Revenue reports $943,842,000 from
+  # U11/U20/U30 while dropping $1,899,995,000 of aggregate-published `U4-`
+  # rents and royalties -- the omission is LARGER than the reported figure.
+  skip_if_no_corpus()
+  r <- suppressMessages(
+    cog_revenue("020000227749", years = 2011L,
+                category = "Miscellaneous Revenue"))
+  sugg <- attr(r, "provenance")$suggestions
+
+  expect_length(sugg, 1L)
+  expect_equal(sugg[[1]]$recipe_id, "rents_royalties_u4_wide")
+  expect_equal(sugg[[1]]$trigger, "suppressed_component")
+  expect_equal(sugg[[1]]$suppressed_amount, 1899995000)
+  expect_equal(sugg[[1]]$suppressed_codes, "U4-")
+  # A revenue recipe must never be handed an M/L expenditure counterpart.
+  expect_null(sugg[[1]]$ig_recipe_id)
+})
+
+test_that("uscogdata#9: no partial-coverage fire in a modern year", {
+  skip_if_no_corpus()
+  r <- cog_spending("061037123085", years = 2019L, category = "Public Welfare")
+  expect_length(attr(r, "provenance")$suggestions, 0L)
+})
+
+test_that("uscogdata#9: leaf-and-classified wide-era families never fire", {
+  # higher_ed_e18_wide and general_gov_e89_wide are the control group: their
+  # components (E16/E18, E85/E89) are ordinary classified leaves even in the
+  # wide era, so widening the trigger must leave them silent. This is the
+  # measurement that refutes "it would fire on every category in every legacy
+  # year" -- corpus-wide on the fixture, these two produce zero suppressed rows.
+  skip_if_no_corpus()
+  con <- uscogdata:::.ensure_session()
+  n <- DBI::dbGetQuery(con,
+    "SELECT COUNT(*) AS n
+     FROM long l
+     JOIN harmonization_recipes r
+       ON l.item_code = r.component_code
+      AND l.year BETWEEN r.year_min AND r.year_max
+     WHERE r.recipe_id IN ('higher_ed_e18_wide', 'general_gov_e89_wide')
+       AND l.amt <> 0
+       AND NOT EXISTS (
+         SELECT 1 FROM spending_long_harmonized v
+         WHERE v.canonical_govid = l.canonical_govid
+           AND v.year = l.year AND v.item_code = l.item_code)")$n
+  expect_equal(as.integer(n), 0L)
+})
