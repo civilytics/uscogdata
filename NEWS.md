@@ -1,5 +1,38 @@
 # uscogdata 0.1.0 (development)
 
+## Signposting now catches partially-suppressed categories
+
+* A coverage suggestion used to fire only when a category returned **no rows
+  at all** in a requested year. That missed the more dangerous case: a
+  category that still returns rows while silently dropping component codes
+  the wide era publishes only as aggregates (#9). `cog_spending(category =
+  "Public Welfare")` for FY2011 returned a plausible figure that omitted
+  `E67`/`E68` entirely -- for Los Angeles County, $2,075,461,000 of a true
+  $5,261,404,000, a 39% understatement, with `provenance$suggestions` empty.
+* Suggestions now also fire on **partial** coverage, and every suggestion
+  carries `trigger` (`"empty_year"` or `"suppressed_component"`),
+  `suppressed_amount`, `suppressed_years` and `suppressed_codes`, so a caller
+  can see how much is missing and decide whether to re-run with the recipe.
+* `cog_revenue()` gets the same fix through the shared verb path. Alaska's
+  FY2011 `Miscellaneous Revenue` reported $943,842,000 while dropping
+  $1,899,995,000 of aggregate-published `U4-` rents and royalties.
+* The trigger stays recipe-driven, so it only fires where a harmonization
+  recipe actually exists to name the fix. `higher_ed_e18_wide` and
+  `general_gov_e89_wide` stay silent in every year measured on the bundled
+  fixture, because their components are ordinary classified leaves even
+  pre-2012.
+* The `suppressed_component` trigger (and any `suppressed_amount`/
+  `suppressed_codes` an `empty_year` fire also carries) is scoped to the
+  calling verb's own flow family: `cog_spending()` only ever measures E/F/G
+  component dollars, `cog_revenue()` only T/A/U/B/C/D. A component from the
+  OTHER flow family reports `suppressed_amount = 0` rather than a fabricated
+  claim. The `empty_year` trigger itself is not flow-scoped -- a category
+  belonging to the other flow (e.g. `cog_spending(category = "IG Local")`)
+  still returns zero rows and can still fire, in any year including modern
+  ones, naming the recipe whose own generic join finds real data for this
+  government. That is a mis-scoped query, not a corpus-format gap, so its
+  `suppressed_amount` is correctly 0.
+
 ## New: `cog_balances()` for cash-and-security holdings
 
 * New `cog_balances()` exposes the 14 cash-and-security holding codes

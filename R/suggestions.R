@@ -1,8 +1,16 @@
 # R/suggestions.R
-# Recipe-component-driven signposting: when a basis = "harmonized" query for
-# a category comes back with a coverage gap in some requested years (the
-# result has no rows at all in that year) that a harmonization recipe would
-# actually fill for this government, surface that recipe as a suggestion.
+# Recipe-component-driven signposting. When a basis = "harmonized" query for
+# a category comes back incomplete in some requested year -- and a
+# harmonization recipe would actually fill it for this government -- surface
+# that recipe as a suggestion. "Incomplete" has two forms, and a recipe
+# qualifies on either:
+#   1. empty_year          -- the result has no rows at all in that year.
+#   2. suppressed_component -- the result HAS rows, but a component code
+#      carries dollars the verb's own long view structurally excludes
+#      (aggregate-published, or absent from summary_categories). This is
+#      uscogdata#9: Public Welfare kept returning E74/E79 rows while dropping
+#      aggregate-only E67/E68, so form 1 never fired and the caller got a
+#      number a third too low with no signpost at all.
 #
 # This is deliberately keyed off the recipe catalog's component codes, not
 # off harmonization_map rows: no live map row carries a non-blank
@@ -48,11 +56,15 @@
 #'   "D")` for `cog_revenue()` -- see `.verb_spendrev()`). Passed through to
 #'   `.attach_ig_counterparts()` to keep the intergovernmental-counterpart
 #'   lookup scoped to the calling verb's own flow family.
+#' @param long_view Name of the verb's own long view (from
+#'   `.select_long_view()`), passed through to `.suppressed_components()` to
+#'   measure the second qualifying path (uscogdata#9).
 #' @return List of `list(recipe_id, label, available_years, hint,
-#'   ig_recipe_id)`, possibly empty.
+#'   ig_recipe_id, trigger, suppressed_amount, suppressed_years,
+#'   suppressed_codes)`, possibly empty.
 #' @noRd
 .build_suggestions <- function(con, govid, years, category, result, basis,
-                                flow_prefixes) {
+                                flow_prefixes, long_view) {
   if (!identical(basis, "harmonized") || is.null(category)) return(list())
 
   # Exclude any recipe that is ITSELF an intergovernmental (M/L) recipe --
@@ -86,7 +98,28 @@
     unique(as.integer(result$year))
   }
   gap_years <- setdiff(as.integer(years), result_years)
-  if (length(gap_years) == 0L) return(list())
+
+  # Path 2 (uscogdata#9): component dollars this government holds that the
+  # verb's own view structurally excludes. Measured across ALL requested
+  # years, not just gap years -- the whole point is that a year with rows can
+  # still be missing dollars. Scoped to the calling verb's own flow_prefixes
+  # (I1) -- see `.suppressed_components()`'s own roxygen for why.
+  #
+  # This runs unconditionally whenever there are candidates -- an earlier
+  # revision of this fix wave tried a free, in-memory pre-check
+  # (`.needs_suppression_query()`) to skip the round trip on an already-
+  # covered path, but a scoped re-review measured it against the fixture and
+  # found it didn't pay for itself (it skipped ~3% of healthy calls, ~0% of
+  # the multi-govid batch shape it was meant to help, at a net cost increase
+  # once its own always-run metadata query was counted) while adding an
+  # untested exactness invariant -- that `result$codes_included` and this
+  # anti-join share the harmonized `item_code` space -- whose silent
+  # violation would kill signposting, the exact failure class uscogdata#9
+  # exists to prevent. Owner's call: keep this simple; a batch-aware
+  # optimization, if one is worth building, is a separate issue.
+  supp <- .suppressed_components(con, candidates, govid, years, long_view, flow_prefixes)
+
+  if (length(gap_years) == 0L && nrow(supp) == 0L) return(list())
 
   meta <- tibble::as_tibble(DBI::dbGetQuery(con, sprintf(
     "SELECT recipe_id, any_value(label) AS label,
@@ -97,35 +130,55 @@
     .sql_lit_chr(candidates)
   )))
 
-  # Which (recipe_id, year) pairs the recipe's own generic join actually
-  # covers for this government, restricted to the gap years -- the same
-  # join .run_recipe() uses (component year_min/year_max + gov_type_scope,
-  # no is_aggregate filter), just checking existence instead of summing.
-  covered <- DBI::dbGetQuery(con, sprintf(
-    "SELECT DISTINCT r.recipe_id, l.year
-     FROM long l
-     JOIN harmonization_recipes r
-       ON l.item_code = r.component_code
-      AND l.year BETWEEN r.year_min AND r.year_max
-      AND (r.gov_type_scope = 'all'
-           OR (r.gov_type_scope = 'state' AND l.type = 0)
-           OR (r.gov_type_scope = 'local' AND l.type BETWEEN 1 AND 3))
-     WHERE r.recipe_id IN (%s)
-       AND l.canonical_govid IN (%s)
-       AND l.year IN (%s)",
-    .sql_lit_chr(candidates), .sql_lit_chr(govid),
-    paste(gap_years, collapse = ",")
-  ))
+  # Path 1 (unchanged): (recipe, year) pairs the recipe's own generic join
+  # covers for this government, restricted to the gap years.
+  covered <- if (length(gap_years) == 0L) {
+    data.frame(recipe_id = character(0), year = integer(0))
+  } else {
+    DBI::dbGetQuery(con, sprintf(
+      "SELECT DISTINCT r.recipe_id, l.year
+       FROM long l
+       JOIN harmonization_recipes r
+         ON l.item_code = r.component_code
+        AND l.year BETWEEN r.year_min AND r.year_max
+        AND (r.gov_type_scope = 'all'
+             OR (r.gov_type_scope = 'state' AND l.type = 0)
+             OR (r.gov_type_scope = 'local' AND l.type BETWEEN 1 AND 3))
+       WHERE r.recipe_id IN (%s)
+         AND l.canonical_govid IN (%s)
+         AND l.year IN (%s)",
+      .sql_lit_chr(candidates), .sql_lit_chr(govid),
+      paste(gap_years, collapse = ",")
+    ))
+  }
 
   suggestions <- list()
   for (rid in candidates) {
-    if (!rid %in% covered$recipe_id) next
+    empty_hit <- rid %in% covered$recipe_id
+    s_rows <- supp[supp$recipe_id == rid, , drop = FALSE]
+    supp_hit <- nrow(s_rows) > 0L
+    if (!empty_hit && !supp_hit) next
     m <- meta[meta$recipe_id == rid, ]
     suggestions[[length(suggestions) + 1L]] <- list(
       recipe_id = rid,
       label = m$label[[1]],
       available_years = c(as.integer(m$year_min), as.integer(m$year_max)),
-      hint = sprintf("re-run with recipe = '%s'", rid)
+      hint = sprintf("re-run with recipe = '%s'", rid),
+      # An empty year is the stronger claim -- the category returned nothing
+      # at all -- so it wins when both paths qualify. The suppressed_* fields
+      # are still populated, so an empty_year fire also reports its dollars.
+      trigger = if (empty_hit) "empty_year" else "suppressed_component",
+      suppressed_amount = if (supp_hit) sum(s_rows$suppressed_amount) else 0,
+      suppressed_years = if (supp_hit) {
+        sort(unique(as.integer(s_rows$year)))
+      } else {
+        integer(0)
+      },
+      suppressed_codes = if (supp_hit) {
+        sort(unique(unlist(strsplit(s_rows$suppressed_codes, ",", fixed = TRUE))))
+      } else {
+        character(0)
+      }
     )
   }
   .attach_ig_counterparts(con, suggestions, flow_prefixes)
@@ -232,12 +285,25 @@
 #' expressions. When a suggestion has an `ig_recipe_id`, one indented
 #' continuation line is appended naming the intergovernmental counterpart
 #' recipe (embedded `\n` renders as a hanging-indent continuation of the
-#' same bullet under cli, not a new bullet).
+#' same bullet under cli, not a new bullet). Same treatment for
+#' `suppressed_amount` (uscogdata#9): only present when dollars were
+#' actually measured as excluded (an `empty_year` fire can carry them too --
+#' see `.build_suggestions()` -- so this keys off the amount, not `trigger`).
 #' @noRd
 .inform_suggestions <- function(suggestions) {
   bullets <- vapply(suggestions, function(s) {
     bullet <- sprintf("%s (%d-%d): %s", s$recipe_id,
             s$available_years[1], s$available_years[2], s$hint)
+    # Only present when dollars were actually measured as excluded. An
+    # empty_year fire can carry them too -- the year had no rows AND the
+    # component was suppressed -- which is strictly more informative.
+    if (isTRUE(s$suppressed_amount > 0)) {
+      bullet <- paste0(bullet, sprintf(
+        "\n  $%s excluded from %s (%s), published as an aggregate or outside the crosswalk",
+        formatC(s$suppressed_amount, format = "f", digits = 0, big.mark = ","),
+        paste0("FY", s$suppressed_years, collapse = ", "),
+        paste(s$suppressed_codes, collapse = ", ")))
+    }
     if (!is.null(s$ig_recipe_id)) {
       bullet <- paste0(bullet, sprintf(
         "\n  intergovernmental counterpart: recipe = '%s'", s$ig_recipe_id))
@@ -245,7 +311,7 @@
     bullet
   }, character(1))
   cli::cli_inform(c(
-    i = "Coverage gap detected for the requested years; a harmonization recipe may fill it:",
+    i = "Incomplete coverage for the requested years; a harmonization recipe may fill it:",
     stats::setNames(bullets, rep("*", length(bullets)))
   ))
 }
