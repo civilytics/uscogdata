@@ -78,8 +78,9 @@
 #'   combined with other category names, and it is not the same thing as
 #'   `expenditure_concept = "total"`: the concept chooses which subtypes are in
 #'   scope, `"All Categories"` chooses whether rows inside that scope are
-#'   broken out or summed. Combine with `subtype = "operations"` for an
-#'   operating-expenditure total.
+#'   broken out or summed. Because the result keeps one row per
+#'   `spend_subtype`, filtering the returned frame to
+#'   `spend_subtype == "operations"` gives an operating-expenditure total.
 #' @param per_capita If `TRUE`, adds `amt_per_capita_nominal` (and
 #'   `amt_per_capita_real` when `adjust_to_year` is set) using the per-year
 #'   Census F-33 population from `gov_population_yearly`. Result also gains

@@ -16,8 +16,9 @@
 #'   combined with other category names, and it is not the same thing as
 #'   `revenue_concept = "total"`: the concept chooses which subtypes are in
 #'   scope, `"All Categories"` chooses whether rows inside that scope are
-#'   broken out or summed. Combine with `subtype = "operations"` for an
-#'   own-source revenue total.
+#'   broken out or summed. Because the result keeps one row per
+#'   `revenue_subtype`, filtering the returned frame to
+#'   `revenue_subtype == "own_source"` gives an own-source revenue total.
 #' @param revenue_concept Which of Census's two published revenue concepts to
 #'   return. Concepts are defined as sets of the crosswalk's `revenue_subtype`
 #'   values -- never as item-code first letters, which cannot classify

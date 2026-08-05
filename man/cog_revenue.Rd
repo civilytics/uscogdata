@@ -29,8 +29,9 @@ category inside the requested concept's subtype scope. It cannot be
 combined with other category names, and it is not the same thing as
 `revenue_concept = "total"`: the concept chooses which subtypes are in
 scope, `"All Categories"` chooses whether rows inside that scope are
-broken out or summed. Combine with `subtype = "operations"` for an
-own-source revenue total.}
+broken out or summed. Because the result keeps one row per
+`revenue_subtype`, filtering the returned frame to
+`revenue_subtype == "own_source"` gives an own-source revenue total.}
 
 \item{per_capita}{If `TRUE`, adds `amt_per_capita_nominal` (and
 `amt_per_capita_real` when `adjust_to_year` is set) using the per-year
