@@ -5,8 +5,9 @@
 * `cog_spending()` and `cog_revenue()` accept the reserved category
   `"All Categories"`, returning one summed row per
   `(year, canonical_govid, subtype)` across every category inside the
-  requested concept's subtype scope. Combine with `subtype = "operations"`
-  for an operating-expenditure total. `cog_geographic_rollup()` inherits it,
+  requested concept's subtype scope. Filtering the result to
+  `spend_subtype == "operations"` gives an operating-expenditure total.
+  `cog_geographic_rollup()` inherits it,
   which is the efficient way to build a geographic total — previously a
   caller had to issue one rollup per category and sum the results
   (cog-api#37).

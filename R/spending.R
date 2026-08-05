@@ -150,7 +150,12 @@
 #'   component (when one exists), and
 #'   `provenance$expenditure_concept_direct_suppressed` is `TRUE` -- the
 #'   figure in those rows is the intergovernmental leg alone, not Direct +
-#'   IG.
+#'   IG. When `category = "All Categories"` is combined with
+#'   `expenditure_concept = "total"`, this detection cannot run (it keys on
+#'   per-category rows, which all-categories mode collapses to one literal
+#'   value), so `expenditure_concept_direct_suppressed` is `NA` rather than a
+#'   possibly-false `FALSE`; query an explicit `category` to get a real
+#'   answer.
 #' @param complete If `TRUE`, fill the requested grid so that a cell the
 #'   corpus does not carry still appears, labelled with **why** it is
 #'   missing, and add a `value_source` column to every row:
@@ -274,8 +279,13 @@ cog_spending <- function(govid, years, category = NULL,
   }
 
   govid <- .coerce_govid_input(govid, arg = "govid")
+  # allow_all_categories = TRUE: cog_spending()/cog_revenue() are the two
+  # verbs the reserved pseudo-category is defined for. cog_balances() shares
+  # this validator but leaves the argument at its FALSE default, so it
+  # rejects "All Categories" instead of silently returning zero rows
+  # (finding 3, all-categories review).
   .validate_verb_inputs(govid, years, category, per_capita, adjust_to_year,
-                        recipe)
+                        recipe, allow_all_categories = TRUE)
 
   # Recognize the reserved pseudo-category. Detected after type validation so a
   # non-character `category` still fails with the ordinary type error.
@@ -325,6 +335,12 @@ cog_spending <- function(govid, years, category = NULL,
     .abort_complete_unsupported(
       "The intergovernmental leg deliberately keeps aggregate-flagged rows (see `inst/sql/24-ig_long.sql`), so its cells are not the ones `code_set` describes.",
       "Use `expenditure_concept = \"direct\"` with `complete = TRUE`, or drop `complete`."
+    )
+  }
+  if (complete && all_categories) {
+    .abort_complete_unsupported(
+      "`category = \"All Categories\"` collapses the category dimension that `code_set` grids over (see `.completion_grid_sql()`), so there is no per-category grid left to fill -- filling a summed row has no defined semantics.",
+      "Drop `complete`, or use `complete = TRUE` with an explicit `category` (or `category = NULL` for every category)."
     )
   }
 
@@ -438,13 +454,32 @@ cog_spending <- function(govid, years, category = NULL,
   # direct spending in that category, which is correct, ordinary data). When
   # a covering recipe is found, both the row-level notes and the provenance
   # say so rather than pass silently as a plausible Total.
-  direct_suppressed_info <- if (identical(expenditure_concept, "total")) {
+  #
+  # In all-categories mode this cannot run at all: .detect_direct_suppressed()
+  # keys on (year, canonical_govid, category), and every row shares the same
+  # literal "All Categories" value, so the key collides across every real
+  # category for that (year, govid) -- an IG-only row for a suppressed
+  # category becomes indistinguishable from one sharing a key with an
+  # unrelated category's ordinary Direct row. `has_direct` would then read
+  # TRUE whenever the government has ANY direct spending at all, and the
+  # detector could never fire. Rather than run it and report a false FALSE,
+  # skip it and record NA -- the provenance must stop making a claim it
+  # cannot support (finding 1, all-categories review).
+  suppression_unavailable <- all_categories &&
+    identical(expenditure_concept, "total")
+  direct_suppressed_info <- if (suppression_unavailable) {
+    list(flag = rep(NA, nrow(result)), notes = rep(NA_character_, nrow(result)))
+  } else if (identical(expenditure_concept, "total")) {
     .detect_direct_suppressed(con, result, subtype_col)
   } else {
     list(flag = rep(FALSE, nrow(result)), notes = rep(NA_character_, nrow(result)))
   }
   direct_suppressed <- direct_suppressed_info$flag
-  direct_suppressed_flag <- isTRUE(any(direct_suppressed))
+  direct_suppressed_flag <- if (suppression_unavailable) {
+    NA
+  } else {
+    isTRUE(any(direct_suppressed))
+  }
 
   result$notes <- .notes_column(result, direct_suppressed_info$notes)
 
@@ -453,9 +488,20 @@ cog_spending <- function(govid, years, category = NULL,
   # leg is suppressed for at least one requested (year, category), append an
   # explicit warning rather than let the base note's "Total = Direct + IG"
   # framing stand unqualified for rows where that arithmetic didn't happen.
+  # When suppression detection itself is unavailable (all-categories mode),
+  # say so instead of silently reusing the unqualified base note.
   expenditure_concept_note_for_prov <- if (identical(expenditure_concept, "total")) {
     base_note <- "Total = Direct + intergovernmental (M to local govts + L to state govts). Legacy-era IG is assembled from aggregate-flagged rows, which are year-disjoint from their modern leaf components; the L-- family total is excluded."
-    if (direct_suppressed_flag) {
+    if (suppression_unavailable) {
+      paste0(
+        base_note,
+        " NOTE: direct-leg-suppression detection is unavailable when ",
+        "`category = \"All Categories\"` -- it keys on per-category rows, ",
+        "which this mode collapses. `expenditure_concept_direct_suppressed` ",
+        "is NA here rather than a possibly-false FALSE; query an explicit ",
+        "`category` (or `category = NULL`) to get a real answer."
+      )
+    } else if (isTRUE(direct_suppressed_flag)) {
       paste0(
         base_note,
         " NOTE: for at least one requested (year, category) the Direct leg ",
@@ -503,9 +549,22 @@ cog_spending <- function(govid, years, category = NULL,
   result
 }
 
+#' Shared input validation for the money/holdings verbs.
+#'
+#' `allow_all_categories` gates the reserved pseudo-category
+#' `.ALL_CATEGORIES` ("All Categories"). It is meaningful only where a
+#' concept's subtype scope defines what "all" sums over --
+#' `cog_spending()`/`cog_revenue()`, via `.verb_spendrev()`, pass `TRUE`.
+#' `cog_balances()` leaves it at the `FALSE` default: holdings are a stock
+#' with no concept vocabulary to sum across (see R/balances.R), and before
+#' this guard existed `cog_balances(category = "All Categories")` silently
+#' matched zero crosswalk rows and returned an empty result with no error
+#' (finding 3, all-categories review). This validator is shared specifically
+#' so the three verbs cannot drift apart on this again.
 #' @noRd
 .validate_verb_inputs <- function(govid, years, category,
-                                  per_capita, adjust_to_year, recipe = NULL) {
+                                  per_capita, adjust_to_year, recipe = NULL,
+                                  allow_all_categories = FALSE) {
   if (!is.character(govid) || length(govid) == 0L) {
     cli::cli_abort("`govid` must be a non-empty character vector.")
   }
@@ -514,6 +573,14 @@ cog_spending <- function(govid, years, category = NULL,
   }
   if (!is.null(category) && !is.character(category)) {
     cli::cli_abort("`category` must be character or NULL.")
+  }
+  if (!allow_all_categories && !is.null(category) &&
+      .ALL_CATEGORIES %in% category) {
+    cli::cli_abort(c(
+      "{.val {(.ALL_CATEGORIES)}} is not supported here.",
+      i = "It sums a spending or revenue concept's subtype scope; this verb has no concept vocabulary to sum across.",
+      i = "Use {.fn cog_spending} or {.fn cog_revenue} for an all-categories total."
+    ), class = "uscogdata_all_categories_unsupported")
   }
   if (!is.logical(per_capita) || length(per_capita) != 1L) {
     cli::cli_abort("`per_capita` must be a length-1 logical.")
@@ -650,8 +717,10 @@ cog_spending <- function(govid, years, category = NULL,
   # this feature exists to surface.
 
   # Collapse the category dimension. subtype is deliberately KEPT: it is what
-  # makes `subtype = "operations"` + all-categories mean "operating
-  # expenditure", the measure a fiscal comparison actually wants.
+  # lets a caller filter the result to `spend_subtype == "operations"` and
+  # get an operating-expenditure total, the measure a fiscal comparison
+  # actually wants. (There is no `subtype` argument -- this is a post-hoc
+  # filter on the returned column, not a query parameter.)
   category_select <- if (all_categories) {
     sprintf("%s AS category", .sql_lit_chr(.ALL_CATEGORIES))
   } else {

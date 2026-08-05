@@ -22,8 +22,8 @@
       "description": "How the intergovernmental leg was assembled; null for 'primary' and 'direct'."
     },
     "expenditure_concept_direct_suppressed": {
-      "type": "boolean",
-      "description": "TRUE when expenditure_concept = 'total' and at least one requested (year, category) has intergovernmental rows but NO Direct rows in this corpus (typically a legacy aggregate-only family) -- those result rows report the intergovernmental leg alone, not Direct + IG. Always FALSE for expenditure_concept = 'primary' or 'direct'. See the affected rows' `notes` for the recovering recipe, if any."
+      "type": ["boolean", "null"],
+      "description": "TRUE when expenditure_concept = 'total' and at least one requested (year, category) has intergovernmental rows but NO Direct rows in this corpus (typically a legacy aggregate-only family) -- those result rows report the intergovernmental leg alone, not Direct + IG. Always FALSE for expenditure_concept = 'primary' or 'direct'. null (NA) when expenditure_concept = 'total' AND category = 'All Categories': the detector keys on per-category rows, which that mode collapses, so suppression cannot be computed -- see `expenditure_concept_note`. See the affected rows' `notes` for the recovering recipe, if any."
     },
     "revenue_concept": {
       "type": "string",

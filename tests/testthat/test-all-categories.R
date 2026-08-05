@@ -123,3 +123,69 @@ test_that('cog_categories(pattern=) matches the pseudo-category', {
   hit <- cog_categories(pattern = "^All Categories$")
   expect_equal(nrow(hit), 2L)
 })
+
+# --- final whole-branch review fixes ---------------------------------------
+
+test_that('complete = TRUE is refused when combined with "All Categories"', {
+  # .completion_grid_sql() would emit `AND c.category IN ('All Categories')`,
+  # match zero crosswalk rows, and the early return in .complete_result()
+  # would stamp completion$applied = TRUE, rows_filled = 0 -- reading as "the
+  # grid was checked and nothing was missing" when nothing was actually
+  # checked. Filling a summed row has no defined semantics, so the verb must
+  # refuse the combination outright (finding 2).
+  expect_error(
+    cog_spending("552025209777", 2019L, category = "All Categories",
+                complete = TRUE),
+    class = "uscogdata_complete_unsupported"
+  )
+  expect_error(
+    cog_revenue("552025209777", 2019L, category = "All Categories",
+               complete = TRUE),
+    class = "uscogdata_complete_unsupported"
+  )
+})
+
+test_that('cog_balances() rejects "All Categories" instead of silently returning zero rows', {
+  # cog_balances() reuses .validate_verb_inputs() but did not pass
+  # allow_all_categories = TRUE, so "All Categories" used to become
+  # `AND category IN ('All Categories')` against balance_annotated -- 0
+  # matching crosswalk rows, 0 rows back, no error (finding 3). Holdings are
+  # a stock with no concept vocabulary to sum across, so the honest answer is
+  # to refuse, the same way cog_spending()/cog_revenue() refuse other
+  # nonsensical combinations.
+  expect_error(
+    cog_balances("552025209777", 2019L, category = "All Categories"),
+    class = "uscogdata_all_categories_unsupported"
+  )
+  # An ordinary category still works -- this is not a blanket regression.
+  r <- suppressMessages(
+    cog_balances("552025209777", 2019L, category = "Fund Balances")
+  )
+  expect_gt(nrow(r), 0L)
+})
+
+test_that('expenditure_concept_direct_suppressed is NA, not FALSE, when categories are collapsed', {
+  # .detect_direct_suppressed() keys on
+  # paste(year, canonical_govid, category, sep = "\r"). In all-categories
+  # mode every row carries the literal "All Categories" value, so an IG-only
+  # row's key collides with any ordinary Direct row for the same
+  # (year, govid) -- has_direct reads TRUE whenever the government has ANY
+  # direct spending at all, candidate is always empty, and the detector can
+  # never fire. Before the fix this silently reported FALSE, an affirmative
+  # claim the code did not actually compute (finding 1). NA is the honest
+  # answer: cog_explain(x, format = "list") is required here, since without
+  # format = "list" it returns the result tibble, not the provenance list.
+  gov <- "552025209777"
+  t <- cog_spending(gov, 2019L, category = "All Categories",
+                    expenditure_concept = "total")
+  prov <- cog_explain(t, format = "list")
+  expect_true(is.na(prov$expenditure_concept_direct_suppressed))
+  expect_false(isTRUE(prov$expenditure_concept_direct_suppressed))
+  expect_match(prov$expenditure_concept_note, "unavailable", fixed = TRUE)
+
+  # A per-category "total" query on the same government/year is unaffected --
+  # the detector can still key correctly and reports a strict logical.
+  t_by_cat <- cog_spending(gov, 2019L, expenditure_concept = "total")
+  prov_by_cat <- cog_explain(t_by_cat, format = "list")
+  expect_false(is.na(prov_by_cat$expenditure_concept_direct_suppressed))
+})

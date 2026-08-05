@@ -106,7 +106,12 @@ possibly-misleading `"harmonized"`/`"raw"` value.}
   component (when one exists), and
   `provenance$expenditure_concept_direct_suppressed` is `TRUE` -- the
   figure in those rows is the intergovernmental leg alone, not Direct +
-  IG.}
+  IG. When `category = "All Categories"` is combined with
+  `expenditure_concept = "total"`, this detection cannot run (it keys on
+  per-category rows, which all-categories mode collapses to one literal
+  value), so `expenditure_concept_direct_suppressed` is `NA` rather than a
+  possibly-false `FALSE`; query an explicit `category` to get a real
+  answer.}
 
 \item{complete}{If `TRUE`, fill the requested grid so that a cell the
   corpus does not carry still appears, labelled with **why** it is
