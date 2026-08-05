@@ -28,7 +28,12 @@ argument: for holdings, `category` is a strict coarsening of
 every combination would be either redundant or empty.
 `category = "Fund Balances"` is exactly the `general` family
 (`W01`/`W31`/`W61`). `balance_subtype` is returned, so a finer split is
-one `dplyr::filter()` away.}
+one `dplyr::filter()` away. The reserved pseudo-category
+`"All Categories"` (see [cog_spending()]) is **not** supported here and
+errors with class `uscogdata_all_categories_unsupported`: it sums a
+concept's subtype scope, and holdings are a stock with no concept
+vocabulary to sum across. Omit `category` to get every category broken
+out instead.}
 
 \item{per_capita}{Divide holdings by population. Note this is a **stock per
 resident** (reserves per person), which is *not* comparable to

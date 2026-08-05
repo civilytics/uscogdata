@@ -28,7 +28,12 @@
 #'   every combination would be either redundant or empty.
 #'   `category = "Fund Balances"` is exactly the `general` family
 #'   (`W01`/`W31`/`W61`). `balance_subtype` is returned, so a finer split is
-#'   one `dplyr::filter()` away.
+#'   one `dplyr::filter()` away. The reserved pseudo-category
+#'   `"All Categories"` (see [cog_spending()]) is **not** supported here and
+#'   errors with class `uscogdata_all_categories_unsupported`: it sums a
+#'   concept's subtype scope, and holdings are a stock with no concept
+#'   vocabulary to sum across. Omit `category` to get every category broken
+#'   out instead.
 #' @param per_capita Divide holdings by population. Note this is a **stock per
 #'   resident** (reserves per person), which is *not* comparable to
 #'   [cog_spending()]'s per-capita figures -- those are a flow per person.
@@ -74,6 +79,13 @@ cog_balances <- function(govid, years, category = NULL,
   # helper reuse as .build_verb_sql()/.attach_per_capita() below; it does NOT
   # route the verb through .verb_spendrev(), which stays deliberately unused
   # here because its flow vocabulary is meaningless for a stock.
+  #
+  # allow_all_categories is left at its FALSE default (contrast
+  # .verb_spendrev(), which passes TRUE): the all-categories mode's "sum"
+  # only means something in terms of a concept's subtype scope, and holdings
+  # have no concept vocabulary. The reuse above is exactly why this can be a
+  # one-line default rather than a second bespoke check -- see the
+  # validator's own doc comment for the incident that made that matter.
   .validate_verb_inputs(govid, years, category, per_capita, adjust_to_year,
                         recipe)
   years <- as.integer(years)

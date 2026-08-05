@@ -29,7 +29,9 @@ test_that("cog_categories(type = 'spending') returns only expenditure rows", {
   # joined with the I/Q/Y flow batch -- the last two characters of Census's
   # expenditure taxonomy. `interest` is what makes the three-concept model
   # computable: primary = direct minus debt service.
-  expect_true(all(r$subtype %in%
+  # Exclude pseudo-category which has NA for subtype
+  r_crosswalk <- r[r$category != "All Categories", ]
+  expect_true(all(r_crosswalk$subtype %in%
                   c("operations", "capital", "intergovernmental", "assistance",
                     "interest", "insurance_benefits")))
 })
@@ -54,7 +56,9 @@ test_that("cog_categories(type = 'revenue') returns only revenue rows", {
   # plus the employee-retirement X codes), utility (A91-A94) and liquor store
   # (A90) revenue by definition, which is what makes both of its published
   # revenue concepts computable -- see `revenue_concept` in `?cog_revenue`.
-  expect_true(all(r$subtype %in%
+  # Exclude pseudo-category which has NA for subtype
+  r_crosswalk <- r[r$category != "All Categories", ]
+  expect_true(all(r_crosswalk$subtype %in%
                   c("own_source", "federal", "state", "local_aid",
                     "insurance_trust", "utility", "liquor_store")))
 })
@@ -69,6 +73,8 @@ test_that("cog_categories(pattern = ...) filters case-insensitively", {
 test_that("cog_categories has one row per (category, subtype)", {
   skip_if_no_corpus()
   r <- cog_categories()
+  # Exclude pseudo-category which is not a crosswalk entry
+  r <- r[r$category != "All Categories", ]
   key <- paste(r$category, r$subtype, sep = "|")
   expect_equal(length(key), length(unique(key)))
 })
@@ -76,6 +82,8 @@ test_that("cog_categories has one row per (category, subtype)", {
 test_that("cog_categories item_codes is non-empty comma-separated string", {
   skip_if_no_corpus()
   r <- cog_categories()
+  # Exclude pseudo-category which has NA for n_codes and item_codes
+  r <- r[r$category != "All Categories", ]
   expect_true(all(nzchar(r$item_codes)))
   expect_true(all(r$n_codes >= 1L))
   # n_codes should equal count of commas + 1

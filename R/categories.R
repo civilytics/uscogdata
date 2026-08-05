@@ -22,7 +22,10 @@
 #'   `category` column (e.g. `"Police"` or `"Tax"`).
 #' @return Tibble with columns `category`, `category_type`, `subtype`,
 #'   `n_codes`, `item_codes` (comma-separated, alphabetical). Sorted by
-#'   `category_type`, `category`, `subtype`.
+#'   `category_type`, `category`, `subtype`. Includes one row per flow for the
+#'   reserved pseudo-category `"All Categories"`, which carries `NA` for
+#'   `subtype`, `n_codes` and `item_codes` because it is a query mode rather
+#'   than a crosswalk entry — see [cog_spending()]'s `category` argument.
 #' @export
 cog_categories <- function(type = NULL, pattern = NULL) {
   if (!is.null(type)) {
@@ -63,5 +66,28 @@ cog_categories <- function(type = NULL, pattern = NULL) {
     "GROUP BY category, category_type, subtype
      ORDER BY category_type, category, subtype"
   )
-  tibble::as_tibble(DBI::dbGetQuery(con, sql))
+  out <- tibble::as_tibble(DBI::dbGetQuery(con, sql))
+
+  # The reserved pseudo-category is a query mode, not a crosswalk row, so it
+  # has no item codes to report -- hence NA rather than 0 for n_codes. It is
+  # emitted for the two FLOW vocabularies only: cog_balances() returns a stock
+  # and has no concept argument to sum within.
+  pseudo <- tibble::tibble(
+    category      = .ALL_CATEGORIES,
+    category_type = c("expenditure", "revenue"),
+    subtype       = NA_character_,
+    n_codes       = NA_integer_,
+    item_codes    = NA_character_
+  )
+  if (!is.null(type)) {
+    db_type <- if (type == "spending") "expenditure" else type
+    pseudo <- pseudo[pseudo$category_type == db_type, , drop = FALSE]
+  }
+  if (!is.null(pattern) && nrow(pseudo) > 0L) {
+    keep <- grepl(pattern, pseudo$category, ignore.case = TRUE)
+    pseudo <- pseudo[keep, , drop = FALSE]
+  }
+  if (nrow(pseudo) == 0L) return(out)
+  out <- rbind(out, pseudo)
+  out[order(out$category_type, out$category, out$subtype), , drop = FALSE]
 }

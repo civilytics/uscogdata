@@ -22,7 +22,16 @@ cog_spending(
 \item{years}{Integer vector of years.}
 
 \item{category}{Character vector of category names (from
-`summary_categories.category`), or `NULL` for all categories.}
+`summary_categories.category`), or `NULL` for all categories broken out
+one row each. The reserved value `"All Categories"` instead returns a
+single summed row per `(year, canonical_govid, subtype)`, covering every
+category inside the requested concept's subtype scope. It cannot be
+combined with other category names, and it is not the same thing as
+`expenditure_concept = "total"`: the concept chooses which subtypes are in
+scope, `"All Categories"` chooses whether rows inside that scope are
+broken out or summed. Because the result keeps one row per
+`spend_subtype`, filtering the returned frame to
+`spend_subtype == "operations"` gives an operating-expenditure total.}
 
 \item{per_capita}{If `TRUE`, adds `amt_per_capita_nominal` (and
 `amt_per_capita_real` when `adjust_to_year` is set) using the per-year
@@ -97,7 +106,12 @@ possibly-misleading `"harmonized"`/`"raw"` value.}
   component (when one exists), and
   `provenance$expenditure_concept_direct_suppressed` is `TRUE` -- the
   figure in those rows is the intergovernmental leg alone, not Direct +
-  IG.}
+  IG. When `category = "All Categories"` is combined with
+  `expenditure_concept = "total"`, this detection cannot run (it keys on
+  per-category rows, which all-categories mode collapses to one literal
+  value), so `expenditure_concept_direct_suppressed` is `NA` rather than a
+  possibly-false `FALSE`; query an explicit `category` to get a real
+  answer.}
 
 \item{complete}{If `TRUE`, fill the requested grid so that a cell the
   corpus does not carry still appears, labelled with **why** it is

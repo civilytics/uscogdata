@@ -20,7 +20,11 @@ cog_geographic_rollup(
 `canonical_govid` values. At least one layer required.}
 
 \item{category}{Single category name or character vector (passed through
-to [cog_spending()]).}
+to [cog_spending()]), or the reserved `"All Categories"` for one summed
+row per `(year, canonical_govid, subtype)` covering every category in the
+concept's scope. `"All Categories"` is the efficient way to build a
+geographic total: without it a caller must issue one rollup per category
+and sum the results themselves.}
 
 \item{years}{Integer vector of years.}
 
@@ -80,3 +84,23 @@ the result. The dropped govids are recorded in
 (gov type 4) and school districts (gov type 5) from per-capita rollups
 by design — see `vignette('population-denominators')`.
 }
+\section{Reading `coverage`}{
+
+`provenance$coverage` reports `n_units_reporting` against
+`n_units_expected` per year. **`n_units_reporting` is category-conditional:
+it counts governments with rows for the category you asked for, not
+governments collected that year.** A government that was surveyed and
+genuinely spends nothing in that category is indistinguishable here from one
+that was never surveyed.
+
+The ratio is therefore **not a response rate** and must not be used as one.
+In FY2022 — a complete census year — Georgia reports 393 of 567 cities for
+`category = "Police"`; the 174-city gap is overwhelmingly cities that
+contract policing to the county sheriff, not non-response.
+
+The comparison that *is* valid is the same category across a census year
+(ending in 2 or 7) and a sample year, where the real-zero component is
+roughly constant and the difference reflects the survey cycle. `is_census_year`
+marks which is which.
+}
+

@@ -16,7 +16,10 @@ balance), `"spending"`, `"revenue"`, or `"balance"`.}
 \value{
 Tibble with columns `category`, `category_type`, `subtype`,
   `n_codes`, `item_codes` (comma-separated, alphabetical). Sorted by
-  `category_type`, `category`, `subtype`.
+  `category_type`, `category`, `subtype`. Includes one row per flow for the
+  reserved pseudo-category `"All Categories"`, which carries `NA` for
+  `subtype`, `n_codes` and `item_codes` because it is a query mode rather
+  than a crosswalk entry — see [cog_spending()]'s `category` argument.
 }
 \description{
 Returns the category taxonomy exposed by the corpus's

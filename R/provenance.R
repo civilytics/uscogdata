@@ -67,7 +67,15 @@
     basis_note = basis_note,
     expenditure_concept = expenditure_concept,
     expenditure_concept_note = expenditure_concept_note,
-    expenditure_concept_direct_suppressed = isTRUE(expenditure_concept_direct_suppressed),
+    # isTRUE() alone would collapse a deliberate NA (all-categories mode,
+    # where suppression detection cannot run -- see .verb_spendrev()) down to
+    # FALSE, turning "we don't know" back into the false claim this field
+    # exists to avoid. Preserve NA; otherwise normalize to a strict logical.
+    expenditure_concept_direct_suppressed = if (isTRUE(is.na(expenditure_concept_direct_suppressed))) {
+      NA
+    } else {
+      isTRUE(expenditure_concept_direct_suppressed)
+    },
     revenue_concept = revenue_concept,
     harmonization = harmonization %||% list(
       applied = FALSE, na_rows_excluded = 0L, na_amount_excluded = 0,
