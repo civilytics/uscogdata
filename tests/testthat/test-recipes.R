@@ -245,6 +245,68 @@ test_that(".select_long_view maps annotated view bases to their long views", {
     "spending_long")
 })
 
+# --- I3(b): the free pre-check gating .suppressed_components() -------------
+
+test_that(".needs_suppression_query skips only when the evidence rules out suppression", {
+  # Every requested (govid, year) already accounts for every component code:
+  # .suppressed_components() is guaranteed to find nothing, so it is safe to
+  # skip the round trip.
+  result_full <- tibble::tibble(
+    year = c(2019L, 2019L, 2020L, 2020L),
+    canonical_govid = c("A", "B", "A", "B"),
+    codes_included = c("E01,E02", "E01,E02,E03", "E01,E02", "E01,E02")
+  )
+  expect_false(uscogdata:::.needs_suppression_query(
+    c("E01", "E02"), result_full, govid = c("A", "B"), years = c(2019L, 2020L)))
+
+  # One (govid, year) is missing a component -- cannot rule out suppression,
+  # so the real measurement must still run.
+  result_gap <- result_full
+  result_gap$codes_included[result_gap$canonical_govid == "B" & result_gap$year == 2020L] <- "E01"
+  expect_true(uscogdata:::.needs_suppression_query(
+    c("E01", "E02"), result_gap, govid = c("A", "B"), years = c(2019L, 2020L)))
+
+  # A requested (govid, year) is entirely absent from `result` (e.g. a gap
+  # year, or one government of many in a batch call) -- conservatively TRUE.
+  result_absent <- result_full[!(result_full$canonical_govid == "B" & result_full$year == 2020L), ]
+  expect_true(uscogdata:::.needs_suppression_query(
+    c("E01", "E02"), result_absent, govid = c("A", "B"), years = c(2019L, 2020L)))
+
+  # No candidate component belongs to the calling verb's own flow family (the
+  # I1 cross-flow-family case) -- nothing could ever be measured, so skip.
+  expect_false(uscogdata:::.needs_suppression_query(
+    character(0), result_full, govid = c("A", "B"), years = c(2019L, 2020L)))
+
+  # An empty result (e.g. every requested year is a gap) can never positively
+  # rule out suppression -- conservatively TRUE.
+  expect_true(uscogdata:::.needs_suppression_query(
+    c("E01"), result_full[0, ], govid = "A", years = 2019L))
+})
+
+test_that("I3(b): a suppression-only fire (zero gap years) still runs the real measurement", {
+  # Public Welfare FY2011 for LA County has rows in every requested year (no
+  # gap_years), so this exercises exactly the path I3(b) must not break: the
+  # pre-check must return TRUE here, and the real .suppressed_components()
+  # round trip must actually execute, or the whole uscogdata#9 feature would
+  # go dark on its own motivating case.
+  skip_if_no_corpus()
+  called <- FALSE
+  orig <- uscogdata:::.suppressed_components
+  testthat::local_mocked_bindings(
+    .suppressed_components = function(...) {
+      called <<- TRUE
+      orig(...)
+    },
+    .package = "uscogdata"
+  )
+  r <- suppressMessages(
+    cog_spending("061037123085", years = 2011L, category = "Public Welfare"))
+  expect_true(called)
+  sugg <- attr(r, "provenance")$suggestions
+  triggers <- vapply(sugg, function(s) s$trigger, character(1))
+  expect_true(all(triggers == "suppressed_component"))
+})
+
 test_that(".suppressed_components measures the E67/E68 dollars Public Welfare drops", {
   skip_if_no_corpus()
   con <- uscogdata:::.ensure_session()
@@ -252,7 +314,8 @@ test_that(".suppressed_components measures the E67/E68 dollars Public Welfare dr
     con,
     candidates = c("welfare_cash_e67_wide", "welfare_cash_e68_wide"),
     govid = "061037123085", years = 2011L,
-    long_view = "spending_long_harmonized")
+    long_view = "spending_long_harmonized",
+    flow_prefixes = c("E", "F", "G"))
 
   expect_s3_class(s, "tbl_df")
   expect_equal(nrow(s), 2L)
@@ -269,7 +332,8 @@ test_that(".suppressed_components finds nothing in a modern year", {
     con,
     candidates = c("welfare_cash_e67_wide", "welfare_cash_e68_wide"),
     govid = "061037123085", years = 2019L,
-    long_view = "spending_long_harmonized")
+    long_view = "spending_long_harmonized",
+    flow_prefixes = c("E", "F", "G"))
   expect_equal(nrow(s), 0L)
 })
 
@@ -279,8 +343,27 @@ test_that(".suppressed_components rejects a long_view outside the allowlist", {
   expect_error(
     uscogdata:::.suppressed_components(
       con, candidates = "welfare_cash_e67_wide", govid = "061037123085",
-      years = 2011L, long_view = "long; DROP TABLE x"),
+      years = 2011L, long_view = "long; DROP TABLE x",
+      flow_prefixes = c("E", "F", "G")),
     class = "uscogdata_internal_error")
+})
+
+test_that(".suppressed_components never measures a component from the other flow family (I1)", {
+  # uscogdata#9 review, finding I1: without the flow_prefixes filter, a
+  # candidate recipe entirely outside the calling verb's own flow family is
+  # ALWAYS absent from that verb's view (by construction), so it was always
+  # reported as "suppressed" -- fabricating a dollar claim. E67/E68 are
+  # Public Welfare EXPENDITURE codes; scoping the measurement to revenue's
+  # own flow_prefixes must find nothing for them.
+  skip_if_no_corpus()
+  con <- uscogdata:::.ensure_session()
+  s <- uscogdata:::.suppressed_components(
+    con,
+    candidates = c("welfare_cash_e67_wide", "welfare_cash_e68_wide"),
+    govid = "061037123085", years = 2011L,
+    long_view = "revenue_long_harmonized",
+    flow_prefixes = c("T", "A", "U", "B", "C", "D"))
+  expect_equal(nrow(s), 0L)
 })
 
 test_that("uscogdata#9: Public Welfare signposts its suppressed E67/E68 dollars", {
@@ -348,6 +431,36 @@ test_that("uscogdata#9: the revenue verb inherits the same trigger", {
   expect_equal(sugg[[1]]$suppressed_codes, "U4-")
   # A revenue recipe must never be handed an M/L expenditure counterpart.
   expect_null(sugg[[1]]$ig_recipe_id)
+})
+
+test_that("I1: cog_revenue never fabricates suppressed dollars for an expenditure-only recipe", {
+  # uscogdata#9 review, finding I1: Corrections is an expenditure-only
+  # category (E04/E05). cog_revenue() naturally returns zero rows for it, so
+  # corrections_combined still fires as an empty_year suggestion (its own
+  # generic join finds real E04/E05 data for this government) -- but before
+  # the flow_prefixes fix, .suppressed_components() measured E04/E05 against
+  # cog_revenue()'s OWN view (which can never contain an E-coded row by
+  # construction) and reported the full $3,631,945,000 as "suppressed",
+  # when cog_spending() for the same gov/years/category actually returns
+  # $3,691,029,000 -- nothing was suppressed at all.
+  skip_if_no_corpus()
+  r <- suppressMessages(
+    cog_revenue("061037123085", years = 2019:2020, category = "Corrections"))
+  sugg <- attr(r, "provenance")$suggestions
+  ids <- vapply(sugg, function(s) s$recipe_id, character(1))
+  expect_true("corrections_combined" %in% ids)
+
+  hit <- sugg[[which(ids == "corrections_combined")]]
+  expect_equal(hit$suppressed_amount, 0)
+  expect_equal(hit$suppressed_years, integer(0))
+  expect_equal(hit$suppressed_codes, character(0))
+
+  # And cog_spending() for the identical gov/years/category is unaffected --
+  # it actually finds the E04/E05 dollars the buggy measurement claimed were
+  # excluded.
+  sp <- suppressMessages(
+    cog_spending("061037123085", years = 2019:2020, category = "Corrections"))
+  expect_equal(sum(sp$amt_nominal), 3691029000)
 })
 
 test_that("uscogdata#9: no partial-coverage fire in a modern year", {

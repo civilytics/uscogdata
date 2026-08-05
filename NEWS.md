@@ -17,10 +17,21 @@
   FY2011 `Miscellaneous Revenue` reported $943,842,000 while dropping
   $1,899,995,000 of aggregate-published `U4-` rents and royalties.
 * The trigger stays recipe-driven, so it only fires where a harmonization
-  recipe actually exists to name the fix. Measured on the bundled fixture,
-  every fire lands in the wide era; `higher_ed_e18_wide` and
-  `general_gov_e89_wide` stay silent, because their components are ordinary
-  classified leaves even pre-2012.
+  recipe actually exists to name the fix. `higher_ed_e18_wide` and
+  `general_gov_e89_wide` stay silent in every year measured on the bundled
+  fixture, because their components are ordinary classified leaves even
+  pre-2012.
+* The `suppressed_component` trigger (and any `suppressed_amount`/
+  `suppressed_codes` an `empty_year` fire also carries) is scoped to the
+  calling verb's own flow family: `cog_spending()` only ever measures E/F/G
+  component dollars, `cog_revenue()` only T/A/U/B/C/D. A component from the
+  OTHER flow family reports `suppressed_amount = 0` rather than a fabricated
+  claim. The `empty_year` trigger itself is not flow-scoped -- a category
+  belonging to the other flow (e.g. `cog_spending(category = "IG Local")`)
+  still returns zero rows and can still fire, in any year including modern
+  ones, naming the recipe whose own generic join finds real data for this
+  government. That is a mis-scoped query, not a corpus-format gap, so its
+  `suppressed_amount` is correctly 0.
 
 ## New: `cog_balances()` for cash-and-security holdings
 

@@ -103,7 +103,42 @@
   # verb's own view structurally excludes. Measured across ALL requested
   # years, not just gap years -- the whole point is that a year with rows can
   # still be missing dollars.
-  supp <- .suppressed_components(con, candidates, govid, years, long_view)
+  #
+  # I3(b): the anti-join inside `.suppressed_components()` is real DuckDB
+  # work, and unconditionally running it here regressed the common healthy
+  # path -- pre-#9, a fully-covered category query returned right after the
+  # cheap `candidates` query above. `.needs_suppression_query()` is a free
+  # (in-memory), EXACT (not heuristic) pre-check built from `result$
+  # codes_included`, which the verb's own basis query already computed: it
+  # never skips a call that could have found something (see its own
+  # roxygen), so a recipe still qualifies on suppression alone with zero gap
+  # years -- it just avoids the round trip when that already-in-memory
+  # evidence rules it out.
+  #
+  # The pre-check needs a candidate's FULL component set, not just the
+  # component(s) that got it INTO `candidates` above -- a recipe with a
+  # modern leaf component (e.g. `welfare_cash_e67_wide`'s J67, a
+  # summary_categories member) also carries a wide-era aggregate component
+  # (E67) that is absent from summary_categories entirely and so would never
+  # surface via that query, yet is exactly the component this feature exists
+  # to catch. This is a second query, but a cheap one: metadata only,
+  # `recipe_id IN (<candidates>)`, no `long`/govid/year involvement -- the
+  # same class of query as `meta` below.
+  comp_rows <- DBI::dbGetQuery(con, sprintf(
+    "SELECT DISTINCT recipe_id, component_code FROM harmonization_recipes
+     WHERE recipe_id IN (%s)",
+    .sql_lit_chr(candidates)
+  ))
+  flow_components <- unique(comp_rows$component_code[
+    substr(comp_rows$component_code, 1L, 1L) %in% flow_prefixes])
+  supp <- if (.needs_suppression_query(flow_components, result, govid, years)) {
+    .suppressed_components(con, candidates, govid, years, long_view, flow_prefixes)
+  } else {
+    tibble::tibble(
+      recipe_id = character(0), year = numeric(0),
+      suppressed_amount = numeric(0), suppressed_codes = character(0)
+    )
+  }
 
   if (length(gap_years) == 0L && nrow(supp) == 0L) return(list())
 
@@ -170,6 +205,60 @@
   .attach_ig_counterparts(con, suggestions, flow_prefixes)
 }
 
+#' Cheap (no SQL), exact pre-check gating the `.suppressed_components()`
+#' round trip (uscogdata#9 review, finding I3(b)).
+#'
+#' Reuses `result`, which the verb's own basis query already computed and
+#' which carries `codes_included` -- the DISTINCT item codes the verb's view
+#' actually returned -- grouped by exactly `(year, canonical_govid,
+#' category)`. A component code appearing there for a given (govid, year)
+#' can only have come from the view, so it is -- by construction -- NOT
+#' excluded for that (govid, year, item_code) key, which is exactly
+#' `.suppressed_components()`'s own anti-join key. So: if every requested
+#' (govid, year) pair already accounts for every one of the candidates'
+#' flow-scoped component codes this way, the real measurement is guaranteed
+#' to return zero rows for every one of them, and can be skipped outright.
+#'
+#' This is exact, not a heuristic approximation: it only ever returns `FALSE`
+#' (skip) when the answer is provably "nothing to find", so it never
+#' silences a genuine suppression fire. Any (govid, year) pair this cheaply
+#' available evidence does not positively cover -- including a pair with
+#' zero rows at all (a gap year), or one government of many in a large
+#' batch call whose result happens to omit that year -- is conservatively
+#' treated as "might be suppressed", so the real query still runs whenever
+#' there is genuine doubt. In particular this does NOT special-case
+#' `gap_years`: a recipe with zero gap years can still need the real query,
+#' and one with every requested year a gap still gets `TRUE` here (the
+#' `is.null(result) || nrow(result) == 0L` branch) rather than being
+#' skipped.
+#'
+#' @param component_codes Character vector of candidate component codes,
+#'   already restricted to the calling verb's own `flow_prefixes` (I1) --
+#'   see `.build_suggestions()`'s `flow_components`.
+#' @param result Same `result` `.build_suggestions()` was passed.
+#' @param govid Character vector of canonical_govid values.
+#' @param years Integer vector of requested years.
+#' @return `TRUE` if `.suppressed_components()` must actually run; `FALSE`
+#'   if it is already provably going to return zero rows.
+#' @noRd
+.needs_suppression_query <- function(component_codes, result, govid, years) {
+  if (length(component_codes) == 0L) return(FALSE)
+  if (is.null(result) || nrow(result) == 0L) return(TRUE)
+
+  req_key <- paste(rep(govid, times = length(years)),
+                    rep(as.integer(years), each = length(govid)))
+  res_key <- paste(result$canonical_govid, as.integer(result$year))
+  codes_by_key <- split(result$codes_included, res_key)
+
+  for (k in unique(req_key)) {
+    codes_here <- codes_by_key[[k]]
+    if (is.null(codes_here)) return(TRUE)
+    present <- unique(unlist(strsplit(codes_here, ",", fixed = TRUE)))
+    if (!all(component_codes %in% present)) return(TRUE)
+  }
+  FALSE
+}
+
 #' Measure, per (recipe, year), the component dollars this government holds
 #' that the calling verb's own long view structurally excludes.
 #'
@@ -193,21 +282,38 @@
 #' excluded from the RESULT for scoping reasons -- because it belongs to a
 #' different `category`, or because `expenditure_concept` narrowed the
 #' subtypes -- is still present in the view, so it never fires. Suggesting a
-#' recipe is a coverage fix, not a category redefinition. Measured on the
-#' bundled fixture, this keeps `higher_ed_e18_wide` and `general_gov_e89_wide`
-#' silent (E18/E89 are leaf-and-classified even in the wide era) and confines
-#' every fire to 2011.
+#' recipe is a coverage fix, not a category redefinition.
+#'
+#' `flow_prefixes` (uscogdata#9 review, finding I1) restricts the measured
+#' components to the CALLING VERB's own flow family (`c("E","F","G")` for
+#' spending, `c("T","A","U","B","C","D")` for revenue). Without this, a
+#' candidate recipe belonging to the OTHER flow family is always absent from
+#' this verb's view (by construction -- `cog_revenue()`'s view never carries
+#' an E-coded row) and so was always reported as "suppressed", fabricating a
+#' dollar claim across flow families (`cog_revenue(category = "Corrections")`
+#' claimed $3.63B excluded that `cog_spending()` reports and fully accounts
+#' for). Filtering on `LEFT(r.component_code, 1)` also drops M/L-prefixed
+#' components from measurement under `cog_spending()` (`flow_prefixes` never
+#' includes "M"/"L") -- harmless today, because a recipe's own M/L components
+#' (e.g. `corrections_ig_local_combined`'s M04/M05) are present in the view
+#' in every year they exist and so never fired as suppressed anyway, but
+#' worth recording since this filter is now the thing relied on to prevent
+#' it.
 #'
 #' @param con Active DuckDB connection.
 #' @param candidates Character vector of recipe ids to measure.
 #' @param govid Character vector of canonical_govid values.
 #' @param years Integer vector of requested years.
 #' @param long_view Name of the verb's long view, from `.select_long_view()`.
+#' @param flow_prefixes The calling verb's own flow-type prefixes (see
+#'   `.build_suggestions()`). Only recipe components whose first character is
+#'   in this set are measured.
 #' @return Tibble of `recipe_id`, `year`, `suppressed_amount` (full US
 #'   dollars), `suppressed_codes` (comma-joined, sorted). Zero rows when
 #'   nothing is suppressed.
 #' @noRd
-.suppressed_components <- function(con, candidates, govid, years, long_view) {
+.suppressed_components <- function(con, candidates, govid, years, long_view,
+                                    flow_prefixes) {
   empty <- tibble::tibble(
     recipe_id = character(0), year = numeric(0),
     suppressed_amount = numeric(0), suppressed_codes = character(0)
@@ -242,16 +348,20 @@
        AND l.canonical_govid IN (%2$s)
        AND l.year IN (%3$s)
        AND l.amt <> 0
+       AND LEFT(r.component_code, 1) IN (%5$s)
        AND NOT EXISTS (
          SELECT 1 FROM %4$s v
          WHERE v.canonical_govid = l.canonical_govid
            AND v.year = l.year
            AND v.item_code = l.item_code
+           AND v.year IN (%3$s)              -- restated: enables partition pruning (I3a)
+           AND v.canonical_govid IN (%2$s)   -- restated: pushes the govid filter (I3a)
        )
      GROUP BY 1, 2
      ORDER BY 1, 2",
     .sql_lit_chr(candidates), .sql_lit_chr(govid),
-    paste(as.integer(years), collapse = ","), long_view
+    paste(as.integer(years), collapse = ","), long_view,
+    .sql_lit_chr(flow_prefixes)
   )
   tibble::as_tibble(DBI::dbGetQuery(con, sql))
 }
