@@ -96,3 +96,30 @@ test_that('"All Categories" combines with subtype to give operating totals', {
   expect_equal(sum(ops_total$amt_nominal), sum(ops_by_cat$amt_nominal),
                tolerance = 1e-8)
 })
+
+test_that('cog_categories() advertises "All Categories" for both flows', {
+  all <- cog_categories()
+  rows <- all[all$category == "All Categories", ]
+  expect_setequal(rows$category_type, c("expenditure", "revenue"))
+  expect_true(all(is.na(rows$subtype)))
+  expect_true(all(is.na(rows$n_codes)))
+})
+
+test_that('cog_categories(type=) still scopes, including the pseudo-category', {
+  sp <- cog_categories(type = "spending")
+  expect_setequal(unique(sp$category_type), "expenditure")
+  expect_true("All Categories" %in% sp$category)
+
+  rev <- cog_categories(type = "revenue")
+  expect_setequal(unique(rev$category_type), "revenue")
+  expect_true("All Categories" %in% rev$category)
+
+  # balances have no concept vocabulary, so no pseudo-category
+  bal <- cog_categories(type = "balance")
+  expect_false("All Categories" %in% bal$category)
+})
+
+test_that('cog_categories(pattern=) matches the pseudo-category', {
+  hit <- cog_categories(pattern = "^All Categories$")
+  expect_equal(nrow(hit), 2L)
+})
