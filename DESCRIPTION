@@ -30,6 +30,6 @@ Suggests:
     ggplot2
 Config/testthat/edition: 3
 VignetteBuilder: knitr
+RoxygenNote: 7.3.3
 MinCorpusSchema: 4
 MaxCorpusSchema: 5
-Config/roxygen2/version: 8.0.0
