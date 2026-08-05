@@ -59,12 +59,36 @@
 #' @param long_view Name of the verb's own long view (from
 #'   `.select_long_view()`), passed through to `.suppressed_components()` to
 #'   measure the second qualifying path (uscogdata#9).
+#' @param all_categories `TRUE` when the caller's `category` is the reserved
+#'   pseudo-category (`.ALL_CATEGORIES`). Defaults to `FALSE` so no other
+#'   caller's behaviour changes. When `TRUE`, the candidate-recipe sub-select
+#'   is scoped by `subtype_col`/`subtype_scope` instead of by `category` --
+#'   symmetric with `.build_verb_sql()`'s own all-categories branch (see
+#'   R/spending.R): the concept's subtype allowlist is the real scope
+#'   boundary, not any literal category value, and
+#'   `.ALL_CATEGORIES` ("All Categories") is never itself a row in
+#'   `summary_categories.category`, so leaving the category-keyed sub-select
+#'   in place here always returned zero candidates and silently disabled
+#'   signposting in all-categories mode (final whole-branch review, finding
+#'   6).
+#' @param subtype_col Name of the `summary_categories` subtype column to
+#'   scope by when `all_categories = TRUE` (`"spend_subtype"` or
+#'   `"revenue_subtype"` -- the same value `.build_verb_sql()` already
+#'   receives as its own `subtype_col`). Ignored when `all_categories =
+#'   FALSE`. `NULL` by default.
+#' @param subtype_scope Character vector of subtype values to scope by when
+#'   `all_categories = TRUE` (the same value `.build_verb_sql()` already
+#'   receives as its own `subtype_scope` -- the concept's subtype allowlist,
+#'   e.g. `.expenditure_concept_subtypes(expenditure_concept)`). Ignored when
+#'   `all_categories = FALSE`. `NULL` by default.
 #' @return List of `list(recipe_id, label, available_years, hint,
 #'   ig_recipe_id, trigger, suppressed_amount, suppressed_years,
 #'   suppressed_codes)`, possibly empty.
 #' @noRd
 .build_suggestions <- function(con, govid, years, category, result, basis,
-                                flow_prefixes, long_view) {
+                                flow_prefixes, long_view,
+                                all_categories = FALSE,
+                                subtype_col = NULL, subtype_scope = NULL) {
   if (!identical(basis, "harmonized") || is.null(category)) return(list())
 
   # Exclude any recipe that is ITSELF an intergovernmental (M/L) recipe --
@@ -79,16 +103,35 @@
   # flow-prefix gate below/in `.attach_ig_counterparts()`: an M/L recipe
   # should never be suggested as a coverage-gap filler for EITHER verb, not
   # just kept from being named as the *counterpart* of another suggestion.
+  #
+  # The inner sub-select is the concept boundary (finding 6, final
+  # whole-branch review): in all-categories mode it is scoped by
+  # `subtype_col`/`subtype_scope` -- the same allowlist `.build_verb_sql()`
+  # applies as a WHERE predicate to make the summed result a *concept*, not
+  # by `category` (`.ALL_CATEGORIES` is never a row in
+  # `summary_categories.category`, so a category-keyed sub-select always
+  # came back empty here). The M/L exclusion below is unchanged either way.
+  candidate_scope_sql <- if (isTRUE(all_categories)) {
+    sprintf(
+      "SELECT DISTINCT item_code FROM summary_categories WHERE %s IN (%s)",
+      subtype_col, .sql_lit_chr(subtype_scope)
+    )
+  } else {
+    sprintf(
+      "SELECT DISTINCT item_code FROM summary_categories WHERE category IN (%s)",
+      .sql_lit_chr(category)
+    )
+  }
   candidates <- DBI::dbGetQuery(con, sprintf(
     "SELECT DISTINCT recipe_id FROM harmonization_recipes
      WHERE component_code IN (
-       SELECT DISTINCT item_code FROM summary_categories WHERE category IN (%s)
+       %s
      )
      AND recipe_id NOT IN (
        SELECT DISTINCT recipe_id FROM harmonization_recipes
        WHERE LEFT(component_code, 1) IN ('M', 'L')
      )",
-    .sql_lit_chr(category)
+    candidate_scope_sql
   ))$recipe_id
   if (length(candidates) == 0L) return(list())
 

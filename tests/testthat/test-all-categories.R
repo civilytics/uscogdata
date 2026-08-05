@@ -189,3 +189,79 @@ test_that('expenditure_concept_direct_suppressed is NA, not FALSE, when categori
   prov_by_cat <- cog_explain(t_by_cat, format = "list")
   expect_false(is.na(prov_by_cat$expenditure_concept_direct_suppressed))
 })
+
+test_that('"All Categories" still signposts coverage gaps (finding 6, final whole-branch review)', {
+  # .build_suggestions()'s candidate sub-select used to be keyed on
+  # `category`, e.g. `WHERE category IN ('All Categories')`. Since
+  # .ALL_CATEGORIES is never itself a row in summary_categories.category,
+  # that sub-select always came back empty in all-categories mode, so
+  # `candidates` was empty and .build_suggestions() short-circuited to
+  # list() -- coverage signposting was structurally impossible for the one
+  # mode whose whole selling point is "you cannot sum the wrong scope"
+  # (uscogdata#9's entire point, silently defeated).
+  #
+  # AL state government, FY2011, category = "Corrections": this category has
+  # no legacy leaf rows in FY2011 (aggregate-flagged E04/E05 family), so the
+  # per-category query returns 0 rows and 3 recipe-hint suggestions fire
+  # (empty_year path). All-categories mode does not have an empty year --
+  # the government has other primary spending in FY2011 -- but the same
+  # suppressed Corrections dollars are still excluded from the summed total,
+  # so the fix (scoping the candidate sub-select by subtype_col/subtype_scope
+  # instead of by category, symmetric with .build_verb_sql()) must still
+  # surface them via the suppressed_component path.
+  gov <- "010000226085"
+
+  by_cat <- suppressMessages(cog_spending(gov, 2011L, category = "Corrections"))
+  sugg_by_cat <- cog_explain(by_cat, format = "list")$suggestions
+  expect_gt(length(sugg_by_cat), 0L)
+
+  all_cat <- suppressMessages(cog_spending(gov, 2011L, category = "All Categories"))
+  sugg_all_cat <- cog_explain(all_cat, format = "list")$suggestions
+  expect_gt(length(sugg_all_cat), 0L)
+
+  # The same Corrections recipe that fired per-category must also fire in
+  # all-categories mode -- not just some unrelated recipe.
+  ids_by_cat <- vapply(sugg_by_cat, function(s) s$recipe_id %||% "", character(1))
+  ids_all_cat <- vapply(sugg_all_cat, function(s) s$recipe_id %||% "", character(1))
+  expect_true("corrections_combined" %in% ids_by_cat)
+  expect_true("corrections_combined" %in% ids_all_cat)
+
+  # In all-categories mode the government DOES have other primary spending
+  # in FY2011 (the year itself is not a gap), so the suggestion can only have
+  # fired via the suppressed_component path, not empty_year.
+  corr_all <- sugg_all_cat[[which(ids_all_cat == "corrections_combined")]]
+  expect_identical(corr_all$trigger, "suppressed_component")
+  expect_gt(corr_all$suppressed_amount, 0)
+})
+
+test_that('"All Categories" candidate scoping is symmetric with .build_verb_sql() -- subtype, not category', {
+  # Direct assertion on the mechanism itself (finding 6): in all-categories
+  # mode .build_suggestions() must scope its candidate recipe sub-select by
+  # subtype_col/subtype_scope, not by the literal "All Categories" value.
+  # Passing all_categories = FALSE with the identical category value proves
+  # the branch -- not merely the subtype_col/subtype_scope arguments' mere
+  # presence -- is what changes the query.
+  con <- uscogdata:::.ensure_session()
+
+  none <- uscogdata:::.build_suggestions(
+    con, govid = "010000226085", years = 2011L,
+    category = "All Categories", result = NULL, basis = "harmonized",
+    flow_prefixes = c("E", "F", "G"),
+    long_view = "spending_long_harmonized",
+    all_categories = FALSE,
+    subtype_col = "spend_subtype",
+    subtype_scope = c("operations", "capital", "assistance")
+  )
+  expect_length(none, 0L)
+
+  scoped <- uscogdata:::.build_suggestions(
+    con, govid = "010000226085", years = 2011L,
+    category = "All Categories", result = NULL, basis = "harmonized",
+    flow_prefixes = c("E", "F", "G"),
+    long_view = "spending_long_harmonized",
+    all_categories = TRUE,
+    subtype_col = "spend_subtype",
+    subtype_scope = c("operations", "capital", "assistance")
+  )
+  expect_gt(length(scoped), 0L)
+})

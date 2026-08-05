@@ -19,6 +19,19 @@
 * `cog_categories()` advertises `"All Categories"` for the expenditure and
   revenue vocabularies, so the reserved value is discoverable.
 
+* Coverage signposting (see "Signposting now catches partially-suppressed
+  categories" below) now also works in `category = "All Categories"` mode.
+  The recipe-suggestion candidate query used to be scoped by `category`,
+  which is never a match for the reserved `"All Categories"` value, so
+  `provenance$suggestions` always came back empty there — the one mode whose
+  whole point is "you cannot sum the wrong scope" was silently unable to
+  signal a wrong scope. The candidate query is now scoped by the concept's
+  subtype allowlist instead, symmetric with how `.build_verb_sql()` itself
+  scopes the summed total: Los Angeles County FY2011, `category = "All
+  Categories"` still excludes $271,589,000 of aggregate-published Public
+  Welfare (`E68`), but now names `recipe = "welfare_cash_e68_wide"` to
+  recover it instead of reporting zero suggestions.
+
 ## Documentation
 
 * `cog_geographic_rollup()` and `cog_peer_compare()` now document that
