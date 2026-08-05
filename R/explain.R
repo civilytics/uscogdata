@@ -125,8 +125,15 @@ cog_explain <- function(result, format = c("print", "list")) {
   if (length(prov$suggestions) > 0L) {
     cli::cli_h2("Suggestions")
     sugg_lines <- vapply(prov$suggestions, function(s) {
-      sprintf("%s -- %s (years %s-%s): %s", s$recipe_id, s$label,
+      line <- sprintf("%s -- %s (years %s-%s): %s", s$recipe_id, s$label,
               s$available_years[1], s$available_years[2], s$hint)
+      if (isTRUE(s$suppressed_amount > 0)) {
+        line <- paste0(line, sprintf(" [$%s excluded from %s: %s]",
+          formatC(s$suppressed_amount, format = "f", digits = 0, big.mark = ","),
+          paste0("FY", s$suppressed_years, collapse = ", "),
+          paste(s$suppressed_codes, collapse = ", ")))
+      }
+      line
     }, character(1))
     cli::cli_ul(sugg_lines)
   }

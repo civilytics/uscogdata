@@ -357,12 +357,25 @@
 #' expressions. When a suggestion has an `ig_recipe_id`, one indented
 #' continuation line is appended naming the intergovernmental counterpart
 #' recipe (embedded `\n` renders as a hanging-indent continuation of the
-#' same bullet under cli, not a new bullet).
+#' same bullet under cli, not a new bullet). Same treatment for
+#' `suppressed_amount` (uscogdata#9): only present when dollars were
+#' actually measured as excluded (an `empty_year` fire can carry them too --
+#' see `.build_suggestions()` -- so this keys off the amount, not `trigger`).
 #' @noRd
 .inform_suggestions <- function(suggestions) {
   bullets <- vapply(suggestions, function(s) {
     bullet <- sprintf("%s (%d-%d): %s", s$recipe_id,
             s$available_years[1], s$available_years[2], s$hint)
+    # Only present when dollars were actually measured as excluded. An
+    # empty_year fire can carry them too -- the year had no rows AND the
+    # component was suppressed -- which is strictly more informative.
+    if (isTRUE(s$suppressed_amount > 0)) {
+      bullet <- paste0(bullet, sprintf(
+        "\n  $%s excluded from %s (%s), published as an aggregate or outside the crosswalk",
+        formatC(s$suppressed_amount, format = "f", digits = 0, big.mark = ","),
+        paste0("FY", s$suppressed_years, collapse = ", "),
+        paste(s$suppressed_codes, collapse = ", ")))
+    }
     if (!is.null(s$ig_recipe_id)) {
       bullet <- paste0(bullet, sprintf(
         "\n  intergovernmental counterpart: recipe = '%s'", s$ig_recipe_id))
@@ -370,7 +383,7 @@
     bullet
   }, character(1))
   cli::cli_inform(c(
-    i = "Coverage gap detected for the requested years; a harmonization recipe may fill it:",
+    i = "Incomplete coverage for the requested years; a harmonization recipe may fill it:",
     stats::setNames(bullets, rep("*", length(bullets)))
   ))
 }

@@ -378,3 +378,29 @@ test_that("uscogdata#9: leaf-and-classified wide-era families never fire", {
            AND v.year = l.year AND v.item_code = l.item_code)")$n
   expect_equal(as.integer(n), 0L)
 })
+
+test_that("uscogdata#9: the cli message reports the suppressed dollars", {
+  skip_if_no_corpus()
+  expect_message(
+    cog_spending("061037123085", years = 2011L, category = "Public Welfare"),
+    "1,803,872,000", fixed = TRUE)
+  expect_message(
+    cog_spending("061037123085", years = 2011L, category = "Public Welfare"),
+    "FY2011", fixed = TRUE)
+  expect_message(
+    cog_spending("061037123085", years = 2011L, category = "Public Welfare"),
+    "E67", fixed = TRUE)
+})
+
+test_that("uscogdata#9: cog_explain() reports the suppressed dollars", {
+  # cog_explain()'s whole "print" output -- including the Suggestions
+  # section built from cli::cli_ul() -- is emitted on the message stream
+  # (verified empirically 2026-08-04: capture.output(..., type = "output")
+  # returns character(0) for this call; testthat::capture_messages() is what
+  # actually carries it), so that is the stream this test captures.
+  skip_if_no_corpus()
+  r <- suppressMessages(
+    cog_spending("061037123085", years = 2011L, category = "Public Welfare"))
+  out <- paste(testthat::capture_messages(cog_explain(r)), collapse = "")
+  expect_match(out, "271,589,000", fixed = TRUE)
+})
