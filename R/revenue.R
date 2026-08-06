@@ -54,7 +54,7 @@ cog_revenue <- function(govid, years, category = NULL,
                         per_capita = FALSE, adjust_to_year = NULL,
                         basis = c("harmonized", "raw"), recipe = NULL,
                         revenue_concept = c("general", "total"),
-                        complete = FALSE) {
+                        complete = FALSE, limit = NULL, offset = NULL) {
   # flow_prefixes no longer classifies rows (crosswalk revenue_subtype
   # membership does -- General Revenue, i.e. everything except
   # insurance_trust) -- it only scopes the recipe-suggestion machinery to
@@ -73,6 +73,8 @@ cog_revenue <- function(govid, years, category = NULL,
     basis          = basis,
     recipe         = recipe,
     revenue_concept = revenue_concept,
-    complete       = complete
+    complete       = complete,
+    limit          = limit,
+    offset         = offset
   )
 }

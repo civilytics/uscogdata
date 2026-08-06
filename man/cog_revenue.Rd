@@ -13,7 +13,9 @@ cog_revenue(
   basis = c("harmonized", "raw"),
   recipe = NULL,
   revenue_concept = c("general", "total"),
-  complete = FALSE
+  complete = FALSE,
+  limit = NULL,
+  offset = NULL
 )
 }
 \arguments{
@@ -115,6 +117,15 @@ possibly-misleading `"harmonized"`/`"raw"` value.}
   `recipe` or with `expenditure_concept = "total"` (class
   `uscogdata_complete_unsupported`) — neither draws its cells from
   `code_set`.}
+
+\item{limit}{Maximum number of result rows to return, pushed into the SQL
+query itself (`LIMIT`/`OFFSET`) rather than applied after the full
+result is materialized. `NULL` (the default) returns every matching row,
+exactly as before this parameter existed. Mutually exclusive with
+`recipe` and with `complete = TRUE` -- see `offset` and `total_rows`.}
+
+\item{offset}{Rows to skip before `limit` starts counting (0-based).
+Ignored if `limit` is `NULL`; defaults to `0L` when `limit` is set.}
 }
 \value{
 Tibble with columns `year`, `canonical_govid`, `gov_name`,

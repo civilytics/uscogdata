@@ -178,6 +178,13 @@
 #'   `recipe` or with `expenditure_concept = "total"` (class
 #'   `uscogdata_complete_unsupported`) — neither draws its cells from
 #'   `code_set`.
+#' @param limit Maximum number of result rows to return, pushed into the SQL
+#'   query itself (`LIMIT`/`OFFSET`) rather than applied after the full
+#'   result is materialized. `NULL` (the default) returns every matching row,
+#'   exactly as before this parameter existed. Mutually exclusive with
+#'   `recipe` and with `complete = TRUE` -- see `offset` and `total_rows`.
+#' @param offset Rows to skip before `limit` starts counting (0-based).
+#'   Ignored if `limit` is `NULL`; defaults to `0L` when `limit` is set.
 #' @return Tibble with columns `year`, `canonical_govid`, `gov_name`,
 #'   `spend_subtype`, `category`, `amt_nominal`, optional `amt_real`,
 #'   optional `amt_per_capita_nominal`, optional `amt_per_capita_real`,
@@ -185,13 +192,17 @@
 #'   and `value_source` when `complete = TRUE`.
 #'   Carries a `provenance` attribute matching `inst/schemas/provenance-v1.json`,
 #'   whose `completion` block reports `applied`, `rows_filled`, and the
-#'   per-year `absence_means` rule that was applied.
+#'   per-year `absence_means` rule that was applied. When `limit` is set,
+#'   also carries a `total_rows` attribute: the full unpaginated row count,
+#'   computed by the same query (`COUNT(*) OVER()`) rather than a second
+#'   round trip -- so a caller walking pages never has to ask "how many are
+#'   there" separately.
 #' @export
 cog_spending <- function(govid, years, category = NULL,
                          per_capita = FALSE, adjust_to_year = NULL,
                          basis = c("harmonized", "raw"), recipe = NULL,
                          expenditure_concept = c("primary", "direct", "total"),
-                         complete = FALSE) {
+                         complete = FALSE, limit = NULL, offset = NULL) {
   # flow_prefixes no longer classifies rows (crosswalk subtype membership
   # does, per expenditure_concept) -- it only scopes the recipe-suggestion
   # machinery to this verb's recipe families (see R/suggestions.R; the
@@ -210,7 +221,9 @@ cog_spending <- function(govid, years, category = NULL,
     basis         = basis,
     recipe        = recipe,
     expenditure_concept = expenditure_concept,
-    complete      = complete
+    complete      = complete,
+    limit         = limit,
+    offset        = offset
   )
 }
 
@@ -238,7 +251,7 @@ cog_spending <- function(govid, years, category = NULL,
                            basis = c("harmonized", "raw"), recipe = NULL,
                            expenditure_concept = c("primary", "direct", "total"),
                            revenue_concept = c("general", "total"),
-                           complete = FALSE) {
+                           complete = FALSE, limit = NULL, offset = NULL) {
   basis_explicit <- length(basis) == 1L
   basis <- match.arg(basis, c("harmonized", "raw"))
   # match.arg() itself throws a base `simpleError`, not an rlang-classed
@@ -344,6 +357,38 @@ cog_spending <- function(govid, years, category = NULL,
     )
   }
 
+  # limit/offset push the page into the SQL itself (see .build_verb_sql()),
+  # so the two things that would make "a page of what" ambiguous are refused
+  # up front rather than silently ignored: complete = TRUE fills a grid over
+  # the FULL requested (year, category) space, and a recipe's result comes
+  # from .run_recipe()'s own query, which this function does not touch.
+  if (!is.null(limit)) {
+    limit <- as.integer(limit)
+    if (length(limit) != 1L || is.na(limit) || limit < 0L) {
+      cli::cli_abort("`limit` must be a single non-negative integer.",
+                     class = "uscogdata_invalid_pagination")
+    }
+    offset <- if (is.null(offset)) 0L else as.integer(offset)
+    if (length(offset) != 1L || is.na(offset) || offset < 0L) {
+      cli::cli_abort("`offset` must be a single non-negative integer.",
+                     class = "uscogdata_invalid_pagination")
+    }
+    if (complete) {
+      cli::cli_abort(c(
+        "`limit`/`offset` cannot be combined with `complete = TRUE`.",
+        "i" = "`complete` fills a grid over the FULL requested (year, category) space; paginating a slice of already-grouped rows has no defined meaning for the cells it would fill.",
+        "*" = "Drop `limit`/`offset`, or drop `complete`."
+      ), class = "uscogdata_complete_pagination_conflict")
+    }
+    if (!is.null(recipe)) {
+      cli::cli_abort(c(
+        "`limit`/`offset` cannot be combined with `recipe`.",
+        "i" = "A recipe's result comes from a separate query (`.run_recipe()`) that pagination is not wired into yet.",
+        "*" = "Drop `limit`/`offset`, or drop `recipe`."
+      ), class = "uscogdata_recipe_pagination_conflict")
+    }
+  }
+
   years   <- as.integer(years)
   if (!is.null(adjust_to_year)) adjust_to_year <- as.integer(adjust_to_year)
 
@@ -356,6 +401,7 @@ cog_spending <- function(govid, years, category = NULL,
 
   recipe_block <- NULL
   category_for_prov <- category
+  total_rows <- NULL  # set below only when limit is non-NULL (non-recipe path)
   if (!is.null(recipe)) {
     .require_schema_v5(con, manifest, "recipe =")
     .validate_recipe_id(con, recipe)
@@ -380,8 +426,29 @@ cog_spending <- function(govid, years, category = NULL,
     sql <- .build_verb_sql(view, subtype_col, govid, years,
                            if (all_categories) NULL else category,
                            ig_view, subtype_scope,
-                           all_categories = all_categories)
+                           all_categories = all_categories,
+                           limit = limit, offset = offset)
     result <- tibble::as_tibble(DBI::dbGetQuery(con, sql))
+    if (!is.null(limit)) {
+      # COUNT(*) OVER() rides along as an ordinary column so the total comes
+      # from the same scan when this page has any rows -- see
+      # .build_verb_sql(). An empty page (offset past the end) carries no
+      # such row to read it from, so that one case falls back to a second,
+      # unpaginated COUNT(*) query rather than reporting a wrong zero.
+      if (nrow(result) > 0L) {
+        total_rows <- result$pagination_total_rows[[1]]
+        result$pagination_total_rows <- NULL
+      } else {
+        count_sql <- sprintf(
+          "SELECT COUNT(*) AS n FROM (%s) AS _uncounted",
+          .build_verb_sql(view, subtype_col, govid, years,
+                          if (all_categories) NULL else category,
+                          ig_view, subtype_scope,
+                          all_categories = all_categories)
+        )
+        total_rows <- as.integer(DBI::dbGetQuery(con, count_sql)$n[[1]])
+      }
+    }
   }
 
   # Fill BEFORE per_capita / inflation so the added cells get the same
@@ -546,6 +613,10 @@ cog_spending <- function(govid, years, category = NULL,
   prov$scope$govids_missing <- scope$missing
   attr(result, "provenance") <- prov
   attr(result, ".popyear_range") <- NULL
+  # Attached here, after every downstream transform (per_capita/real-dollar
+  # joins, notes, subtype filtering), the same way provenance is -- an
+  # attribute set before those runs is not guaranteed to survive them.
+  if (!is.null(limit)) attr(result, "total_rows") <- total_rows
 
   if (length(suggestions) > 0L) .inform_suggestions(suggestions)
 
@@ -671,7 +742,7 @@ cog_spending <- function(govid, years, category = NULL,
 #' @noRd
 .build_verb_sql <- function(view, subtype_col, govid, years, category,
                             ig_view = NULL, subtype_scope = NULL,
-                            all_categories = FALSE) {
+                            all_categories = FALSE, limit = NULL, offset = NULL) {
   govid_lit <- .sql_lit_chr(govid)
   years_lit <- paste(as.integer(years), collapse = ",")
   # In all-categories mode there is no category filter: the sum is defined by
@@ -731,7 +802,7 @@ cog_spending <- function(govid, years, category = NULL,
   }
   category_group <- if (all_categories) "" else ", category"
 
-  sprintf(
+  base_sql <- sprintf(
     "SELECT
        year,
        canonical_govid,
@@ -751,6 +822,27 @@ cog_spending <- function(govid, years, category = NULL,
     subtype_col, source_expr, govid_lit, years_lit, category_pred, subtype_pred,
     category_select, category_group
   )
+
+  # limit/offset push the page into the query itself instead of pulling every
+  # matching row across the network only to slice and discard most of it
+  # afterward (the pattern behind the 2026-08-06 production incident: a
+  # 193,105-row/194-page sweep re-ran the full query and re-listified every
+  # row on EVERY page). COUNT(*) OVER() rides along as an ordinary column so
+  # the caller gets the true total from this same scan -- see the call site
+  # in .verb_spendrev(), which reads it off row 1 and strips it back out.
+  # The outer SELECT * wrapping (rather than appending LIMIT/OFFSET directly
+  # to base_sql) is what makes COUNT(*) OVER() see the post-GROUP-BY row
+  # count, not the pre-aggregation one.
+  if (is.null(limit)) {
+    base_sql
+  } else {
+    sprintf(
+      "SELECT *, COUNT(*) OVER() AS pagination_total_rows
+       FROM (%s) AS _paged
+       LIMIT %d OFFSET %d",
+      base_sql, limit, offset
+    )
+  }
 }
 
 #' @noRd
