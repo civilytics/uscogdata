@@ -124,3 +124,10 @@ devtools::test()
   a numbered `.sql` file; build a query in R.
 - No arrow dependency — DuckDB reads parquet natively
 - `withr` is a Suggests-only dep; only used in tests
+
+## Domain context — read this first
+
+**Before doing any work in this repo, read `~/.claude/memory/values/civilytics.md`.**
+It carries the purpose, direction, and constraints for this domain. It is not optional
+context — read it before planning or writing code, not after. (An `@` import will not
+work here; project-level imports don't preload. The read is the mechanism.)
