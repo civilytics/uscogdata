@@ -11,6 +11,30 @@
 #'   returns `result` invisibly for chaining. `"list"` returns the raw
 #'   provenance list (identical to `attr(result, "provenance")`).
 #' @return Either `result` (invisibly) or the provenance list.
+#' @section Two kinds of series break:
+#' Catalogued breaks reach you without being asked for, in two disjoint
+#' fields, because a caveat about one series and a caveat about the whole
+#' corpus are different claims:
+#'
+#' * **`series_break_refs`** — breaks matched against the item codes actually
+#'   present in this result. A break in one code you queried.
+#' * **`corpus_break_refs`** — breaks catalogued with `fin_code = "ALL"`,
+#'   which are statements about the corpus rather than about any one code:
+#'   dollar precision across the 1976/1977 boundary (`SB085`), imputation
+#'   exclusion from FY2002 (`SB087`), the FY2012 dense-to-sparse
+#'   representation change (`SB194`), and the FY2017 government-identifier
+#'   change (`SB086`). These are selected on the break-year window alone.
+#'
+#' `SB194` is the one most likely to matter: a query spanning FY2011 to FY2012
+#' crosses the boundary where an absent cell stops meaning "Census published
+#' $0" and starts meaning "not reported".
+#' @section Other provenance blocks:
+#' `transformations$units_conversion` records the `$1,000s`-to-dollars
+#' multiply that every amount column has already had applied.
+#' `transformations$per_capita` records the population denominator and its
+#' year range. `coverage` and `coverage_mode` appear on multi-government
+#' results (see [cog_geographic_rollup()]). `completion` appears when
+#' `complete = TRUE`. `balance_caveats` appears on [cog_balances()] results.
 #' @export
 cog_explain <- function(result, format = c("print", "list")) {
   format <- match.arg(format)
