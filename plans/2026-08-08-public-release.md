@@ -1,4 +1,4 @@
-# uscogdata 0.1.0 Public Release Implementation Plan
+# uscogdata 0.3.0 Public Release Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -511,6 +511,14 @@ Change:
 MaxCorpusSchema: 7
 ```
 
+Bump the version — this release changes user-visible behaviour (remote reads
+go from broken to working; the default URL from placeholder to live corpus),
+which is a minor bump, not a patch:
+
+```
+Version: 0.3.0
+```
+
 - [ ] **Step 4: Verify the person object parses**
 
 Run: `Rscript -e 'print(eval(parse(text = read.dcf("DESCRIPTION")[1, "Authors@R"])))'`
@@ -887,10 +895,21 @@ Before deleting anything, move each of these to its documentation home. Verify e
 
 Run `Rscript -e 'devtools::document()'` after editing roxygen.
 
-- [ ] **Step 2: Replace NEWS.md entirely**
+- [ ] **Step 2: Restructure NEWS.md**
+
+Three edits, in this order:
+
+1. **Prepend** the `0.3.0` section below.
+2. **Keep** the existing `# uscogdata 0.2.0` section verbatim — it is a real
+   changelog (`"All Categories"`, the coverage-signposting fix, the
+   `n_units_reporting` documentation) and users deserve it.
+3. **Delete** the entire `# uscogdata 0.1.0 (development)` section and
+   everything under it. That is pre-release churn; it stays in git.
+
+The new top section:
 
 ```markdown
-# uscogdata 0.1.0
+# uscogdata 0.3.0
 
 First public release.
 
@@ -939,7 +958,15 @@ provenance; `cog_mirror()` for a local copy.
 
 Run: `git show HEAD:NEWS.md > /tmp/news-old.md && wc -l /tmp/news-old.md NEWS.md`
 
-Read `/tmp/news-old.md` once more and confirm every substantive claim either appears in the new NEWS, landed somewhere in Step 1, or is genuinely pre-release churn (version bumps, fixture regenerations, internal refactors). The pre-release history stays in git; it does not need preserving in NEWS.
+Read `/tmp/news-old.md` once more and confirm every substantive claim from the **deleted `0.1.0 (development)` section** either appears in the new `0.3.0` section, landed somewhere in Step 1, or is genuinely pre-release churn (version bumps, fixture regenerations, internal refactors).
+
+Then confirm the `0.2.0` section survived intact:
+
+```bash
+diff <(git show HEAD:NEWS.md | sed -n '/^# uscogdata 0.2.0/,/^# uscogdata 0.1.0/p' | head -n -1) \
+     <(sed -n '/^# uscogdata 0.2.0/,$p' NEWS.md)
+```
+Expected: no output. Any diff means the `0.2.0` changelog was damaged — restore it.
 
 - [ ] **Step 4: Run the full suite**
 
@@ -950,7 +977,7 @@ Expected: PASS — `devtools::document()` in Step 1 regenerated `man/`, so this 
 
 ```bash
 git add NEWS.md README.md R/ man/
-git commit -m "docs: rewrite NEWS as an initial release
+git commit -m "docs: recast NEWS around the first public release
 
 The changelog described changes relative to states no user ever saw, which
 reads as instability to someone deciding whether to depend on this. The
@@ -990,7 +1017,7 @@ It must contain, in this order:
    ```
    ````
    Explain why it exists: every other test path uses a local corpus, which is
-   how the remote-read defect in 0.1.0 went unnoticed.
+   how the remote-read defect fixed for 0.3.0 went unnoticed.
 
 5. **Do not exclude the fixture from the build.** State the reason — it is what lets `R CMD check` pass on r-universe and GitHub Actions with no credentials.
 
@@ -1061,4 +1088,4 @@ Run before declaring the release ready. Every one of these must pass.
 
 ## Out of scope for this plan
 
-Flipping the Gitea repo public, `gitleaks`, the GitHub mirror and its Actions matrix, the Gitea push workflow, the r-universe registry, and tagging `v0.1.0`. Those follow after this plan's final verification is green — r-universe publishes check results on registration, so registering before checks pass means a red badge on day one. Corrections intake and announcement posts are deferred by decision (see the spec).
+Flipping the Gitea repo public, `gitleaks`, the GitHub mirror and its Actions matrix, the Gitea push workflow, the r-universe registry, and tagging `v0.3.0`. Those follow after this plan's final verification is green — r-universe publishes check results on registration, so registering before checks pass means a red badge on day one. Corrections intake and announcement posts are deferred by decision (see the spec).

@@ -1,4 +1,4 @@
-# `uscogdata` 0.1.0 — public release
+# `uscogdata` 0.3.0 — public release
 
 **Date:** 2026-08-08 · **Status:** design, awaiting approval
 **Scope:** release-readiness, README, NEWS. Distribution mechanics recorded here as
@@ -176,15 +176,25 @@ with a URL that resolves for someone who has only this repo.
 
 ## NEWS.md
 
-The current NEWS is a pre-release churn log: changes described relative to states
-no user has seen ("Breaking: corpus schema_version 4", "the package now
-requires…"), newest-first across the package's entire pre-release development
-(2026-04-23 to 2026-08-04, 140 commits). To a newcomer evaluating whether to
-depend on the package, it reads as instability.
+`NEWS.md` currently holds two sections. `0.2.0` is a legitimate changelog — the
+`"All Categories"` reserved value, the coverage-signposting fix, the
+`n_units_reporting` documentation — and it stays. Beneath it,
+`0.1.0 (development)` is a pre-release churn log: changes described relative to
+states no user has ever seen ("Breaking: corpus schema_version 4", "the package
+now requires…"), spanning the package's entire pre-release development. To a
+newcomer deciding whether to depend on this, that section reads as instability.
 
-**0.1.0 is rewritten as an initial release**: what the package does, what the
-corpus covers, and the caveats that are genuinely load-bearing. The pre-release
-history is not preserved in NEWS — it is in git, where it belongs.
+**A new `0.3.0` section is added at the top, framed as the first public
+release**: what the package does, what the corpus covers, and the caveats that
+are genuinely load-bearing. **`0.2.0` is kept verbatim.** **`0.1.0 (development)`
+is dropped** — that history stays in git, where it belongs.
+
+The version is `0.3.0` rather than `0.2.0` because this release changes
+user-visible behaviour: remote corpus reads go from broken to working, and the
+default URL from a dead placeholder to a live corpus. It is also not `1.0.0` —
+the corpus still excludes government types 4 and 5 pending validation, so a
+stability promise would overclaim. No git tag exists for any prior version;
+`chore: release 0.2.0` bumped `DESCRIPTION` and `NEWS` only.
 
 The substantive content is migrated, not deleted. These are hard-won and belong
 in documentation rather than buried in a changelog:
@@ -224,7 +234,7 @@ which is a worse first impression than a week's delay.
    account — r-universe links maintainer identity by matching DESCRIPTION's email
    against registered GitHub emails, and the association only takes effect on the
    next build.
-6. Tag `v0.1.0`. Create `github.com/civilytics/civilytics.r-universe.dev` with a
+6. Tag `v0.3.0`. Create `github.com/civilytics/civilytics.r-universe.dev` with a
    `packages.json` pinned to the tag, pointing at the GitHub mirror rather than
    Gitea so clone traffic stays off maxwell. Install the r-universe app.
 
