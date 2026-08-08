@@ -130,6 +130,11 @@ test_that("vignettes are not excluded from the build", {
   # The fixture is what lets R CMD check run offline with no credentials on
   # r-universe and GitHub Actions. It must never be excluded.
   expect_false(any(grepl("fixture_corpus", ignore, fixed = TRUE)))
+  # doc/ and Meta/ ARE build artefacts of devtools::build_vignettes() and must
+  # stay excluded -- R CMD build regenerates inst/doc/ from vignettes/ on its
+  # own, and leaving them in earns a "non-standard file at top level" NOTE.
+  expect_true(any(grepl("^\\^doc\\$$", ignore)))
+  expect_true(any(grepl("^\\^Meta\\$$", ignore)))
 })
 
 test_that("_pkgdown.yml indexes every exported topic", {

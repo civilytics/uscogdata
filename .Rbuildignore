@@ -3,6 +3,8 @@
 ^\.Rproj\.user$
 ^_pkgdown\.yml$
 ^docs$
+^Meta$
+^doc$
 ^pkgdown$
 ^\.github$
 ^LICENSE\.md$
