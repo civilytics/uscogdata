@@ -122,3 +122,12 @@ test_that("LICENSE and LICENSE.md name the same copyright holder", {
   # LICENSE alone, which is how the two came to disagree in the first place.
   expect_match(full, "MIT License", fixed = TRUE)
 })
+
+test_that("vignettes are not excluded from the build", {
+  skip_if_no_source_tree(".Rbuildignore")
+  ignore <- readLines(source_tree_path(".Rbuildignore"), warn = FALSE)
+  expect_false(any(grepl("^\\^vignettes\\$$", ignore)))
+  # The fixture is what lets R CMD check run offline with no credentials on
+  # r-universe and GitHub Actions. It must never be excluded.
+  expect_false(any(grepl("fixture_corpus", ignore, fixed = TRUE)))
+})

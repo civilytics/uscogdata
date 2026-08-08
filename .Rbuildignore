@@ -9,11 +9,8 @@
 ^\.git$
 ^\.gitignore$
 \.gitkeep$
-^vignettes$
 ^specs$
 ^plans$
-^doc$
-^Meta$
 ^\.gitea$
 ^CLAUDE\.md$
 ^\.superpowers$
