@@ -108,3 +108,17 @@ test_that("DESCRIPTION carries release metadata", {
   expect_s3_class(people, "person")
   expect_true("cre" %in% unlist(lapply(people, function(p) p$role)))
 })
+
+test_that("LICENSE and LICENSE.md name the same copyright holder", {
+  skip_if_no_source_tree("LICENSE", "LICENSE.md")
+  holder <- sub("^COPYRIGHT HOLDER:\\s*", "",
+                grep("^COPYRIGHT HOLDER:", readLines(source_tree_path("LICENSE"),
+                                                     warn = FALSE), value = TRUE))
+  full <- paste(readLines(source_tree_path("LICENSE.md"), warn = FALSE), collapse = "\n")
+
+  expect_equal(holder, "Civilytics Consulting LLC")
+  expect_match(full, holder, fixed = TRUE)
+  # usethis::use_mit_license() writes LICENSE.md but leaves an existing
+  # LICENSE alone, which is how the two came to disagree in the first place.
+  expect_match(full, "MIT License", fixed = TRUE)
+})
