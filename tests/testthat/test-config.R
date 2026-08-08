@@ -145,3 +145,23 @@ test_that("_pkgdown.yml indexes every exported topic", {
   # means the docs site does not build at all.
   expect_equal(missing, character(0))
 })
+
+test_that("README is written for a stranger, not a repo insider", {
+  skip_if_no_source_tree("README.md")
+  r <- paste(readLines(source_tree_path("README.md"), warn = FALSE), collapse = "\n")
+
+  # No paths that only resolve inside a maintainer's checkout.
+  expect_false(grepl("../cog_pipeline", r, fixed = TRUE))
+  # A real, uncommented install line.
+  expect_match(r, "install.packages", fixed = TRUE)
+  expect_false(grepl("# pak::pkg_install", r, fixed = TRUE))
+  # The errata most likely to produce a plausible-looking wrong answer.
+  expect_match(r, "full US dollars", fixed = TRUE)
+  # The release advice that conflicts with public CI is gone.
+  expect_false(grepl("Rbuildignore", r, fixed = TRUE))
+  # Both read paths documented.
+  expect_match(r, "cog_mirror", fixed = TRUE)
+  # cog_spending() has no default for `years`; a quickstart that omits it
+  # errors on the reader's first call.
+  expect_match(r, "years\\s*=", perl = TRUE)
+})
