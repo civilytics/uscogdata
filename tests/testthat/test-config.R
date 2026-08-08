@@ -87,3 +87,24 @@ test_that("an explicitly-set sentinel URL still aborts", {
     class = "uscogdata_url_not_configured"
   )
 })
+
+test_that("DESCRIPTION carries release metadata", {
+  skip_if_no_source_tree("DESCRIPTION")
+  d <- read.dcf(source_tree_path("DESCRIPTION"))
+  fields <- colnames(d)
+
+  expect_true(all(c("URL", "BugReports") %in% fields))
+  expect_match(d[1, "Authors@R"], "Knowles", fixed = TRUE)
+  expect_match(d[1, "Authors@R"], "0000-0003-0005-9478", fixed = TRUE)
+  expect_match(d[1, "Authors@R"], "Civilytics Consulting LLC", fixed = TRUE)
+
+  # The gate in .validate_schema() accepts up to 7 and the published corpus
+  # IS 7; DESCRIPTION must not claim otherwise.
+  expect_equal(as.integer(d[1, "MaxCorpusSchema"]), 7L)
+
+  # Authors@R must actually parse -- a malformed person() call is only
+  # caught at citation()/build time otherwise.
+  people <- eval(parse(text = d[1, "Authors@R"]))
+  expect_s3_class(people, "person")
+  expect_true("cre" %in% unlist(lapply(people, function(p) p$role)))
+})
