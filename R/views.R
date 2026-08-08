@@ -78,6 +78,55 @@
   file %in% basename(paths)
 }
 
+#' Build the SQL path expression for the partitioned `long` table.
+#'
+#' DuckDB cannot expand a glob over generic HTTP: there is no directory
+#' listing to expand against, and `allow_asterisks_in_http_paths` only
+#' forwards the literal `**/*` as a filename, which 404s. Measured against
+#' the published corpus on 2026-08-08, an explicit file list returns the
+#' same 46,148,034 rows the (working) `hf://` glob does, and
+#' `hive_partitioning = true` still recovers `year` from the paths.
+#'
+#' The manifest already enumerates every partition, so we build the list
+#' from it. This is host-agnostic -- Nextcloud, HuggingFace and a local
+#' fixture take the same path -- where an `hf://` URL would tie the reader
+#' to one vendor's protocol and still need special-casing, since manifest
+#' fetching goes through httr2, which cannot speak `hf://`.
+#'
+#' Falls back to the glob when the manifest carries no partition list: a
+#' hand-built manifest in a test (see test-views.R) or a corpus predating
+#' the field. Both are local, where globbing works.
+#' @noRd
+.long_files_sql <- function(url, manifest) {
+  parts <- manifest$files$long_partitions %||% list()
+  if (length(parts) == 0L) {
+    return(.sql_lit_chr(paste0(url, "data/long/**/*.parquet")))
+  }
+  paths <- vapply(parts, function(p) as.character(p$path), character(1))
+  paste0("[", .sql_lit_chr(paste0(url, paths)), "]")
+}
+
+#' Substitute the corpus-location tokens in a view's SQL text.
+#'
+#' One place knows the token vocabulary. `.register_views()` and the tests
+#' that execute a view file directly both route through here. This exists
+#' because four test sites had hand-rolled the `{url}` substitution -- one
+#' of them commented as doing it "exactly as .register_views() does" -- and
+#' every one of them broke the moment a second token was introduced.
+#'
+#' `{long_files}` must be substituted BEFORE `{url}`: it expands to a string
+#' that itself contains the url, so the reverse order leaves the token in
+#' place and DuckDB's parser fails on the brace.
+#'
+#' `manifest` defaults to empty, which routes `.long_files_sql()` to its glob
+#' fallback -- correct for the local temp corpora the direct-execution tests
+#' build.
+#' @noRd
+.render_view_sql <- function(sql, url, manifest = list()) {
+  sql <- gsub("\\{long_files\\}", .long_files_sql(url, manifest), sql, fixed = FALSE)
+  gsub("\\{url\\}", url, sql, fixed = FALSE)
+}
+
 #' Register DuckDB views from inst/sql/ SQL files
 #' @noRd
 .register_views <- function(con, url, manifest) {
@@ -91,7 +140,7 @@
         !.corpus_has_table(manifest, .representation_view_files[[base]])) next
     if (base %in% .balance_view_files && !.corpus_has_balance_subtype(con)) next
     sql <- paste(readLines(f, warn = FALSE), collapse = "\n")
-    sql <- gsub("\\{url\\}", url, sql, fixed = FALSE)
+    sql <- .render_view_sql(sql, url, manifest)
     DBI::dbExecute(con, sql)
   }
 }

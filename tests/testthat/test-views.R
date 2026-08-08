@@ -103,7 +103,7 @@ test_that("inst/sql/22- and 23- harmonized views enforce every WHERE predicate (
   sql_dir <- system.file("sql", package = "uscogdata")
   .read_view_sql <- function(filename) {
     txt <- paste(readLines(file.path(sql_dir, filename), warn = FALSE), collapse = "\n")
-    gsub("\\{url\\}", paste0(tmp, "/"), txt, fixed = FALSE)
+    uscogdata:::.render_view_sql(txt, paste0(tmp, "/"))
   }
 
   con <- DBI::dbConnect(duckdb::duckdb())
@@ -183,7 +183,7 @@ test_that("inst/sql/24- and 25- IG views retain aggregates, COALESCE NULL harmon
   sql_dir <- system.file("sql", package = "uscogdata")
   .read_view_sql <- function(filename) {
     txt <- paste(readLines(file.path(sql_dir, filename), warn = FALSE), collapse = "\n")
-    gsub("\\{url\\}", paste0(tmp, "/"), txt, fixed = FALSE)
+    uscogdata:::.render_view_sql(txt, paste0(tmp, "/"))
   }
 
   con <- DBI::dbConnect(duckdb::duckdb())
@@ -335,7 +335,7 @@ test_that(".harmonization_view_files guard is necessary: registration against a 
   sql_dir <- system.file("sql", package = "uscogdata")
   .read_view_sql <- function(filename) {
     txt <- paste(readLines(file.path(sql_dir, filename), warn = FALSE), collapse = "\n")
-    gsub("\\{url\\}", url, txt, fixed = FALSE)
+    uscogdata:::.render_view_sql(txt, url)
   }
   con2 <- DBI::dbConnect(duckdb::duckdb())
   on.exit(DBI::dbDisconnect(con2, shutdown = TRUE), add = TRUE)
