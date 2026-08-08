@@ -5,7 +5,18 @@
 .uscogdata_env <- new.env(parent = emptyenv())
 
 .uscogdata_defaults <- list(
-  url               = "https://cloud.civilytics.org/s/REPLACE_WITH_SHARE_TOKEN/download/",
+  # Public HuggingFace mirror of the published corpus: CC-BY-4.0, no
+  # credential, CDN-backed. This is the default so `library(uscogdata)`
+  # followed by a verb works with zero configuration -- previously the
+  # default was a REPLACE_WITH_SHARE_TOKEN sentinel and no document in the
+  # package supplied a working URL, so a new user had no path to a session.
+  #
+  # The trailing slash is required: every consumer concatenates onto this
+  # (see .resolve_url(), which enforces it anyway).
+  #
+  # Override with USCOGDATA_URL or options(uscogdata.url=) to read a
+  # Nextcloud share or a local copy made by cog_mirror().
+  url               = "https://huggingface.co/datasets/civilytics/us-cog-finance/resolve/main/",
   cache_dir         = NULL,
   manifest_ttl_secs = 3600L
 )

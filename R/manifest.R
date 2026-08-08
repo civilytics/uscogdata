@@ -28,7 +28,7 @@
       "*" = "{.code Sys.setenv(USCOGDATA_URL = \"<url-or-local-path>/\")}",
       "*" = "{.code options(uscogdata.url = \"<url-or-local-path>/\")}",
       i = "For an offline smoke test, use the bundled fixture: {.code system.file(\"extdata/fixture_corpus\", package = \"uscogdata\")}.",
-      i = "For the live Civilytics corpus, request the Nextcloud share URL from the package maintainer."
+      i = "The public corpus is the default: unset USCOGDATA_URL to use it, or point it at a local copy made by {.code cog_mirror()}."
     ), class = "uscogdata_url_not_configured")
   }
   invisible(url)

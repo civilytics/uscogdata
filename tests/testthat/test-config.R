@@ -64,3 +64,26 @@ test_that(".resolve_url does not invent a slash for an empty setting", {
   withr::local_options(uscogdata.url = "")
   expect_equal(.resolve_url(), "")
 })
+
+test_that("the default corpus URL is real, not a placeholder", {
+  # setup.R points USCOGDATA_URL at the bundled fixture for the whole suite,
+  # so both the env var and the option have to be cleared to see the default.
+  withr::local_envvar(USCOGDATA_URL = NA)
+  withr::local_options(uscogdata.url = NULL)
+  url <- .resolve_url()
+  expect_false(grepl("REPLACE_WITH", url, fixed = TRUE))
+  expect_match(url, "^https://")
+  expect_match(url, "/$")
+})
+
+test_that("an explicitly-set sentinel URL still aborts", {
+  # The guard must survive the default change: a user who half-edited a
+  # copied config still gets the actionable error.
+  withr::local_envvar(
+    USCOGDATA_URL = "https://other.example/s/REPLACE_WITH_SHARE_TOKEN/x/"
+  )
+  expect_error(
+    .check_url_configured(.resolve_url()),
+    class = "uscogdata_url_not_configured"
+  )
+})
