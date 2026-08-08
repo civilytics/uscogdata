@@ -1,23 +1,115 @@
 # uscogdata
 
-Curated R reader for the Civilytics US Census of Governments finance corpus.
+<!-- badges: start -->
+[![r-universe](https://civilytics.r-universe.dev/badges/uscogdata)](https://civilytics.r-universe.dev/uscogdata)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
+<!-- badges: end -->
 
-Provides unit-level financial profiles, geographic rollups, and peer comparisons
-with auditable provenance and built-in cross-vintage correctness. Reads the
-published corpus (Hive-partitioned parquet + manifest.json) directly from
-Nextcloud via DuckDB httpfs — no local bulk downloads required.
+A curated R reader for the Civilytics US Census of Governments finance corpus —
+every dollar that US state, county, municipal and township governments reported
+raising and spending, from **FY1967 to FY2024**, in one queryable place.
 
-## Status
+The Census of Governments is the only nationwide source for local government
+finance, and it is hard to use: item codes change meaning across vintages,
+government identifiers were renumbered in 2017, and an absent value means
+"published zero" in one era and "not reported" in the next. This package
+handles each of those problems, and it tells you when it has — every result
+carries provenance describing what was converted, what was aggregated, and
+which known series breaks intersect your query.
 
-Under active development (Phase 2 of the cog_pipeline project). See
-`../cog_pipeline/docs/reader-specification.md` for the reader contract this
-package implements.
+**Scope:** government types 0–3 (state, county, municipality, township).
+56 fiscal years, 46,148,034 rows, 190.6 MB. There is no source data for FY1968
+or FY1969. Special districts (type 4) and school districts (type 5) are
+excluded pending validation.
 
-## Installation
+## Where the data comes from
+
+The corpus is published and documented at the **[US Census of Governments
+Finance API](https://pages.civilytics.org/cog-api/)**. Start there for how the
+data was built, how the identifier and item-code reconciliation works, and what
+the corpus does and does not cover.
+
+- **[API documentation and walkthroughs](https://pages.civilytics.org/cog-api/)**
+  — reference, data dictionary, and worked examples such as the
+  [Southern states guide](https://pages.civilytics.org/cog-api/cog-api-south-guide.html)
+- **[Live API](https://cog-api.civilytics.org/api/v1/)** — the same corpus over
+  HTTP, for Tableau, Python, or anything that isn't R
+- **[Bulk corpus on Hugging Face](https://huggingface.co/datasets/civilytics/us-cog-finance)**
+  — CC-BY-4.0; the same parquet files this package reads
+- **[Census Bureau source data](https://www.census.gov/programs-surveys/gov-finances.html)**
+  — the underlying public files
+
+## Install
 
 ```r
-# pak::pkg_install("gitea.civilytics.org/Civilytics/uscogdata")
+install.packages("uscogdata",
+  repos = c("https://civilytics.r-universe.dev",
+            "https://cloud.r-project.org"))
 ```
+
+Or from source:
+
+```r
+pak::pkg_install("git::https://gitea.civilytics.org/Civilytics/uscogdata.git")
+```
+
+## Quickstart
+
+No configuration, no credentials, no download. The package reads the published
+corpus over HTTPS by default.
+
+```r
+library(uscogdata)
+
+# Resolve a place name to a canonical government id
+madison <- cog_gov_search(name = "Madison", state = "WI", type = 2)
+madison$canonical_govid
+#> [1] "552025209777"
+
+# Police spending, inflation-adjusted and per capita
+spend <- cog_spending(
+  madison$canonical_govid,
+  years          = 2012:2022,
+  category       = "Police",
+  per_capita     = TRUE,
+  adjust_to_year = 2023
+)
+
+# What did that result do to the numbers, and what should you know about them?
+cog_explain(spend)
+```
+
+`years` is required — there is no implicit full-history default.
+
+## Two ways to read the corpus
+
+| | Remote (default) | Mirrored |
+|---|---|---|
+| Setup | none | `cog_mirror(dest)`, 190.6 MB once |
+| Disk used | **0 MB** — HTTP range requests only | 190.6 MB |
+| Per query | ~4 s (one government, one year)<br>~6 s (one government, 23 years) | local speed |
+| Good for | trying it out, teaching, one-off questions | repeated analysis, offline work, reproducibility |
+
+Nothing is written to disk in remote mode: DuckDB fetches the parquet footer,
+works out which row groups it needs, and reads only those. Nothing is cached
+between sessions either, so every query goes back to the network.
+
+The default points at a public HuggingFace mirror of the corpus. If you would
+rather not depend on a third party — for reproducibility, for an air-gapped
+environment, or on principle — **the escape hatch is one function call**:
+
+```r
+cog_mirror("~/cog-corpus")
+Sys.setenv(USCOGDATA_URL = "~/cog-corpus/")
+```
+
+After that, nothing in your analysis touches an external service.
+
+### Configuration
+
+- `USCOGDATA_URL` — corpus root: an HTTPS URL or a local path, **trailing slash required**
+- `USCOGDATA_CACHE_DIR` — where the manifest is cached (default: user cache dir)
+- `USCOGDATA_MANIFEST_TTL_SECS` — manifest re-fetch interval (default 3600)
 
 ## Amounts are in full US dollars
 
@@ -29,111 +121,127 @@ own `amt` column preserves that. The verbs multiply by 1000 on the way out, so
 you never have to. The conversion is recorded in every result:
 
 ```r
-r <- cog_spending("552025209777", 2020L)
-attr(r, "provenance")$transformations$units_conversion
-#> $applied TRUE  $source_unit "$1,000s (raw Census)"  $target_unit "$USD"  $multiplier 1000
+attr(spend, "provenance")$transformations$units_conversion
+#> $applied     TRUE
+#> $source_unit "$1,000s (raw Census)"
+#> $target_unit "$USD"
+#> $multiplier  1000
 ```
 
 **Do not multiply again.** If you have read elsewhere that COG amounts are in
-`$1,000s` — true of the raw corpus, and of `cog_explorer`'s conventions doc —
-that rule does not apply to anything a `cog_*()` verb hands you. Applying it
-twice overstates every figure by 1000x, and the result looks plausible rather
-than obviously wrong.
+`$1,000s` — which is true of the raw Census files and of the corpus's own `amt`
+column — that rule does not apply to anything a `cog_*()` verb hands you.
+Applying it twice overstates every figure by 1000x, and the result looks
+plausible rather than obviously wrong.
 
-## Configuration
+## Concepts worth understanding before you publish a number
 
-- `USCOGDATA_URL` — corpus root URL (public Nextcloud share, trailing slash)
-- `USCOGDATA_CACHE_DIR` — optional override for the manifest cache directory
-- `USCOGDATA_MANIFEST_TTL_SECS` — optional manifest re-fetch TTL (default 3600)
-
-## Primary vs Direct vs Total spending
+### Primary vs Direct vs Total spending
 
 `cog_spending(..., expenditure_concept = c("primary", "direct", "total"))`
-controls whose spending a result counts. Concepts are defined as sets of the
-crosswalk's `spend_subtype` values — never item-code first letters, which
-cannot classify correctly (the letter `Y` alone spans revenue, expenditure,
-and balance codes):
+controls *whose* spending a result counts. Concepts are defined as sets of the
+crosswalk's `spend_subtype` values, never item-code first letters — the letter
+`Y` alone spans revenue, expenditure and balance codes.
 
-- `"primary"` (the default) is the government's own service provision:
-  current operations, capital outlay, and assistance payments.
-- `"direct"` is Census's published Direct Expenditure: `primary` plus
-  interest on debt and insurance trust benefit payments (e.g. pensions).
-- `"total"` additionally adds the intergovernmental leg — money handed to
-  other governments to spend (`M`/`L` codes plus `Q11`/`Q12`/`Q18` state
-  payments to school systems) — which is meaningful for describing one
-  government's own budget over time, but double-counts when summed across
-  governments (a state's payment to a county is the same dollar the county
-  reports as its own direct spending).
+- **`"primary"`** (default) — the government's own service provision: current
+  operations, capital outlay, assistance payments.
+- **`"direct"`** — Census's published Direct Expenditure: `primary` plus
+  interest on debt and insurance trust benefits (e.g. pensions).
+- **`"total"`** — adds the intergovernmental leg, money handed to other
+  governments to spend. Meaningful for one government's own budget over time,
+  but it double-counts when summed across governments: a state's payment to a
+  county is the same dollar the county reports as its own direct spending.
 
-**Rule of thumb: any figure that spans more than one government uses
-`primary` or `direct`.** `cog_geographic_rollup()` and `cog_peer_compare()`
-enforce this by refusing `expenditure_concept = "total"`. See
-`vignette("total-spending", package = "uscogdata")` for the full
-explanation with worked examples.
+**Rule of thumb: any figure spanning more than one government uses `primary`
+or `direct`.** `cog_geographic_rollup()` and `cog_peer_compare()` enforce that
+by refusing `"total"` outright. Worked examples in
+`vignette("total-spending", package = "uscogdata")`.
 
-## General vs Total revenue
+### General vs Total revenue
 
-`cog_revenue(..., revenue_concept = c("general", "total"))` selects between
-Census's two published revenue concepts, again defined as crosswalk
-`revenue_subtype` sets rather than item-code prefixes:
+`cog_revenue(..., revenue_concept = c("general", "total"))`:
 
-- `"general"` (the default) is Census **General Revenue**: own-source
-  (taxes, charges, miscellaneous) plus federal, state and local
-  intergovernmental aid.
-- `"total"` is Census **Total Revenue**: `general` plus utility revenue
-  (`A91`–`A94`), liquor store revenue (`A90`), and insurance trust revenue
-  (unemployment and workers' compensation `Y` codes plus the
-  employee-retirement `X` codes).
+- **`"general"`** (default) — Census General Revenue: own-source taxes,
+  charges and miscellaneous, plus federal, state and local aid.
+- **`"total"`** — General plus utility revenue (`A91`–`A94`), liquor store
+  revenue (`A90`), and insurance trust revenue.
 
-The manual defines the first by subtracting the other three from the second,
-so the two are related by Census's own identity:
+Census defines these by its own identity:
 
 ```
 Total Revenue = General + Utility + Liquor Store + Insurance Trust
 ```
 
-Two things worth knowing before switching to `"total"`:
+Two things to know before switching to `"total"`. **Utility revenue is large
+for cities** — measured on the bundled fixture, utility plus liquor store is
+15.9% of city revenue, against 1.2% for states and 1.7% for counties. And the
+**employee-retirement (`X`) codes stop at FY2016**, when those systems moved to
+the separate Annual Survey of Public Pensions, so a `"total"` series steps down
+at the FY2016/FY2017 boundary for reasons of collection scope, not revenue
+(series breaks `SB197`–`SB209`).
 
-- **Utility revenue is large for cities.** Measured on the bundled fixture,
-  utility plus liquor store revenue is 15.9% of city (type 2) revenue, versus
-  1.2% for states and 1.7% for counties. `general` excludes it by definition.
-- **The employee-retirement (`X`) codes stop at FY2016**, when those systems
-  moved out of the annual finance file into the separate Annual Survey of
-  Public Pensions. A `"total"` series therefore steps down at the
-  FY2016/FY2017 seam for reasons of collection scope, not revenue (series
-  breaks `SB197`–`SB202`, in the corpus's `series_breaks` table).
+### Reporting coverage: the Census is only sometimes a census
 
-## Developer notes
+**The Census of Governments is a complete enumeration only in years ending in
+2 and 7.** Every other year is a sample, and the sample varies enormously —
+measured on the bundled fixture, Wisconsin's 608-city universe rolls up 597
+governments in FY2012 and 112 in FY2019.
 
-### Testing
-
-The package ships a bundled fixture corpus at `inst/extdata/fixture_corpus/` —
-a 15 MB four-year slice (2011, 2012, 2019, 2020) of the full corpus covering
-all 50 states. `tests/testthat/setup.R` automatically points `USCOGDATA_URL`
-at this fixture, so the full test suite runs offline with no network
-dependency:
+A statewide total resting on a fifth of the universe looks exactly like one
+resting on all of it, so every multi-government result now says which it is:
 
 ```r
-devtools::test()   # uses bundled fixture, no credentials required
+attr(rollup, "provenance")$coverage   # per-year n_units_reporting, is_census_year
 ```
 
-### Releasing against the live corpus
+`cog_geographic_rollup()`, `cog_peer_compare()` and `cog_find_peers()` take a
+`coverage` argument — `"all"` (default), `"census"` (census years only), or
+`"consistent"` (only units reporting in every requested year, a balanced
+panel).
 
-Before cutting a release, run the test suite against the published corpus to
-catch any drift between the fixture and the real data:
+`n_units_reporting` is **category-conditional**, and it is not a response rate. A government that was surveyed and genuinely spends
+nothing in the requested category is indistinguishable from one never surveyed.
+
+### Absent cells mean two different things
+
+Before FY2012, an absent cell means Census published `$0`. From FY2012 on, it
+means not reported. `cog_spending(..., complete = TRUE)` fills the requested
+grid and labels every row with which it is, via `value_source`:
+
+| `value_source` | meaning | `amt_nominal` |
+|---|---|---|
+| `reported` | the corpus carries this cell | as published |
+| `census_zero` | dense-source year (≤ FY2011), absent — Census published `$0` | `0` |
+| `not_reported` | sparse-source year (≥ FY2012), absent — unknown | `NA` |
+
+That `NA` is deliberate. Filling a modern absence with `0` would invent data.
+
+### Series breaks surface on their own
+
+Catalogued breaks that intersect your query appear in provenance whether or not
+you went looking for them — `series_break_refs` for breaks in a specific item code, and
+`corpus_break_refs` for caveats about the corpus as a whole (dollar precision
+across the 1976/1977 boundary, the FY2017 identifier change, the FY2012
+dense→sparse representation change). `cog_explain()` prints both.
+
+## How to cite
 
 ```r
-Sys.setenv(USCOGDATA_URL = "<published-corpus-url-with-trailing-slash>")
-devtools::test()
+citation("uscogdata")
 ```
 
-When the live-corpus run is clean, strip the fixture from the built package by
-adding this line to `.Rbuildignore`:
+The corpus itself is published under CC-BY-4.0. Cite it as:
 
-```
-^inst/extdata/fixture_corpus$
-```
+> Civilytics Consulting. US Census of Governments finance corpus.
+> https://huggingface.co/datasets/civilytics/us-cog-finance
 
-The test suite is URL-agnostic — `setup.R` falls back to `USCOGDATA_URL` when
-the bundled fixture is absent, so no test code changes are needed for the
-release run or after stripping the fixture.
+## Contributing
+
+Development happens on [Gitea](https://gitea.civilytics.org/Civilytics/uscogdata);
+[GitHub](https://github.com/civilytics/uscogdata) is a mirror that accepts
+issues and pull requests. See [CONTRIBUTING.md](CONTRIBUTING.md) for how a
+patch gets from there to here.
+
+## License
+
+MIT © Civilytics Consulting LLC. See [LICENSE.md](LICENSE.md).

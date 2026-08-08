@@ -66,7 +66,7 @@ test_that("inst/sql/26-balance_long.sql enforces NOT is_aggregate (real SQL text
   sql_dir <- system.file("sql", package = "uscogdata")
   .read_view_sql <- function(filename) {
     txt <- paste(readLines(file.path(sql_dir, filename), warn = FALSE), collapse = "\n")
-    gsub("\\{url\\}", paste0(tmp, "/"), txt, fixed = FALSE)
+    uscogdata:::.render_view_sql(txt, paste0(tmp, "/"))
   }
 
   con <- DBI::dbConnect(duckdb::duckdb())

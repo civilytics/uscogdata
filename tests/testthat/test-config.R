@@ -64,3 +64,109 @@ test_that(".resolve_url does not invent a slash for an empty setting", {
   withr::local_options(uscogdata.url = "")
   expect_equal(.resolve_url(), "")
 })
+
+test_that("the default corpus URL is real, not a placeholder", {
+  # setup.R points USCOGDATA_URL at the bundled fixture for the whole suite,
+  # so both the env var and the option have to be cleared to see the default.
+  withr::local_envvar(USCOGDATA_URL = NA)
+  withr::local_options(uscogdata.url = NULL)
+  url <- .resolve_url()
+  expect_false(grepl("REPLACE_WITH", url, fixed = TRUE))
+  expect_match(url, "^https://")
+  expect_match(url, "/$")
+})
+
+test_that("an explicitly-set sentinel URL still aborts", {
+  # The guard must survive the default change: a user who half-edited a
+  # copied config still gets the actionable error.
+  withr::local_envvar(
+    USCOGDATA_URL = "https://other.example/s/REPLACE_WITH_SHARE_TOKEN/x/"
+  )
+  expect_error(
+    .check_url_configured(.resolve_url()),
+    class = "uscogdata_url_not_configured"
+  )
+})
+
+test_that("DESCRIPTION carries release metadata", {
+  skip_if_no_source_tree("DESCRIPTION")
+  d <- read.dcf(source_tree_path("DESCRIPTION"))
+  fields <- colnames(d)
+
+  expect_true(all(c("URL", "BugReports") %in% fields))
+  expect_match(d[1, "Authors@R"], "Knowles", fixed = TRUE)
+  expect_match(d[1, "Authors@R"], "0000-0003-0005-9478", fixed = TRUE)
+  expect_match(d[1, "Authors@R"], "Civilytics Consulting LLC", fixed = TRUE)
+
+  # The gate in .validate_schema() accepts up to 7 and the published corpus
+  # IS 7; DESCRIPTION must not claim otherwise.
+  expect_equal(as.integer(d[1, "MaxCorpusSchema"]), 7L)
+
+  # Authors@R must actually parse -- a malformed person() call is only
+  # caught at citation()/build time otherwise.
+  people <- eval(parse(text = d[1, "Authors@R"]))
+  expect_s3_class(people, "person")
+  expect_true("cre" %in% unlist(lapply(people, function(p) p$role)))
+})
+
+test_that("LICENSE and LICENSE.md name the same copyright holder", {
+  skip_if_no_source_tree("LICENSE", "LICENSE.md")
+  holder <- sub("^COPYRIGHT HOLDER:\\s*", "",
+                grep("^COPYRIGHT HOLDER:", readLines(source_tree_path("LICENSE"),
+                                                     warn = FALSE), value = TRUE))
+  full <- paste(readLines(source_tree_path("LICENSE.md"), warn = FALSE), collapse = "\n")
+
+  expect_equal(holder, "Civilytics Consulting LLC")
+  expect_match(full, holder, fixed = TRUE)
+  # usethis::use_mit_license() writes LICENSE.md but leaves an existing
+  # LICENSE alone, which is how the two came to disagree in the first place.
+  expect_match(full, "MIT License", fixed = TRUE)
+})
+
+test_that("vignettes are not excluded from the build", {
+  skip_if_no_source_tree(".Rbuildignore")
+  ignore <- readLines(source_tree_path(".Rbuildignore"), warn = FALSE)
+  expect_false(any(grepl("^\\^vignettes\\$$", ignore)))
+  # The fixture is what lets R CMD check run offline with no credentials on
+  # r-universe and GitHub Actions. It must never be excluded.
+  expect_false(any(grepl("fixture_corpus", ignore, fixed = TRUE)))
+  # doc/ and Meta/ ARE build artefacts of devtools::build_vignettes() and must
+  # stay excluded -- R CMD build regenerates inst/doc/ from vignettes/ on its
+  # own, and leaving them in earns a "non-standard file at top level" NOTE.
+  expect_true(any(grepl("^\\^doc\\$$", ignore)))
+  expect_true(any(grepl("^\\^Meta\\$$", ignore)))
+})
+
+test_that("_pkgdown.yml indexes every exported topic", {
+  skip_if_no_source_tree("_pkgdown.yml", "NAMESPACE")
+  exports <- grep("^export\\(", readLines(source_tree_path("NAMESPACE"), warn = FALSE),
+                  value = TRUE)
+  exports <- sub("^export\\((.*)\\)$", "\\1", exports)
+  yml <- paste(readLines(source_tree_path("_pkgdown.yml"), warn = FALSE), collapse = "\n")
+  missing <- exports[!vapply(exports,
+                             function(e) grepl(paste0("\\b", e, "\\b"), yml),
+                             logical(1))]
+  # pkgdown errors on topics missing from the index, so an unlisted export
+  # means the docs site does not build at all.
+  expect_equal(missing, character(0))
+})
+
+test_that("README is written for a stranger, not a repo insider", {
+  skip_if_no_source_tree("README.md")
+  r <- paste(readLines(source_tree_path("README.md"), warn = FALSE), collapse = "\n")
+
+  # No paths that only resolve inside a maintainer's checkout.
+  expect_false(grepl("../cog_pipeline", r, fixed = TRUE))
+  # A real, uncommented install line.
+  expect_match(r, "install.packages", fixed = TRUE)
+  expect_false(grepl("# pak::pkg_install", r, fixed = TRUE))
+  # The errata most likely to produce a plausible-looking wrong answer.
+  expect_match(r, "full US dollars", fixed = TRUE)
+  # The release advice that conflicts with public CI is gone.
+  expect_false(grepl("Rbuildignore", r, fixed = TRUE))
+  # Both read paths documented.
+  expect_match(r, "cog_mirror", fixed = TRUE)
+  # cog_spending() has no default for `years`; a quickstart that omits it
+  # errors on the reader's first call.
+  expect_match(r, "years\\s*=", perl = TRUE)
+})

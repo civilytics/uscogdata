@@ -4,12 +4,14 @@
 # protect users from silent failures when USCOGDATA_URL is misconfigured
 # or returns non-JSON content.
 
-test_that("cog_open aborts with actionable error when URL is the placeholder default", {
+test_that("cog_open aborts with actionable error when URL contains the sentinel", {
   uscogdata:::cog_close()
   on.exit(uscogdata:::cog_close(), add = TRUE)
 
-  placeholder <- "https://cloud.civilytics.org/s/REPLACE_WITH_SHARE_TOKEN/download/"
-  withr::with_envvar(c(USCOGDATA_URL = placeholder), {
+  # No longer the package default (that is the public HF corpus). This is a
+  # user who copied a config template and did not finish editing it.
+  sentinel_url <- "https://cloud.civilytics.org/s/REPLACE_WITH_SHARE_TOKEN/download/"
+  withr::with_envvar(c(USCOGDATA_URL = sentinel_url), {
     expect_error(
       uscogdata:::cog_open(),
       class = "uscogdata_url_not_configured"
@@ -35,8 +37,10 @@ test_that("placeholder guard error names both env var and option as remediation"
   uscogdata:::cog_close()
   on.exit(uscogdata:::cog_close(), add = TRUE)
 
-  placeholder <- "https://cloud.civilytics.org/s/REPLACE_WITH_SHARE_TOKEN/download/"
-  withr::with_envvar(c(USCOGDATA_URL = placeholder), {
+  # No longer the package default (that is the public HF corpus). This is a
+  # user who copied a config template and did not finish editing it.
+  sentinel_url <- "https://cloud.civilytics.org/s/REPLACE_WITH_SHARE_TOKEN/download/"
+  withr::with_envvar(c(USCOGDATA_URL = sentinel_url), {
     msg <- tryCatch(uscogdata:::cog_open(), error = conditionMessage)
     expect_match(msg, "USCOGDATA_URL", fixed = TRUE)
     expect_match(msg, "uscogdata.url", fixed = TRUE)

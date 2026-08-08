@@ -1,14 +1,21 @@
 Package: uscogdata
 Type: Package
 Title: Curated Reader for the Civilytics US Census of Governments Finance Corpus
-Version: 0.2.0
-Authors@R:
-    person("Civilytics", , , "jknowles@gmail.com", role = c("aut", "cre"))
+Version: 0.3.0
+Authors@R: c(
+    person(c("Jared", "E."), "Knowles",
+           email = "jared@civilytics.com",
+           role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0003-0005-9478")),
+    person("Civilytics Consulting LLC", role = c("cph", "fnd")))
 Description: Curated R verbs over the Civilytics US Census of Governments
     finance corpus. Provides unit-level financial profiles, geographic
     rollups, and peer comparisons with auditable provenance and built-in
     cross-vintage correctness.
 License: MIT + file LICENSE
+URL: https://github.com/civilytics/uscogdata,
+    https://civilytics.r-universe.dev/uscogdata
+BugReports: https://github.com/civilytics/uscogdata/issues
 Encoding: UTF-8
 LazyData: false
 Depends: R (>= 4.1)
@@ -32,4 +39,4 @@ Config/testthat/edition: 3
 VignetteBuilder: knitr
 RoxygenNote: 7.3.3
 MinCorpusSchema: 4
-MaxCorpusSchema: 5
+MaxCorpusSchema: 7
