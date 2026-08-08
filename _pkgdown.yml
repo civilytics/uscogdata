@@ -1,4 +1,5 @@
-url: ~
+url: https://civilytics.r-universe.dev/uscogdata
+
 template:
   bootstrap: 5
 
@@ -15,11 +16,26 @@ reference:
       - cog_gov_search
       - cog_basket_resolution
       - cog_basket_unresolved
-  - title: Session
+  - title: Comparison & aggregation
+    desc: Peer cohorts and geographic aggregates.
     contents:
-      - has_keyword("internal")
+      - cog_find_peers
+      - cog_peer_compare
+      - cog_geographic_rollup
+  - title: Corpus metadata
+    desc: >
+      What the corpus contains, where a given result came from, and how to
+      hold a local copy of it.
+    contents:
+      - cog_categories
+      - cog_recipes
+      - cog_manifest
+      - cog_explain
+      - cog_mirror
 
 articles:
-  - title: Getting started
+  - title: Concepts
     navbar: ~
-    contents: []
+    contents:
+      - total-spending
+      - population-denominators

@@ -131,3 +131,17 @@ test_that("vignettes are not excluded from the build", {
   # r-universe and GitHub Actions. It must never be excluded.
   expect_false(any(grepl("fixture_corpus", ignore, fixed = TRUE)))
 })
+
+test_that("_pkgdown.yml indexes every exported topic", {
+  skip_if_no_source_tree("_pkgdown.yml", "NAMESPACE")
+  exports <- grep("^export\\(", readLines(source_tree_path("NAMESPACE"), warn = FALSE),
+                  value = TRUE)
+  exports <- sub("^export\\((.*)\\)$", "\\1", exports)
+  yml <- paste(readLines(source_tree_path("_pkgdown.yml"), warn = FALSE), collapse = "\n")
+  missing <- exports[!vapply(exports,
+                             function(e) grepl(paste0("\\b", e, "\\b"), yml),
+                             logical(1))]
+  # pkgdown errors on topics missing from the index, so an unlisted export
+  # means the docs site does not build at all.
+  expect_equal(missing, character(0))
+})
