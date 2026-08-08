@@ -1,0 +1,61 @@
+# Multi-platform R CMD check, running on the GitHub mirror.
+#
+# This exists because the canonical Gitea runner is Linux-only, and this
+# package hard-depends on duckdb and httr2 -- both compiled, both with real
+# platform variance -- while having never been checked on Windows or macOS.
+# A large share of the audience is on Windows.
+#
+# Gitea reads .gitea/workflows and GitHub reads .github/workflows, so this
+# file is inert on the canonical repo and coexists with the Gitea CI that
+# remains authoritative for deploys.
+#
+# The suite needs NO credentials: tests/testthat/setup.R points USCOGDATA_URL
+# at the bundled fixture corpus. That is exactly why inst/extdata/fixture_corpus
+# must never be added to .Rbuildignore.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+name: R-CMD-check
+
+permissions: read-all
+
+jobs:
+  R-CMD-check:
+    runs-on: ${{ matrix.config.os }}
+    name: ${{ matrix.config.os }} (${{ matrix.config.r }})
+
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {os: macos-latest,   r: 'release'}
+          - {os: windows-latest, r: 'release'}
+          - {os: ubuntu-latest,  r: 'devel', http-user-agent: 'release'}
+          - {os: ubuntu-latest,  r: 'release'}
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ matrix.config.r }}
+          http-user-agent: ${{ matrix.config.http-user-agent }}
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::rcmdcheck
+          needs: check
+
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          upload-snapshots: true
+          build_args: 'c("--no-manual")'
