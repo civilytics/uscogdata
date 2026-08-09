@@ -251,7 +251,7 @@ test_that(".suppressed_components measures the E67/E68 dollars Public Welfare dr
   s <- uscogdata:::.suppressed_components(
     con,
     candidates = c("welfare_cash_e67_wide", "welfare_cash_e68_wide"),
-    govid = "061037123085", years = 2011L,
+    cohort = uscogdata:::.make_cohort("061037123085"), years = 2011L,
     long_view = "spending_long_harmonized",
     flow_prefixes = c("E", "F", "G"))
 
@@ -269,7 +269,7 @@ test_that(".suppressed_components finds nothing in a modern year", {
   s <- uscogdata:::.suppressed_components(
     con,
     candidates = c("welfare_cash_e67_wide", "welfare_cash_e68_wide"),
-    govid = "061037123085", years = 2019L,
+    cohort = uscogdata:::.make_cohort("061037123085"), years = 2019L,
     long_view = "spending_long_harmonized",
     flow_prefixes = c("E", "F", "G"))
   expect_equal(nrow(s), 0L)
@@ -280,7 +280,7 @@ test_that(".suppressed_components rejects a long_view outside the allowlist", {
   con <- uscogdata:::.ensure_session()
   expect_error(
     uscogdata:::.suppressed_components(
-      con, candidates = "welfare_cash_e67_wide", govid = "061037123085",
+      con, candidates = "welfare_cash_e67_wide", cohort = uscogdata:::.make_cohort("061037123085"),
       years = 2011L, long_view = "long; DROP TABLE x",
       flow_prefixes = c("E", "F", "G")),
     class = "uscogdata_internal_error")
@@ -298,7 +298,7 @@ test_that(".suppressed_components never measures a component from the other flow
   s <- uscogdata:::.suppressed_components(
     con,
     candidates = c("welfare_cash_e67_wide", "welfare_cash_e68_wide"),
-    govid = "061037123085", years = 2011L,
+    cohort = uscogdata:::.make_cohort("061037123085"), years = 2011L,
     long_view = "revenue_long_harmonized",
     flow_prefixes = c("T", "A", "U", "B", "C", "D"))
   expect_equal(nrow(s), 0L)

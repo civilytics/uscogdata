@@ -50,11 +50,12 @@
 #'   optional `pop_source`, `codes_included`, `aggregate_fallback`, `notes`,
 #'   and `value_source` when `complete = TRUE`.
 #' @export
-cog_revenue <- function(govid, years, category = NULL,
+cog_revenue <- function(govid = NULL, years, category = NULL,
                         per_capita = FALSE, adjust_to_year = NULL,
                         basis = c("harmonized", "raw"), recipe = NULL,
                         revenue_concept = c("general", "total"),
-                        complete = FALSE, limit = NULL, offset = NULL) {
+                        complete = FALSE, limit = NULL, offset = NULL,
+                        state = NULL, type = NULL) {
   # flow_prefixes no longer classifies rows (crosswalk revenue_subtype
   # membership does -- General Revenue, i.e. everything except
   # insurance_trust) -- it only scopes the recipe-suggestion machinery to
@@ -75,6 +76,8 @@ cog_revenue <- function(govid, years, category = NULL,
     revenue_concept = revenue_concept,
     complete       = complete,
     limit          = limit,
-    offset         = offset
+    offset         = offset,
+    state          = state,
+    type           = type
   )
 }

@@ -68,7 +68,9 @@
 #' millions/billions). The conversion is recorded in the provenance attribute
 #' under `transformations$units_conversion`.
 #'
-#' @param govid Character vector of `canonical_govid` values.
+#' @param govid Character vector of `canonical_govid` values, or `NULL` to name
+#'   the cohort by `state`/`type` instead. One of `govid`, `state`, or `type`
+#'   is required.
 #' @param years Integer vector of years.
 #' @param category Character vector of category names (from
 #'   `summary_categories.category`), or `NULL` for all categories broken out
@@ -185,6 +187,29 @@
 #'   `recipe` and with `complete = TRUE` -- see `offset` and `total_rows`.
 #' @param offset Rows to skip before `limit` starts counting (0-based).
 #'   Ignored if `limit` is `NULL`; defaults to `0L` when `limit` is set.
+#' @param state,type Name the cohort by predicate instead of by id: `state` is
+#'   a 2-letter USPS abbreviation (or a FIPS code) and `type` is one of
+#'   `"state"`, `"county"`, `"city"`, `"township"` (or the integer `0:3`) --
+#'   the same vocabulary, and the same internal coercion, as
+#'   [cog_gov_search()]. Both default to `NULL`.
+#'
+#'   The cohort is then expressed as a subquery against `canonical_fips_xwalk`
+#'   inside each statement rather than round-tripped through R as a literal id
+#'   list. For a fleet-scale cohort that is the difference between a
+#'   301,591-character `IN` list re-parsed in 5--8 statements per call and a
+#'   constant-size predicate: measured at **94 ms versus 449 ms** for the same
+#'   FY2022 aggregate over the 20,106-government `type = "city"` cohort, within
+#'   7% of the no-filter floor.
+#'
+#'   Supplying `govid` **and** `state`/`type` INTERSECTS them -- the
+#'   governments in `govid` that also match the predicate -- rather than one
+#'   silently taking precedence. Naming no cohort at all (`govid`, `state` and
+#'   `type` all `NULL`) aborts with class `uscogdata_no_cohort`.
+#'
+#'   When the cohort is named by predicate, `provenance$scope$govids_found`
+#'   and `govids_missing` are empty -- there is no id list to report against --
+#'   and `provenance$scope$cohort` carries `state`, `type` and
+#'   `n_governments` instead. A `govid`-named cohort reports exactly as before.
 #' @return Tibble with columns `year`, `canonical_govid`, `gov_name`,
 #'   `spend_subtype`, `category`, `amt_nominal`, optional `amt_real`,
 #'   optional `amt_per_capita_nominal`, optional `amt_per_capita_real`,
@@ -198,11 +223,12 @@
 #'   round trip -- so a caller walking pages never has to ask "how many are
 #'   there" separately.
 #' @export
-cog_spending <- function(govid, years, category = NULL,
+cog_spending <- function(govid = NULL, years, category = NULL,
                          per_capita = FALSE, adjust_to_year = NULL,
                          basis = c("harmonized", "raw"), recipe = NULL,
                          expenditure_concept = c("primary", "direct", "total"),
-                         complete = FALSE, limit = NULL, offset = NULL) {
+                         complete = FALSE, limit = NULL, offset = NULL,
+                         state = NULL, type = NULL) {
   # flow_prefixes no longer classifies rows (crosswalk subtype membership
   # does, per expenditure_concept) -- it only scopes the recipe-suggestion
   # machinery to this verb's recipe families (see R/suggestions.R; the
@@ -223,7 +249,9 @@ cog_spending <- function(govid, years, category = NULL,
     expenditure_concept = expenditure_concept,
     complete      = complete,
     limit         = limit,
-    offset        = offset
+    offset        = offset,
+    state         = state,
+    type          = type
   )
 }
 
@@ -251,7 +279,8 @@ cog_spending <- function(govid, years, category = NULL,
                            basis = c("harmonized", "raw"), recipe = NULL,
                            expenditure_concept = c("primary", "direct", "total"),
                            revenue_concept = c("general", "total"),
-                           complete = FALSE, limit = NULL, offset = NULL) {
+                           complete = FALSE, limit = NULL, offset = NULL,
+                           state = NULL, type = NULL) {
   basis_explicit <- length(basis) == 1L
   basis <- match.arg(basis, c("harmonized", "raw"))
   # match.arg() itself throws a base `simpleError`, not an rlang-classed
@@ -291,7 +320,10 @@ cog_spending <- function(govid, years, category = NULL,
     .revenue_concept_subtypes(revenue_concept)
   }
 
-  govid <- .coerce_govid_input(govid, arg = "govid")
+  # NULL `govid` means "the cohort is named by predicate"; anything else is
+  # coerced and validated exactly as before, so an empty or wrong-typed vector
+  # still fails with its original message rather than being read as absent.
+  govid <- if (is.null(govid)) NULL else .coerce_govid_input(govid, arg = "govid")
   # allow_all_categories = TRUE: cog_spending()/cog_revenue() are the two
   # verbs the reserved pseudo-category is defined for. cog_balances() shares
   # this validator but leaves the argument at its FALSE default, so it
@@ -299,6 +331,10 @@ cog_spending <- function(govid, years, category = NULL,
   # (finding 3, all-categories review).
   .validate_verb_inputs(govid, years, category, per_capita, adjust_to_year,
                         recipe, allow_all_categories = TRUE)
+
+  # Built after validation so the argument-shape errors above keep firing
+  # first, and before .ensure_session() so a bad state/type costs no I/O.
+  cohort <- .make_cohort(govid, state, type)
 
   # Recognize the reserved pseudo-category. Detected after type validation so a
   # non-character `category` still fails with the ordinary type error.
@@ -407,7 +443,7 @@ cog_spending <- function(govid, years, category = NULL,
     .validate_recipe_id(con, recipe)
     comps <- .recipe_components(con, recipe)
     recipe_label <- comps$label[[1]]
-    result <- .run_recipe(con, recipe, govid, years)
+    result <- .run_recipe(con, recipe, cohort, years)
     sql <- attr(result, "sql_query")
     result <- .shape_recipe_result(result, subtype_col, recipe_label)
     recipe_block <- list(
@@ -423,7 +459,7 @@ cog_spending <- function(govid, years, category = NULL,
     } else {
       NULL
     }
-    sql <- .build_verb_sql(view, subtype_col, govid, years,
+    sql <- .build_verb_sql(view, subtype_col, cohort, years,
                            if (all_categories) NULL else category,
                            ig_view, subtype_scope,
                            all_categories = all_categories,
@@ -441,7 +477,7 @@ cog_spending <- function(govid, years, category = NULL,
       } else {
         count_sql <- sprintf(
           "SELECT COUNT(*) AS n FROM (%s) AS _uncounted",
-          .build_verb_sql(view, subtype_col, govid, years,
+          .build_verb_sql(view, subtype_col, cohort, years,
                           if (all_categories) NULL else category,
                           ig_view, subtype_scope,
                           all_categories = all_categories)
@@ -457,13 +493,13 @@ cog_spending <- function(govid, years, category = NULL,
   # spurious 0.
   completion <- list(applied = FALSE, rows_filled = 0L, absence_means = list())
   if (complete) {
-    result <- .complete_result(result, con, subtype_col, govid, years,
+    result <- .complete_result(result, con, subtype_col, cohort, years,
                                category, subtype_scope)
     completion <- attr(result, ".completion")
     attr(result, ".completion") <- NULL
   }
 
-  if (per_capita) result <- .attach_per_capita(result, con, govid)
+  if (per_capita) result <- .attach_per_capita(result, con)
   if (!is.null(adjust_to_year)) {
     result <- .attach_real_dollars(result, adjust_to_year, per_capita)
   }
@@ -491,7 +527,7 @@ cog_spending <- function(govid, years, category = NULL,
     basis_for_prov <- resolved$basis
     basis_note_for_prov <- resolved$note
     harmonization <- .build_harmonization_block(
-      con, govid, years, resolved, subtype_col, subtype_scope
+      con, cohort, years, resolved, subtype_col, subtype_scope
     )
     # C1(a): gap detection must run against the Direct leg alone. `result`
     # can also carry UNION'd intergovernmental rows (expenditure_concept =
@@ -506,7 +542,7 @@ cog_spending <- function(govid, years, category = NULL,
     } else {
       result
     }
-    suggestions <- .build_suggestions(con, govid, years, category,
+    suggestions <- .build_suggestions(con, cohort, years, category,
                                        direct_leg_result,
                                        resolved$basis, flow_prefixes,
                                        .select_long_view(view_base, resolved$basis),
@@ -611,6 +647,12 @@ cog_spending <- function(govid, years, category = NULL,
   )
   prov$scope$govids_found   <- scope$found
   prov$scope$govids_missing <- scope$missing
+  # A predicate-named cohort has no id list to report found/missing against
+  # (both stay empty), so it describes itself instead. Deliberately a COUNT
+  # rather than the resolved ids: enumerating them would put 20,000 govids in
+  # every fleet-scale response body, which is the cost this path exists to
+  # remove. NULL for a govid-named cohort, so that output is untouched.
+  prov$scope$cohort <- .cohort_provenance(con, cohort)
   attr(result, "provenance") <- prov
   attr(result, ".popyear_range") <- NULL
   # Attached here, after every downstream transform (per_capita/real-dollar
@@ -639,7 +681,11 @@ cog_spending <- function(govid, years, category = NULL,
 .validate_verb_inputs <- function(govid, years, category,
                                   per_capita, adjust_to_year, recipe = NULL,
                                   allow_all_categories = FALSE) {
-  if (!is.character(govid) || length(govid) == 0L) {
+  # NULL is allowed only because the caller has already established that the
+  # cohort is named some other way (`state`/`type`); .make_cohort() is what
+  # refuses a call that names no cohort at all. A supplied-but-empty `govid`
+  # still fails here, exactly as before.
+  if (!is.null(govid) && (!is.character(govid) || length(govid) == 0L)) {
     cli::cli_abort("`govid` must be a non-empty character vector.")
   }
   if (!(is.integer(years) || is.numeric(years)) || length(years) == 0L) {
@@ -740,10 +786,10 @@ cog_spending <- function(govid, years, category = NULL,
 }
 
 #' @noRd
-.build_verb_sql <- function(view, subtype_col, govid, years, category,
+.build_verb_sql <- function(view, subtype_col, cohort, years, category,
                             ig_view = NULL, subtype_scope = NULL,
                             all_categories = FALSE, limit = NULL, offset = NULL) {
-  govid_lit <- .sql_lit_chr(govid)
+  cohort_pred <- .cohort_sql(cohort)
   years_lit <- paste(as.integer(years), collapse = ",")
   # In all-categories mode there is no category filter: the sum is defined by
   # the concept's SUBTYPE allowlist (subtype_pred below), which is the real
@@ -813,13 +859,13 @@ cog_spending <- function(govid, years, category = NULL,
        string_agg(DISTINCT item_code, ',' ORDER BY item_code) AS codes_included,
        bool_or(is_aggregate) AS aggregate_fallback
      FROM %2$s
-     WHERE canonical_govid IN (%3$s)
+     WHERE %3$s
        AND year IN (%4$s)
        %5$s
        %6$s
      GROUP BY year, canonical_govid, gov_name, xwalk_gov_name, %1$s%8$s
      ORDER BY year, canonical_govid, %1$s%8$s",
-    subtype_col, source_expr, govid_lit, years_lit, category_pred, subtype_pred,
+    subtype_col, source_expr, cohort_pred, years_lit, category_pred, subtype_pred,
     category_select, category_group
   )
 
@@ -845,8 +891,16 @@ cog_spending <- function(govid, years, category = NULL,
   }
 }
 
+#' Join population onto a result and derive the per-capita columns.
+#'
+#' The population lookup is keyed on the govids PRESENT IN `result`, not on the
+#' cohort that produced it. Those are the only ones the LEFT JOIN below can
+#' match, so the joined output is identical either way -- but it means this
+#' works unchanged for a cohort named by predicate (where no id list exists in
+#' R at all), and on a paginated call it looks up one page's governments
+#' instead of the whole fleet's.
 #' @noRd
-.attach_per_capita <- function(result, con, govid) {
+.attach_per_capita <- function(result, con) {
   if (nrow(result) == 0L) {
     result$amt_per_capita_nominal <- numeric(0)
     result$pop_source <- character(0)
@@ -859,7 +913,7 @@ cog_spending <- function(govid, years, category = NULL,
      FROM gov_population_yearly
      WHERE canonical_govid IN (%s)
        AND year IN (%s)",
-    .sql_lit_chr(govid), years_lit
+    .sql_lit_chr(unique(result$canonical_govid)), years_lit
   )
   pops <- tibble::as_tibble(DBI::dbGetQuery(con, sql))
   result <- dplyr::left_join(result, pops,

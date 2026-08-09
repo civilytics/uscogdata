@@ -113,7 +113,7 @@ cog_recipes <- function(pattern = NULL) {
 #' `year_min`/`year_max` -- so there is no double-counting. (Checkpoint
 #' review docs/phase_r_harmonization_review.md § 0.2.)
 #' @noRd
-.run_recipe <- function(con, recipe_id, govid, years) {
+.run_recipe <- function(con, recipe_id, cohort, years) {
   sql <- sprintf(
     "SELECT l.year, l.canonical_govid,
             COALESCE(x.gov_name, l.gov_name) AS gov_name,
@@ -128,11 +128,11 @@ cog_recipes <- function(pattern = NULL) {
            OR (r.gov_type_scope = 'local' AND l.type BETWEEN 1 AND 3))
      LEFT JOIN canonical_fips_xwalk x USING (canonical_govid)
      WHERE r.recipe_id = %1$s
-       AND l.canonical_govid IN (%2$s)
+       AND %2$s
        AND l.year IN (%3$s)
      GROUP BY 1, 2, 3
      ORDER BY 1, 2",
-    .sql_lit_chr(recipe_id), .sql_lit_chr(govid),
+    .sql_lit_chr(recipe_id), .cohort_sql(cohort, "l.canonical_govid"),
     paste(as.integer(years), collapse = ",")
   )
   result <- tibble::as_tibble(DBI::dbGetQuery(con, sql))
