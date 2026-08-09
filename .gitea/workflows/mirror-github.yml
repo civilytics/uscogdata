@@ -1,0 +1,43 @@
+# Mirror the canonical Gitea repo to the public GitHub mirror.
+#
+# Deliberately a plain `git push`, NOT Gitea's built-in push mirror. A push
+# mirror force-updates the refs it owns: if anyone ever clicks Merge on a
+# GitHub PR, the next sync silently overwrites main, the PR still displays
+# "Merged", the commit becomes unreachable, and nothing anywhere says so.
+# A non-force push is REJECTED as non-fast-forward the moment that happens,
+# turning a silent data-loss trap into a red CI run in a place we already look.
+#
+# Do NOT add --force here, and do NOT add GitHub branch protection to the
+# mirror: protection rules block the mirror's legitimate pushes too, breaking
+# normal syncing to catch an abnormal case.
+#
+# PAT_GH is a GitHub personal access token (repo + workflow scope; workflow is
+# required because this pushes .github/workflows/). It is stored as a Gitea
+# Actions secret. The name cannot begin with GITHUB_ or GITEA_ -- Gitea
+# reserves both prefixes for its own injected variables and rejects the secret.
+name: Mirror to GitHub
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push main and tags to the GitHub mirror
+        env:
+          PAT_GH: ${{ secrets.PAT_GH }}
+        run: |
+          set -eu
+          if [ -z "${PAT_GH:-}" ]; then
+            echo "PAT_GH is unset -- add it under Settings > Actions > Secrets." >&2
+            exit 1
+          fi
+          git push "https://x-access-token:${PAT_GH}@github.com/civilytics/uscogdata.git" \
+            HEAD:refs/heads/main --tags
