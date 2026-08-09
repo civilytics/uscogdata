@@ -122,9 +122,25 @@
 #' fallback -- correct for the local temp corpora the direct-execution tests
 #' build.
 #' @noRd
+#' `fixed = TRUE` is load-bearing, not a style choice.
+#'
+#' In regex mode, `gsub()` interprets backslashes in the REPLACEMENT string as
+#' escape sequences and silently drops them. A Windows corpus path is full of
+#' them, so `C:\Users\RUNNER\AppData\...` was substituted in as
+#' `C:UsersRUNNERAppData...` and every DuckDB read failed with "No files found
+#' that match the pattern". `fixed = TRUE` treats pattern and replacement as
+#' literal text, which is what a filesystem path needs.
+#'
+#' This is why the package could not read a LOCAL corpus on Windows at all --
+#' including the test fixture, hence the entire suite, and any `cog_mirror()`
+#' copy. Remote https URLs were unaffected, having no backslashes, which is
+#' part of why it stayed hidden: the bug predates the `{long_files}` token and
+#' lived in the original `{url}` substitution, unnoticed because nothing ever
+#' ran on Windows until the mirror's check matrix existed.
+#' @noRd
 .render_view_sql <- function(sql, url, manifest = list()) {
-  sql <- gsub("\\{long_files\\}", .long_files_sql(url, manifest), sql, fixed = FALSE)
-  gsub("\\{url\\}", url, sql, fixed = FALSE)
+  sql <- gsub("{long_files}", .long_files_sql(url, manifest), sql, fixed = TRUE)
+  gsub("{url}", url, sql, fixed = TRUE)
 }
 
 #' Register DuckDB views from inst/sql/ SQL files

@@ -62,3 +62,36 @@ test_that("registered `long` view reads through the enumerated list", {
     expect_true(all(c(2011, 2012, 2019, 2020) %in% yrs))
   })
 })
+
+test_that("a Windows-style corpus path survives token substitution", {
+  # gsub() in regex mode treats backslashes in the REPLACEMENT as escape
+  # sequences and silently drops them, so a Windows path went in as
+  # C:\Users\RUNNER\... and came out as C:UsersRUNNER..., after which every
+  # DuckDB read failed with "No files found that match the pattern".
+  #
+  # That made a LOCAL corpus unreadable on Windows -- the bundled fixture
+  # included, so the whole suite failed there -- while remote https URLs
+  # worked fine, having no backslashes. It went unnoticed for the life of the
+  # package because nothing ever ran on Windows.
+  #
+  # Reproducible on any platform: this is string handling, not a filesystem
+  # behaviour, so it does not need a Windows runner to catch.
+  win <- "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\Rtmp123/"
+
+  out <- uscogdata:::.render_view_sql(
+    "FROM read_parquet('{url}data/summary_categories.parquet')", win
+  )
+  expect_true(grepl("C:\\Users\\RUNNER~1\\AppData", out, fixed = TRUE))
+  expect_false(grepl("C:Users", out, fixed = TRUE))
+
+  # The same must hold through the {long_files} path, which embeds the url
+  # once per enumerated partition.
+  manifest <- list(files = list(long_partitions = list(
+    list(year = 2011L, path = "data/long/year=2011/part-0.parquet")
+  )))
+  out2 <- uscogdata:::.render_view_sql(
+    "FROM read_parquet({long_files}, hive_partitioning = true)", win, manifest
+  )
+  expect_true(grepl("C:\\Users\\RUNNER~1\\AppData", out2, fixed = TRUE))
+  expect_false(grepl("C:Users", out2, fixed = TRUE))
+})
