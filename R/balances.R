@@ -18,7 +18,9 @@
 #' comparable to a GAAP fund balance from an ACFR.
 #'
 #' @param govid Canonical govid(s): a character vector, or a data frame with a
-#'   `canonical_govid` column (e.g. from [cog_gov_search()]).
+#'   `canonical_govid` column (e.g. from [cog_gov_search()]). `NULL` to name
+#'   the cohort by `state`/`type` instead.
+#' @inheritParams cog_spending
 #' @param years Integer vector of fiscal years.
 #' @param category Optional character vector of categories to keep. One of
 #'   `"Fund Balances"`, `"Insurance Trust Balances"`,
@@ -63,15 +65,16 @@
 #'   requested years). `expenditure_concept`/`revenue_concept` are `NA` --
 #'   holdings are a stock, not a flow, so neither concept vocabulary applies.
 #' @export
-cog_balances <- function(govid, years, category = NULL,
+cog_balances <- function(govid = NULL, years, category = NULL,
                          per_capita = FALSE, adjust_to_year = NULL,
-                         basis = c("harmonized", "raw"), recipe = NULL) {
+                         basis = c("harmonized", "raw"), recipe = NULL,
+                         state = NULL, type = NULL) {
   call <- match.call()
   basis <- match.arg(basis, c("harmonized", "raw"))
   # Coerce FIRST, validate second: .validate_verb_inputs() asserts
   # is.character(govid), and a data-frame govid (cog_gov_search() output) has
   # not been unwrapped yet at this point.
-  govid <- .coerce_govid_input(govid)
+  govid <- if (is.null(govid)) NULL else .coerce_govid_input(govid)
   # The money verbs' validator, reused rather than re-implemented (R/spending.R).
   # It covers the exact superset cog_balances() needs -- including the
   # recipe/category mutual-exclusivity guard -- so a second local copy would
@@ -91,6 +94,8 @@ cog_balances <- function(govid, years, category = NULL,
   years <- as.integer(years)
   if (!is.null(adjust_to_year)) adjust_to_year <- as.integer(adjust_to_year)
 
+  cohort <- .make_cohort(govid, state, type)
+
   con <- .ensure_session()
   .require_balance_support(con)
   scope <- .check_govids_in_scope(govid)
@@ -109,7 +114,7 @@ cog_balances <- function(govid, years, category = NULL,
     .validate_recipe_id(con, recipe)
     comps <- .recipe_components(con, recipe)
     recipe_label <- comps$label[[1]]
-    result <- .run_recipe(con, recipe, govid, years)
+    result <- .run_recipe(con, recipe, cohort, years)
     sql <- attr(result, "sql_query")
     result <- .shape_recipe_result(result, "balance_subtype", recipe_label)
     recipe_block <- list(
@@ -119,7 +124,7 @@ cog_balances <- function(govid, years, category = NULL,
     category_for_prov <- recipe_label
   } else {
     sql <- .build_verb_sql("balance_annotated", "balance_subtype",
-                           govid, years, category,
+                           cohort, years, category,
                            ig_view = NULL, subtype_scope = NULL)
     result <- tibble::as_tibble(DBI::dbGetQuery(con, sql))
   }
@@ -127,7 +132,7 @@ cog_balances <- function(govid, years, category = NULL,
   # Order matters (matches .verb_spendrev()): per-capita first, so
   # .attach_real_dollars() deflates the nominal per-capita column into
   # amt_per_capita_real rather than needing amt_per_capita_nominal recomputed.
-  if (isTRUE(per_capita)) result <- .attach_per_capita(result, con, govid)
+  if (isTRUE(per_capita)) result <- .attach_per_capita(result, con)
   if (!is.null(adjust_to_year)) {
     result <- .attach_real_dollars(result, adjust_to_year, per_capita)
   }
@@ -145,6 +150,7 @@ cog_balances <- function(govid, years, category = NULL,
   )
   prov$scope$govids_found   <- scope$found
   prov$scope$govids_missing <- scope$missing
+  prov$scope$cohort <- .cohort_provenance(con, cohort)
 
   prov$balance_caveats <- .balance_caveats(
     con, prov$codes_summed$observed, years

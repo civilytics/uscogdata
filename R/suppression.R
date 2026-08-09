@@ -50,7 +50,9 @@
 #'
 #' @param con Active DuckDB connection.
 #' @param candidates Character vector of recipe ids to measure.
-#' @param govid Character vector of canonical_govid values.
+#' @param cohort The verb's cohort object (see `.make_cohort()`), rendered
+#'   into the govid predicate on both the outer scan and the restated
+#'   NOT EXISTS filter.
 #' @param years Integer vector of requested years.
 #' @param long_view Name of the verb's long view, from `.select_long_view()`.
 #' @param flow_prefixes The calling verb's own flow-type prefixes (see
@@ -60,7 +62,7 @@
 #'   dollars), `suppressed_codes` (comma-joined, sorted). Zero rows when
 #'   nothing is suppressed.
 #' @noRd
-.suppressed_components <- function(con, candidates, govid, years, long_view,
+.suppressed_components <- function(con, candidates, cohort, years, long_view,
                                     flow_prefixes) {
   empty <- tibble::tibble(
     recipe_id = character(0), year = numeric(0),
@@ -93,7 +95,7 @@
            OR (r.gov_type_scope = 'state' AND l.type = 0)
            OR (r.gov_type_scope = 'local' AND l.type BETWEEN 1 AND 3))
      WHERE r.recipe_id IN (%1$s)
-       AND l.canonical_govid IN (%2$s)
+       AND %2$s
        AND l.year IN (%3$s)
        AND l.amt <> 0
        AND LEFT(r.component_code, 1) IN (%5$s)
@@ -103,13 +105,13 @@
            AND v.year = l.year
            AND v.item_code = l.item_code
            AND v.year IN (%3$s)              -- restated: enables partition pruning (I3a)
-           AND v.canonical_govid IN (%2$s)   -- restated: pushes the govid filter (I3a)
+           AND %6$s   -- restated: pushes the cohort filter (I3a)
        )
      GROUP BY 1, 2
      ORDER BY 1, 2",
-    .sql_lit_chr(candidates), .sql_lit_chr(govid),
+    .sql_lit_chr(candidates), .cohort_sql(cohort, "l.canonical_govid"),
     paste(as.integer(years), collapse = ","), long_view,
-    .sql_lit_chr(flow_prefixes)
+    .sql_lit_chr(flow_prefixes), .cohort_sql(cohort, "v.canonical_govid")
   )
   tibble::as_tibble(DBI::dbGetQuery(con, sql))
 }

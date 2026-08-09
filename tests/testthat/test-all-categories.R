@@ -4,7 +4,7 @@ test_that(".build_verb_sql emits a literal category and no category filter in al
   sql <- uscogdata:::.build_verb_sql(
     view         = "spending_annotated",
     subtype_col  = "spend_subtype",
-    govid        = "552025209777",
+    cohort = uscogdata:::.make_cohort("552025209777"),
     years        = 2019L,
     category     = NULL,
     subtype_scope = c("operations", "capital"),
@@ -24,7 +24,7 @@ test_that(".build_verb_sql emits a literal category and no category filter in al
 test_that(".build_verb_sql is unchanged when all_categories is FALSE", {
   args <- list(
     view = "spending_annotated", subtype_col = "spend_subtype",
-    govid = "552025209777", years = 2019L, category = NULL,
+    cohort = uscogdata:::.make_cohort("552025209777"), years = 2019L, category = NULL,
     subtype_scope = c("operations", "capital")
   )
   old <- do.call(uscogdata:::.build_verb_sql, args)
@@ -244,7 +244,7 @@ test_that('"All Categories" candidate scoping is symmetric with .build_verb_sql(
   con <- uscogdata:::.ensure_session()
 
   none <- uscogdata:::.build_suggestions(
-    con, govid = "010000226085", years = 2011L,
+    con, cohort = uscogdata:::.make_cohort("010000226085"), years = 2011L,
     category = "All Categories", result = NULL, basis = "harmonized",
     flow_prefixes = c("E", "F", "G"),
     long_view = "spending_long_harmonized",
@@ -255,7 +255,7 @@ test_that('"All Categories" candidate scoping is symmetric with .build_verb_sql(
   expect_length(none, 0L)
 
   scoped <- uscogdata:::.build_suggestions(
-    con, govid = "010000226085", years = 2011L,
+    con, cohort = uscogdata:::.make_cohort("010000226085"), years = 2011L,
     category = "All Categories", result = NULL, basis = "harmonized",
     flow_prefixes = c("E", "F", "G"),
     long_view = "spending_long_harmonized",

@@ -54,7 +54,7 @@
 #' expenditure_concept = "total": ig_long_harmonized COALESCEs rather than
 #' drops NULL-harmonized rows, so harmonization never excludes an IG row.
 #' @noRd
-.build_harmonization_block <- function(con, govid, years, resolved,
+.build_harmonization_block <- function(con, cohort, years, resolved,
                                        subtype_col, subtype_scope) {
   if (!identical(resolved$basis, "harmonized")) {
     return(list(
@@ -68,12 +68,12 @@
   sql <- sprintf(
     "SELECT COUNT(*) AS n, COALESCE(SUM(amt), 0) * 1000.0 AS amt
      FROM long
-     WHERE canonical_govid IN (%s) AND year IN (%s)
+     WHERE %s AND year IN (%s)
        AND NOT is_aggregate AND harmonized_code IS NULL
        AND item_code IN (
          SELECT item_code FROM summary_categories WHERE %s IN (%s)
        )",
-    .sql_lit_chr(govid), paste(as.integer(years), collapse = ","),
+    .cohort_sql(cohort), paste(as.integer(years), collapse = ","),
     subtype_col, .sql_lit_chr(subtype_scope)
   )
   na <- DBI::dbGetQuery(con, sql)

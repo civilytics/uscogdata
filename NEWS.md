@@ -1,3 +1,59 @@
+# uscogdata 0.4.0
+
+## Cohorts can be named by predicate, not just by id
+
+`cog_spending()`, `cog_revenue()` and `cog_balances()` gain optional `state`
+and `type` arguments. Both default to `NULL`, so every existing call behaves
+exactly as before.
+
+Passing them expresses the cohort as a subquery against `canonical_fips_xwalk`
+inside each statement, instead of round-tripping the ids through R and
+rendering them back into a literal `IN` list:
+
+```r
+# before: resolve 20,106 ids in R, then embed them in every statement
+ids <- cog_gov_search(NULL, state = "CA", type = "city")$canonical_govid
+cog_spending(ids, years = 2022)
+
+# now: the cohort never leaves the database
+cog_spending(years = 2022, state = "CA", type = "city")
+```
+
+Measured against the production corpus, same FY2022 aggregate over the
+20,106-government `type = "city"` cohort:
+
+| cohort expressed as | time |
+|---|---:|
+| `IN (20,106 literals)` | 449 ms |
+| join against a temp cohort table | 99 ms |
+| predicate on `canonical_fips_xwalk` | **94 ms** |
+| no cohort filter at all (the floor) | 88 ms |
+
+**4.8x, within 7% of the floor.** The rendered `IN` list was 301,591
+characters and was re-parsed in 5-8 separate statements per call, so the cost
+was paid repeatedly; the predicate's size is constant in the cohort.
+
+`state` and `type` use the same vocabulary and the same internal coercion as
+`cog_gov_search()` -- `state` is a postal abbreviation (`"WI"`) even though the
+crosswalk column holds a FIPS code (`"55"`).
+
+Supplying `govid` **and** `state`/`type` intersects them: the governments in
+`govid` that also match the predicate. Naming no cohort at all now aborts with
+class `uscogdata_no_cohort` rather than R's "argument is missing" error.
+
+When the cohort is named by predicate there is no id list to report, so
+`provenance$scope$govids_found`/`govids_missing` are empty and
+`provenance$scope$cohort` carries `state`, `type` and `n_governments` instead.
+A `govid`-named cohort's provenance is unchanged.
+
+## Fixes
+
+* An unknown `state` abbreviation now aborts with "Unknown state abbreviation"
+  (class `uscogdata_unknown_state`) instead of base R's "subscript out of
+  bounds". `.state_abbrev_to_fips` is a named character vector, so `[[` on an
+  absent name threw before the curated message could be reached -- making that
+  message unreachable dead code in every verb that takes a `state`.
+
 # uscogdata 0.3.0
 
 First public release.

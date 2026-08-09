@@ -184,11 +184,18 @@ cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
   if (!is.character(state) || length(state) != 1L) {
     cli::cli_abort("`state` must be a 2-letter USPS abbrev or a FIPS integer.")
   }
-  fips <- .state_abbrev_to_fips[[toupper(state)]]
-  if (is.null(fips)) {
-    cli::cli_abort("Unknown state abbreviation: {state}.")
+  # Membership tested before the lookup, not after: `.state_abbrev_to_fips` is
+  # a named CHARACTER vector, and `[[` on a name it does not carry throws
+  # base R's "subscript out of bounds" rather than returning NULL -- which
+  # made the curated message below unreachable dead code. Reported as a bare
+  # subscript error, `cog_gov_search(state = "ZZ")` gave no hint that the
+  # argument wants a postal abbreviation.
+  key <- toupper(state)
+  if (!key %in% names(.state_abbrev_to_fips)) {
+    cli::cli_abort("Unknown state abbreviation: {state}.",
+                   class = "uscogdata_unknown_state")
   }
-  fips
+  .state_abbrev_to_fips[[key]]
 }
 
 # USPS state / territory abbreviation -> 2-digit FIPS code.

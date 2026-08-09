@@ -42,8 +42,8 @@
 #' verb call: recipes whose generic join would fill a real gap in `result`.
 #'
 #' @param con Active DuckDB connection.
-#' @param govid Character vector of canonical_govid values (the verb's raw
-#'   `govid`).
+#' @param cohort The verb's cohort object (see `.make_cohort()`), naming the
+#'   governments by id, by state/type predicate, or both.
 #' @param years Integer vector of requested years.
 #' @param category `category` argument as passed to the verb (character
 #'   vector or `NULL`; suggestions are only computed when non-NULL).
@@ -85,7 +85,7 @@
 #'   ig_recipe_id, trigger, suppressed_amount, suppressed_years,
 #'   suppressed_codes)`, possibly empty.
 #' @noRd
-.build_suggestions <- function(con, govid, years, category, result, basis,
+.build_suggestions <- function(con, cohort, years, category, result, basis,
                                 flow_prefixes, long_view,
                                 all_categories = FALSE,
                                 subtype_col = NULL, subtype_scope = NULL) {
@@ -160,7 +160,7 @@
   # violation would kill signposting, the exact failure class uscogdata#9
   # exists to prevent. Owner's call: keep this simple; a batch-aware
   # optimization, if one is worth building, is a separate issue.
-  supp <- .suppressed_components(con, candidates, govid, years, long_view, flow_prefixes)
+  supp <- .suppressed_components(con, candidates, cohort, years, long_view, flow_prefixes)
 
   if (length(gap_years) == 0L && nrow(supp) == 0L) return(list())
 
@@ -188,9 +188,9 @@
              OR (r.gov_type_scope = 'state' AND l.type = 0)
              OR (r.gov_type_scope = 'local' AND l.type BETWEEN 1 AND 3))
        WHERE r.recipe_id IN (%s)
-         AND l.canonical_govid IN (%s)
+         AND %s
          AND l.year IN (%s)",
-      .sql_lit_chr(candidates), .sql_lit_chr(govid),
+      .sql_lit_chr(candidates), .cohort_sql(cohort, "l.canonical_govid"),
       paste(gap_years, collapse = ",")
     ))
   }

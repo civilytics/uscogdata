@@ -57,7 +57,7 @@
 #' aggregate rows. Without it the grid would offer cells the verb structurally
 #' never returns, so every one of them would fill as a phantom $0.
 #' @noRd
-.completion_grid_sql <- function(subtype_col, govid, years, category,
+.completion_grid_sql <- function(subtype_col, cohort, years, category,
                                  subtype_scope) {
   category_pred <- if (is.null(category)) {
     ""
@@ -76,13 +76,13 @@
      JOIN canonical_fips_xwalk x ON x.govs_type = cs.type
      JOIN summary_categories c   ON c.item_code = cs.item_code
      JOIN representation r       ON r.year = cs.year
-     WHERE x.canonical_govid IN (%2$s)
+     WHERE %2$s
        AND cs.year IN (%3$s)
        AND NOT cs.is_aggregate
        AND c.category IS NOT NULL
        AND c.%1$s IN (%4$s)
        %5$s",
-    subtype_col, .sql_lit_chr(govid),
+    subtype_col, .cohort_sql(cohort, "x.canonical_govid"),
     paste(as.integer(years), collapse = ","),
     .sql_lit_chr(subtype_scope), category_pred
   )
@@ -94,10 +94,10 @@
 #' provenance block. Reported rows are passed through untouched -- filling
 #' must never alter or drop what the corpus actually published.
 #' @noRd
-.complete_result <- function(result, con, subtype_col, govid, years, category,
+.complete_result <- function(result, con, subtype_col, cohort, years, category,
                              subtype_scope) {
   grid <- tibble::as_tibble(DBI::dbGetQuery(
-    con, .completion_grid_sql(subtype_col, govid, years, category, subtype_scope)
+    con, .completion_grid_sql(subtype_col, cohort, years, category, subtype_scope)
   ))
 
   result$value_source <- rep("reported", nrow(result))
