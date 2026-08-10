@@ -44,10 +44,22 @@
 #'   in basket mode (recycles from length 1). Excluded types `4`/`5` (or
 #'   `"special_district"` / `"school_district"`) trigger an explanatory
 #'   message and an empty result.
+#' @param limit Maximum number of rows to return, applied in SQL. `NULL`
+#'   (default) returns every match -- which, with no other filter, is the
+#'   entire crosswalk. Utility mode only: pagination has no meaning in basket
+#'   mode, where the result is one resolved row per requested name in input
+#'   order, and is refused there with class
+#'   `uscogdata_basket_pagination_conflict`.
+#' @param offset Rows to skip before `limit` starts counting (0-based).
+#'   Ignored if `limit` is `NULL`; defaults to `0L` when `limit` is set.
 #' @return A tibble of `canonical_fips_xwalk` rows. In utility mode, all
-#'   matches sorted by `population_acs` desc. In basket mode, resolved
-#'   rows in input order, with `attr(., "resolution")` set to the
-#'   sidecar tibble.
+#'   matches sorted by `population_acs` desc, ties broken by
+#'   `canonical_govid`. In basket mode, resolved rows in input order, with
+#'   `attr(., "resolution")` set to the sidecar tibble.
+#'
+#'   When `limit` is set, carries a `total_rows` attribute: the full
+#'   unpaginated match count, computed by the same query (`COUNT(*) OVER()`)
+#'   rather than a second scan.
 #' @seealso [cog_basket_resolution()], [cog_basket_unresolved()],
 #'   [cog_spending()], [cog_revenue()].
 #' @examples
@@ -82,7 +94,12 @@
 #' )
 #' }
 #' @export
-cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
+cog_gov_search <- function(name = NULL, state = NULL, type = NULL,
+                           limit = NULL, offset = NULL) {
+  paging <- .validate_pagination(limit, offset)
+  limit  <- paging$limit
+  offset <- paging$offset
+
   if (!is.null(type) && length(type) == 1L && .is_excluded_type(type)) {
     cli::cli_inform(c(
       i = "v0.1 covers gov_types 0-3 (state/county/city/township) only.",
@@ -94,6 +111,18 @@ cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
   con <- .ensure_session()
 
   if (length(name) > 1L) {
+    # Basket mode returns one resolved row per requested name, in input order,
+    # with a resolution sidecar describing how each was matched. A page of that
+    # is not a page of anything the caller asked for -- the sidecar would still
+    # describe every name -- so refuse rather than silently ignoring the
+    # arguments. Same shape as the recipe/complete refusals in .verb_spendrev().
+    if (!is.null(limit)) {
+      cli::cli_abort(c(
+        "`limit`/`offset` cannot be combined with basket mode.",
+        "i" = "Basket mode ({.code length(name) > 1}) returns one resolved row per requested name, in input order, with a resolution sidecar covering all of them.",
+        "*" = "Drop `limit`/`offset`, or search one name at a time."
+      ), class = "uscogdata_basket_pagination_conflict")
+    }
     return(.resolve_basket(name = name, state = state, type = type, con = con))
   }
 
@@ -123,12 +152,26 @@ cog_gov_search <- function(name = NULL, state = NULL, type = NULL) {
   }
 
   where <- if (length(preds) == 0L) "" else paste("WHERE", paste(preds, collapse = " AND "))
-  sql <- paste(
+  # canonical_govid breaks ties. population_acs alone is NOT a total order --
+  # governments sharing a population, and the whole NULLS LAST block, came back
+  # in whatever order the scan produced. That was invisible while every call
+  # returned the full result set, but it makes a paged sweep unsound: two
+  # requests can order the tied rows differently, so a row is duplicated on one
+  # page and missing from the next. Any pagination has to sit on a total order.
+  base_sql <- paste(
     "SELECT * FROM canonical_fips_xwalk",
     where,
-    "ORDER BY population_acs DESC NULLS LAST"
+    "ORDER BY population_acs DESC NULLS LAST, canonical_govid"
   )
-  tibble::as_tibble(DBI::dbGetQuery(con, sql))
+  result <- tibble::as_tibble(
+    DBI::dbGetQuery(con, .paginate_sql(base_sql, limit, offset))
+  )
+  if (is.null(limit)) return(result)
+
+  paged <- .take_pagination_total(result, con, base_sql)
+  out <- paged$result
+  attr(out, "total_rows") <- paged$total_rows
+  out
 }
 
 #' @noRd

@@ -13,7 +13,9 @@ cog_balances(
   basis = c("harmonized", "raw"),
   recipe = NULL,
   state = NULL,
-  type = NULL
+  type = NULL,
+  limit = NULL,
+  offset = NULL
 )
 }
 \arguments{
@@ -76,6 +78,14 @@ wide era to the modern one.}
   and `govids_missing` are empty -- there is no id list to report against --
   and `provenance$scope$cohort` carries `state`, `type` and
   `n_governments` instead. A `govid`-named cohort reports exactly as before.}
+
+\item{limit}{Maximum number of result rows to return, pushed into the SQL
+rather than applied after materializing every row. `NULL` (default)
+returns everything. Cannot be combined with `recipe` -- see `offset` and
+`total_rows`.}
+
+\item{offset}{Rows to skip before `limit` starts counting (0-based).
+Ignored if `limit` is `NULL`; defaults to `0L` when `limit` is set.}
 }
 \value{
 Tibble with columns `year`, `canonical_govid`, `gov_name`,
@@ -94,6 +104,10 @@ Tibble with columns `year`, `canonical_govid`, `gov_name`,
   and `truncated` (the observed subtypes whose coverage falls short of the
   requested years). `expenditure_concept`/`revenue_concept` are `NA` --
   holdings are a stock, not a flow, so neither concept vocabulary applies.
+
+  When `limit` is set, also carries a `total_rows` attribute: the full
+  unpaginated row count, computed by the same query (`COUNT(*) OVER()`)
+  rather than a second scan.
 }
 \description{
 Returns Census cash-and-security holdings (`category_type = "balance"`):

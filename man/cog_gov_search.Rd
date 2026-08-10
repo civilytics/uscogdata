@@ -4,7 +4,13 @@
 \alias{cog_gov_search}
 \title{Search for governments by name, state, and/or type}
 \usage{
-cog_gov_search(name = NULL, state = NULL, type = NULL)
+cog_gov_search(
+  name = NULL,
+  state = NULL,
+  type = NULL,
+  limit = NULL,
+  offset = NULL
+)
 }
 \arguments{
 \item{name}{Character vector of place name(s). Length 1 = utility mode;
@@ -19,12 +25,26 @@ all entries; otherwise must match `length(name)`.}
 in basket mode (recycles from length 1). Excluded types `4`/`5` (or
 `"special_district"` / `"school_district"`) trigger an explanatory
 message and an empty result.}
+
+\item{limit}{Maximum number of rows to return, applied in SQL. `NULL`
+(default) returns every match -- which, with no other filter, is the
+entire crosswalk. Utility mode only: pagination has no meaning in basket
+mode, where the result is one resolved row per requested name in input
+order, and is refused there with class
+`uscogdata_basket_pagination_conflict`.}
+
+\item{offset}{Rows to skip before `limit` starts counting (0-based).
+Ignored if `limit` is `NULL`; defaults to `0L` when `limit` is set.}
 }
 \value{
 A tibble of `canonical_fips_xwalk` rows. In utility mode, all
-  matches sorted by `population_acs` desc. In basket mode, resolved
-  rows in input order, with `attr(., "resolution")` set to the
-  sidecar tibble.
+  matches sorted by `population_acs` desc, ties broken by
+  `canonical_govid`. In basket mode, resolved rows in input order, with
+  `attr(., "resolution")` set to the sidecar tibble.
+
+  When `limit` is set, carries a `total_rows` attribute: the full
+  unpaginated match count, computed by the same query (`COUNT(*) OVER()`)
+  rather than a second scan.
 }
 \description{
 Resolves human-readable place names into rows of `canonical_fips_xwalk`,
