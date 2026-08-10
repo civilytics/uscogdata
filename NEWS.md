@@ -19,6 +19,28 @@ at boot -- `getFromNamespace(".ensure_session", "uscogdata")()` followed by a ma
 `SET threads` -- depending both on a private name and on the session already being
 open.
 
+## `cog_gov_search()` and `cog_balances()` gain `limit`/`offset`
+
+Pagination arrived on `cog_spending()`/`cog_revenue()` in 0.3.0; the other two
+verbs were left materializing everything and slicing in R. Both now take
+`limit`/`offset` with the same semantics: `NULL` default, the page applied in
+SQL behind a deterministic `ORDER BY`, and the unpaginated count returned as a
+`total_rows` attribute computed by `COUNT(*) OVER()` in the same scan rather
+than a second query.
+
+`cog_gov_search()` had no `LIMIT` at all, which made it the one verb that
+returns the entire 40,336-row crosswalk when called with no filter.
+
+Two refusals rather than silent surprises:
+
+* `cog_balances(recipe = , limit = )` aborts with class
+  `uscogdata_recipe_pagination_conflict` -- a recipe's result comes from a
+  separate query that pagination is not wired into.
+* `cog_gov_search()` in basket mode (`length(name) > 1`) aborts with class
+  `uscogdata_basket_pagination_conflict`. Basket mode returns one resolved row
+  per requested name with a sidecar covering all of them; a page of that is not
+  a page of anything the caller asked for.
+
 ## Cohorts can be named by predicate, not just by id
 
 `cog_spending()`, `cog_revenue()` and `cog_balances()` gain optional `state`
@@ -66,6 +88,14 @@ When the cohort is named by predicate there is no id list to report, so
 A `govid`-named cohort's provenance is unchanged.
 
 ## Fixes
+
+* `cog_gov_search()` now orders by `population_acs DESC NULLS LAST,
+  canonical_govid`. **`population_acs` alone is not a total order** -- ties, and
+  the entire `NULLS LAST` block, came back in whatever order the scan produced.
+  That was invisible while every call returned the full result set, but it makes
+  a paged sweep unsound: two requests can order tied rows differently, so a row
+  is duplicated on one page and missing from the next. Unpaginated results are
+  unchanged except for the relative order of rows that were already tied.
 
 * An unknown `state` abbreviation now aborts with "Unknown state abbreviation"
   (class `uscogdata_unknown_state`) instead of base R's "subscript out of

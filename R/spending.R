@@ -398,17 +398,10 @@ cog_spending <- function(govid = NULL, years, category = NULL,
   # up front rather than silently ignored: complete = TRUE fills a grid over
   # the FULL requested (year, category) space, and a recipe's result comes
   # from .run_recipe()'s own query, which this function does not touch.
+  paging <- .validate_pagination(limit, offset)
+  limit  <- paging$limit
+  offset <- paging$offset
   if (!is.null(limit)) {
-    limit <- as.integer(limit)
-    if (length(limit) != 1L || is.na(limit) || limit < 0L) {
-      cli::cli_abort("`limit` must be a single non-negative integer.",
-                     class = "uscogdata_invalid_pagination")
-    }
-    offset <- if (is.null(offset)) 0L else as.integer(offset)
-    if (length(offset) != 1L || is.na(offset) || offset < 0L) {
-      cli::cli_abort("`offset` must be a single non-negative integer.",
-                     class = "uscogdata_invalid_pagination")
-    }
     if (complete) {
       cli::cli_abort(c(
         "`limit`/`offset` cannot be combined with `complete = TRUE`.",
@@ -466,24 +459,14 @@ cog_spending <- function(govid = NULL, years, category = NULL,
                            limit = limit, offset = offset)
     result <- tibble::as_tibble(DBI::dbGetQuery(con, sql))
     if (!is.null(limit)) {
-      # COUNT(*) OVER() rides along as an ordinary column so the total comes
-      # from the same scan when this page has any rows -- see
-      # .build_verb_sql(). An empty page (offset past the end) carries no
-      # such row to read it from, so that one case falls back to a second,
-      # unpaginated COUNT(*) query rather than reporting a wrong zero.
-      if (nrow(result) > 0L) {
-        total_rows <- result$pagination_total_rows[[1]]
-        result$pagination_total_rows <- NULL
-      } else {
-        count_sql <- sprintf(
-          "SELECT COUNT(*) AS n FROM (%s) AS _uncounted",
-          .build_verb_sql(view, subtype_col, cohort, years,
-                          if (all_categories) NULL else category,
-                          ig_view, subtype_scope,
-                          all_categories = all_categories)
-        )
-        total_rows <- as.integer(DBI::dbGetQuery(con, count_sql)$n[[1]])
-      }
+      paged <- .take_pagination_total(result, con, function() {
+        .build_verb_sql(view, subtype_col, cohort, years,
+                        if (all_categories) NULL else category,
+                        ig_view, subtype_scope,
+                        all_categories = all_categories)
+      })
+      result     <- paged$result
+      total_rows <- paged$total_rows
     }
   }
 
@@ -873,22 +856,9 @@ cog_spending <- function(govid = NULL, years, category = NULL,
   # matching row across the network only to slice and discard most of it
   # afterward (the pattern behind the 2026-08-06 production incident: a
   # 193,105-row/194-page sweep re-ran the full query and re-listified every
-  # row on EVERY page). COUNT(*) OVER() rides along as an ordinary column so
-  # the caller gets the true total from this same scan -- see the call site
-  # in .verb_spendrev(), which reads it off row 1 and strips it back out.
-  # The outer SELECT * wrapping (rather than appending LIMIT/OFFSET directly
-  # to base_sql) is what makes COUNT(*) OVER() see the post-GROUP-BY row
-  # count, not the pre-aggregation one.
-  if (is.null(limit)) {
-    base_sql
-  } else {
-    sprintf(
-      "SELECT *, COUNT(*) OVER() AS pagination_total_rows
-       FROM (%s) AS _paged
-       LIMIT %d OFFSET %d",
-      base_sql, limit, offset
-    )
-  }
+  # row on EVERY page). See .paginate_sql() in R/pagination.R for why the
+  # wrapping is an outer SELECT rather than a bare LIMIT on base_sql.
+  .paginate_sql(base_sql, limit, offset)
 }
 
 #' Join population onto a result and derive the per-capita columns.

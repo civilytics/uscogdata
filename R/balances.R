@@ -47,6 +47,12 @@
 #' @param recipe Optional harmonization recipe id (see [cog_recipes()]).
 #'   `"cash_securities_z77_wide"` and `"cash_securities_z78_wide"` bridge the
 #'   wide era to the modern one.
+#' @param limit Maximum number of result rows to return, pushed into the SQL
+#'   rather than applied after materializing every row. `NULL` (default)
+#'   returns everything. Cannot be combined with `recipe` -- see `offset` and
+#'   `total_rows`.
+#' @param offset Rows to skip before `limit` starts counting (0-based).
+#'   Ignored if `limit` is `NULL`; defaults to `0L` when `limit` is set.
 #'
 #' @return Tibble with columns `year`, `canonical_govid`, `gov_name`,
 #'   `balance_subtype`, `category`, `amt_nominal`, `codes_included`,
@@ -64,11 +70,16 @@
 #'   and `truncated` (the observed subtypes whose coverage falls short of the
 #'   requested years). `expenditure_concept`/`revenue_concept` are `NA` --
 #'   holdings are a stock, not a flow, so neither concept vocabulary applies.
+#'
+#'   When `limit` is set, also carries a `total_rows` attribute: the full
+#'   unpaginated row count, computed by the same query (`COUNT(*) OVER()`)
+#'   rather than a second scan.
 #' @export
 cog_balances <- function(govid = NULL, years, category = NULL,
                          per_capita = FALSE, adjust_to_year = NULL,
                          basis = c("harmonized", "raw"), recipe = NULL,
-                         state = NULL, type = NULL) {
+                         state = NULL, type = NULL,
+                         limit = NULL, offset = NULL) {
   call <- match.call()
   basis <- match.arg(basis, c("harmonized", "raw"))
   # Coerce FIRST, validate second: .validate_verb_inputs() asserts
@@ -91,6 +102,22 @@ cog_balances <- function(govid = NULL, years, category = NULL,
   # validator's own doc comment for the incident that made that matter.
   .validate_verb_inputs(govid, years, category, per_capita, adjust_to_year,
                         recipe)
+
+  # Same semantics as the money verbs (R/pagination.R). Only the `recipe`
+  # conflict applies here: cog_balances() has no `complete` argument, and a
+  # recipe's result comes from .run_recipe()'s own query, which pagination is
+  # not wired into.
+  paging <- .validate_pagination(limit, offset)
+  limit  <- paging$limit
+  offset <- paging$offset
+  if (!is.null(limit) && !is.null(recipe)) {
+    cli::cli_abort(c(
+      "`limit`/`offset` cannot be combined with `recipe`.",
+      "i" = "A recipe's result comes from a separate query (`.run_recipe()`) that pagination is not wired into yet.",
+      "*" = "Drop `limit`/`offset`, or drop `recipe`."
+    ), class = "uscogdata_recipe_pagination_conflict")
+  }
+
   years <- as.integer(years)
   if (!is.null(adjust_to_year)) adjust_to_year <- as.integer(adjust_to_year)
 
@@ -108,6 +135,7 @@ cog_balances <- function(govid = NULL, years, category = NULL,
   manifest <- .uscogdata_env$manifest
   recipe_block <- NULL
   category_for_prov <- category
+  total_rows <- NULL  # set below only when limit is non-NULL (non-recipe path)
 
   if (!is.null(recipe)) {
     .require_schema_v5(con, manifest, "recipe =")
@@ -125,8 +153,18 @@ cog_balances <- function(govid = NULL, years, category = NULL,
   } else {
     sql <- .build_verb_sql("balance_annotated", "balance_subtype",
                            cohort, years, category,
-                           ig_view = NULL, subtype_scope = NULL)
+                           ig_view = NULL, subtype_scope = NULL,
+                           limit = limit, offset = offset)
     result <- tibble::as_tibble(DBI::dbGetQuery(con, sql))
+    if (!is.null(limit)) {
+      paged <- .take_pagination_total(result, con, function() {
+        .build_verb_sql("balance_annotated", "balance_subtype",
+                        cohort, years, category,
+                        ig_view = NULL, subtype_scope = NULL)
+      })
+      result     <- paged$result
+      total_rows <- paged$total_rows
+    }
   }
 
   # Order matters (matches .verb_spendrev()): per-capita first, so
@@ -158,6 +196,7 @@ cog_balances <- function(govid = NULL, years, category = NULL,
   .emit_balance_caveats(prov$balance_caveats)
 
   attr(result, "provenance") <- prov
+  if (!is.null(limit)) attr(result, "total_rows") <- total_rows
   result
 }
 
