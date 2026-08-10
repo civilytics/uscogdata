@@ -1,6 +1,7 @@
 # uscogdata
 
 <!-- badges: start -->
+[![R-CMD-check](https://github.com/civilytics/uscogdata/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/civilytics/uscogdata/actions/workflows/R-CMD-check.yaml)
 [![r-universe](https://civilytics.r-universe.dev/badges/uscogdata)](https://civilytics.r-universe.dev/uscogdata)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 <!-- badges: end -->

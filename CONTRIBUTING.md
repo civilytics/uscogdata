@@ -101,5 +101,13 @@ but "usually" is not a release gate.
    variables set. This is the only check that catches a
    corpus-unreachable defect, and its absence is why 0.3.0 needed fixing.
 8. Bump `Version` and add a `NEWS.md` section.
-9. Tag, then update the r-universe registry pin at
-   `github.com/civilytics/civilytics.r-universe.dev`.
+9. Tag on **Gitea** (`git tag -a vX.Y.Z && git push origin vX.Y.Z`). The mirror
+   workflow carries tags to GitHub on its own — confirm the tag appears at
+   `github.com/civilytics/uscogdata/tags` before continuing.
+10. Update the r-universe registry pin at
+    `github.com/civilytics/civilytics.r-universe.dev` — edit `packages.json`'s
+    `branch` to the new tag. **r-universe will not pick up a release until this
+    is edited**: the pin is a tag, deliberately, so a mid-refactor `main` is
+    never published as a release. `"branch": "*release"` would track releases
+    automatically, but it needs a GitHub *Release* object and the mirror pushes
+    tags only — so it would silently never update.
