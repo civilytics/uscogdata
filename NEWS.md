@@ -1,46 +1,5 @@
 # uscogdata 0.4.0
 
-## DuckDB's resource budget is configurable
-
-`USCOGDATA_DUCKDB_THREADS` and `USCOGDATA_DUCKDB_MEMORY_LIMIT` (with matching
-`options(uscogdata.duckdb_threads = )` / `options(uscogdata.duckdb_memory_limit = )`
-spellings) cap the DuckDB connection the package opens. Both follow the same
-env-var > option > default precedence as `USCOGDATA_URL`.
-
-Unset, **no pragma is issued at all** and DuckDB's own defaults apply exactly as
-before -- every visible core. That is right for one interactive session on a
-dedicated machine and wrong for a server: where several readers share a host, each
-otherwise claims the whole machine and they contend. Capping measured ~5% on a
-single-government all-years query (502 ms at 2 threads vs 475 ms uncapped on 16
-cores), which is cheap enough that a server should always cap.
-
-This replaces a workaround in which a consumer reached into the package namespace
-at boot -- `getFromNamespace(".ensure_session", "uscogdata")()` followed by a manual
-`SET threads` -- depending both on a private name and on the session already being
-open.
-
-## `cog_gov_search()` and `cog_balances()` gain `limit`/`offset`
-
-Pagination arrived on `cog_spending()`/`cog_revenue()` in 0.3.0; the other two
-verbs were left materializing everything and slicing in R. Both now take
-`limit`/`offset` with the same semantics: `NULL` default, the page applied in
-SQL behind a deterministic `ORDER BY`, and the unpaginated count returned as a
-`total_rows` attribute computed by `COUNT(*) OVER()` in the same scan rather
-than a second query.
-
-`cog_gov_search()` had no `LIMIT` at all, which made it the one verb that
-returns the entire 40,336-row crosswalk when called with no filter.
-
-Two refusals rather than silent surprises:
-
-* `cog_balances(recipe = , limit = )` aborts with class
-  `uscogdata_recipe_pagination_conflict` -- a recipe's result comes from a
-  separate query that pagination is not wired into.
-* `cog_gov_search()` in basket mode (`length(name) > 1`) aborts with class
-  `uscogdata_basket_pagination_conflict`. Basket mode returns one resolved row
-  per requested name with a sidecar covering all of them; a page of that is not
-  a page of anything the caller asked for.
-
 ## Cohorts can be named by predicate, not just by id
 
 `cog_spending()`, `cog_revenue()` and `cog_balances()` gain optional `state`
@@ -86,6 +45,71 @@ When the cohort is named by predicate there is no id list to report, so
 `provenance$scope$govids_found`/`govids_missing` are empty and
 `provenance$scope$cohort` carries `state`, `type` and `n_governments` instead.
 A `govid`-named cohort's provenance is unchanged.
+
+## `cog_gov_search()` and `cog_balances()` gain `limit`/`offset`
+
+Pagination arrived on `cog_spending()`/`cog_revenue()` in 0.3.0; the other two
+verbs were left materializing everything and slicing in R. Both now take
+`limit`/`offset` with the same semantics: `NULL` default, the page applied in
+SQL behind a deterministic `ORDER BY`, and the unpaginated count returned as a
+`total_rows` attribute computed by `COUNT(*) OVER()` in the same scan rather
+than a second query.
+
+`cog_gov_search()` had no `LIMIT` at all, which made it the one verb that
+returns the entire 40,336-row crosswalk when called with no filter.
+
+Two refusals rather than silent surprises:
+
+* `cog_balances(recipe = , limit = )` aborts with class
+  `uscogdata_recipe_pagination_conflict` -- a recipe's result comes from a
+  separate query that pagination is not wired into.
+* `cog_gov_search()` in basket mode (`length(name) > 1`) aborts with class
+  `uscogdata_basket_pagination_conflict`. Basket mode returns one resolved row
+  per requested name with a sidecar covering all of them; a page of that is not
+  a page of anything the caller asked for.
+
+## DuckDB's resource budget is configurable
+
+`USCOGDATA_DUCKDB_THREADS` and `USCOGDATA_DUCKDB_MEMORY_LIMIT` (with matching
+`options(uscogdata.duckdb_threads = )` / `options(uscogdata.duckdb_memory_limit = )`
+spellings) cap the DuckDB connection the package opens. Both follow the same
+env-var > option > default precedence as `USCOGDATA_URL`.
+
+Unset, **no pragma is issued at all** and DuckDB's own defaults apply exactly as
+before -- every visible core. That is right for one interactive session on a
+dedicated machine and wrong for a server: where several readers share a host, each
+otherwise claims the whole machine and they contend. Capping measured ~5% on a
+single-government all-years query (502 ms at 2 threads vs 475 ms uncapped on 16
+cores), which is cheap enough that a server should always cap.
+
+This replaces a workaround in which a consumer reached into the package namespace
+at boot -- `getFromNamespace(".ensure_session", "uscogdata")()` followed by a manual
+`SET threads` -- depending both on a private name and on the session already being
+open.
+
+## Documentation: the corpus-access table is re-measured and honest
+
+The README's "two ways to read the corpus" table carried figures taken before
+the corpus was re-chunked into row groups (cog_pipeline#93, published
+2026-08-09) and reported the mirrored column as "local speed" with no number at
+all. Re-measured 2026-08-10 against the published corpus (`pipeline_commit
+3d28ddd`), fresh R session per arm:
+
+* **A local mirror is roughly 60-80x faster.** A one-off question costs ~12 s
+  end to end remotely against ~0.15 s mirrored. That is the largest single
+  difference available to a user and it is now stated outright rather than left
+  as "local speed".
+* **Opening the session is the largest remote cost** (~7.5 s -- manifest fetch
+  plus 23 view registrations over HTTPS), larger than any individual query, and
+  it lands on the first query rather than on `library(uscogdata)`. The old table
+  did not account for it anywhere.
+* **The remote cost is round-trips, not scanning.** A repeat query over
+  already-touched partitions is ~1.5 s against ~4 s cold, and a full-history
+  query costs ~7 s whether it runs first or last.
+* The corpus size is **~201 MB**, not 190.6 MB -- row-group chunking added ~3.4%
+  and the old figure was ambiguous between MB and MiB besides.
+* Documented that a burst of remote queries can be rate-limited by the host
+  (`HTTP 429`), which is another reason to mirror for real work.
 
 ## Fixes
 
