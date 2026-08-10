@@ -1,5 +1,24 @@
 # uscogdata 0.4.0
 
+## DuckDB's resource budget is configurable
+
+`USCOGDATA_DUCKDB_THREADS` and `USCOGDATA_DUCKDB_MEMORY_LIMIT` (with matching
+`options(uscogdata.duckdb_threads = )` / `options(uscogdata.duckdb_memory_limit = )`
+spellings) cap the DuckDB connection the package opens. Both follow the same
+env-var > option > default precedence as `USCOGDATA_URL`.
+
+Unset, **no pragma is issued at all** and DuckDB's own defaults apply exactly as
+before -- every visible core. That is right for one interactive session on a
+dedicated machine and wrong for a server: where several readers share a host, each
+otherwise claims the whole machine and they contend. Capping measured ~5% on a
+single-government all-years query (502 ms at 2 threads vs 475 ms uncapped on 16
+cores), which is cheap enough that a server should always cap.
+
+This replaces a workaround in which a consumer reached into the package namespace
+at boot -- `getFromNamespace(".ensure_session", "uscogdata")()` followed by a manual
+`SET threads` -- depending both on a private name and on the session already being
+open.
+
 ## Cohorts can be named by predicate, not just by id
 
 `cog_spending()`, `cog_revenue()` and `cog_balances()` gain optional `state`

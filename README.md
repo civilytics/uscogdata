@@ -110,6 +110,17 @@ After that, nothing in your analysis touches an external service.
 - `USCOGDATA_URL` — corpus root: an HTTPS URL or a local path, **trailing slash required**
 - `USCOGDATA_CACHE_DIR` — where the manifest is cached (default: user cache dir)
 - `USCOGDATA_MANIFEST_TTL_SECS` — manifest re-fetch interval (default 3600)
+- `USCOGDATA_DUCKDB_THREADS` — cap DuckDB's thread count (default: every visible core)
+- `USCOGDATA_DUCKDB_MEMORY_LIMIT` — cap DuckDB's memory, e.g. `"4GB"` (default: DuckDB's own)
+
+Each also has an `options()` spelling — `uscogdata.url`, `uscogdata.duckdb_threads`,
+and so on — and the environment variable wins where both are set.
+
+The two DuckDB caps exist for **servers**, not laptops. Unset, DuckDB claims every
+core it can see, which is right for one interactive session on your own machine and
+wrong when several readers share a box: each claims the whole machine and they fight.
+Capping costs roughly 5% on a single query and is worth it anywhere the process is
+sharing hardware.
 
 ## Amounts are in full US dollars
 
