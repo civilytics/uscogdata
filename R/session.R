@@ -2,13 +2,23 @@
 
 #' Internal: open session, register views, cache manifest.
 #' Not exported. Called lazily by verbs via .ensure_session().
+#'
+#' `threads` and `memory_limit` default to the resolved configuration and are
+#' applied as pragmas on the new connection. When both resolve to NULL -- which
+#' is the case unless the operator sets one -- NO pragma is issued at all, so an
+#' unconfigured session connects exactly as it did before this argument existed.
 #' @noRd
 cog_open <- function(url = .resolve_url(),
-                     cache_dir = .resolve_cache_dir()) {
+                     cache_dir = .resolve_cache_dir(),
+                     threads = .resolve_duckdb_threads(),
+                     memory_limit = .resolve_duckdb_memory_limit()) {
   .check_url_configured(url)
   if (!dir.exists(cache_dir)) dir.create(cache_dir, recursive = TRUE)
 
   con <- DBI::dbConnect(duckdb::duckdb())
+  # Before anything else touches the connection: httpfs reads the corpus, and
+  # a remote read should already be bound by whatever budget the operator set.
+  .apply_duckdb_limits(con, threads, memory_limit)
   DBI::dbExecute(con, "INSTALL httpfs; LOAD httpfs;")
 
   manifest <- .fetch_or_cache_manifest(url, cache_dir)
@@ -22,6 +32,26 @@ cog_open <- function(url = .resolve_url(),
   .uscogdata_env$url       <- url
   .uscogdata_env$cache_dir <- cache_dir
 
+  invisible(con)
+}
+
+#' Apply the operator's DuckDB resource budget to a fresh connection.
+#'
+#' Split out from cog_open() so the "unset changes nothing" property is one
+#' readable branch rather than two conditionals buried in the connection path.
+#' Both settings are session-scoped in DuckDB, so this must run per connection;
+#' cog_close() discards the connection and the next cog_open() re-resolves,
+#' which is what makes a changed option take effect on the next session.
+#' @noRd
+.apply_duckdb_limits <- function(con, threads, memory_limit) {
+  if (!is.null(threads)) {
+    DBI::dbExecute(con, sprintf("SET threads TO %d", threads))
+  }
+  if (!is.null(memory_limit)) {
+    # Quoted as a string literal: DuckDB's memory_limit takes '4GB', not 4GB.
+    DBI::dbExecute(con, sprintf("SET memory_limit TO %s",
+                                .sql_lit_chr(memory_limit)))
+  }
   invisible(con)
 }
 
