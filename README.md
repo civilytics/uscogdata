@@ -18,7 +18,7 @@ carries provenance describing what was converted, what was aggregated, and
 which known series breaks intersect your query.
 
 **Scope:** government types 0–3 (state, county, municipality, township).
-56 fiscal years, 46,148,034 rows, 190.6 MB. There is no source data for FY1968
+56 fiscal years, 46,148,034 rows, ~201 MB. There is no source data for FY1968
 or FY1969. Special districts (type 4) and school districts (type 5) are
 excluded pending validation.
 
@@ -85,14 +85,38 @@ cog_explain(spend)
 
 | | Remote (default) | Mirrored |
 |---|---|---|
-| Setup | none | `cog_mirror(dest)`, 190.6 MB once |
-| Disk used | **0 MB** — HTTP range requests only | 190.6 MB |
-| Per query | ~4 s (one government, one year)<br>~6 s (one government, 23 years) | local speed |
+| Setup | none | `cog_mirror(dest)`, ~201 MB once |
+| Disk used | **0 MB** — HTTP range requests only | ~201 MB |
+| Opening a session | ~7.5 s | ~0.1 s |
+| One government, one year | ~4 s | ~0.05 s |
+| One government, full history | ~7 s | ~0.1 s |
+| Later queries, same session | ~1.5 s | ~0.05 s |
 | Good for | trying it out, teaching, one-off questions | repeated analysis, offline work, reproducibility |
+
+**A local mirror is roughly 60–80x faster, and it is one function call.** That is
+by far the largest difference any of these settings makes. If you are going to
+ask more than a handful of questions, mirror first.
+
+Measured 2026-08-10 on a 16-core Linux workstation against the published corpus
+(schema v7, `pipeline_commit 3d28ddd`), fresh R session per arm. A one-off
+question costs about **12 seconds end to end remotely and 0.15 seconds
+mirrored**, session setup included.
+
+Two things the per-query rows hide:
+
+- **Opening the session is the single largest remote cost** — larger than any
+  one query. It fetches the manifest and registers 23 SQL views over HTTPS, and
+  it lands on your first query, not on `library(uscogdata)`.
+- **The cost is network round-trips, not scanning.** A repeat query against
+  partitions this session has already touched is ~1.5 s rather than ~4 s, and a
+  full-history query costs ~7 s whether it runs first or last. What you are
+  paying for is reaching each of the 56 yearly files over HTTPS the first time.
 
 Nothing is written to disk in remote mode: DuckDB fetches the parquet footer,
 works out which row groups it needs, and reads only those. Nothing is cached
-between sessions either, so every query goes back to the network.
+between sessions either, so every query goes back to the network — and a session
+that issues many remote queries in quick succession can be rate-limited by the
+host (`HTTP Error: ... 429`). Both are further reasons to mirror for real work.
 
 The default points at a public HuggingFace mirror of the corpus. If you would
 rather not depend on a third party — for reproducibility, for an air-gapped

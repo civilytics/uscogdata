@@ -41,6 +41,30 @@ Two refusals rather than silent surprises:
   per requested name with a sidecar covering all of them; a page of that is not
   a page of anything the caller asked for.
 
+## Documentation: the corpus-access table is re-measured and honest
+
+The README's "two ways to read the corpus" table carried figures taken before
+the corpus was re-chunked into row groups (cog_pipeline#93, published
+2026-08-09) and reported the mirrored column as "local speed" with no number at
+all. Re-measured 2026-08-10 against the published corpus (`pipeline_commit
+3d28ddd`), fresh R session per arm:
+
+* **A local mirror is roughly 60-80x faster.** A one-off question costs ~12 s
+  end to end remotely against ~0.15 s mirrored. That is the largest single
+  difference available to a user and it is now stated outright rather than left
+  as "local speed".
+* **Opening the session is the largest remote cost** (~7.5 s -- manifest fetch
+  plus 23 view registrations over HTTPS), larger than any individual query, and
+  it lands on the first query rather than on `library(uscogdata)`. The old table
+  did not account for it anywhere.
+* **The remote cost is round-trips, not scanning.** A repeat query over
+  already-touched partitions is ~1.5 s against ~4 s cold, and a full-history
+  query costs ~7 s whether it runs first or last.
+* The corpus size is **~201 MB**, not 190.6 MB -- row-group chunking added ~3.4%
+  and the old figure was ambiguous between MB and MiB besides.
+* Documented that a burst of remote queries can be rate-limited by the host
+  (`HTTP 429`), which is another reason to mirror for real work.
+
 ## Cohorts can be named by predicate, not just by id
 
 `cog_spending()`, `cog_revenue()` and `cog_balances()` gain optional `state`
