@@ -1,0 +1,64 @@
+# Explain the mirror contribution flow on every incoming pull request.
+#
+# This repository is a MIRROR. A PR opened here is landed on the canonical Gitea
+# repository and syncs back; because the merge preserves the contributor's
+# commits at their original SHAs, GitHub marks the PR "Merged" on its own as
+# soon as the mirror syncs -- with nobody visibly clicking Merge.
+#
+# Without this comment, that reads as a rejection: the contributor sees their PR
+# close with no review, no merge button pressed, and no explanation. It is
+# actually the successful outcome. Say so up front, before it happens.
+#
+# WHY pull_request_target AND NOT pull_request:
+# a `pull_request` run from a fork gets a read-only token, so it cannot post a
+# comment -- which is exactly the case this workflow exists to serve.
+# `pull_request_target` runs in the context of the BASE repo and gets a writable
+# token. That is only safe because this job never checks out or executes the
+# contributor's code; it posts a fixed string. Do not add a checkout of
+# `github.event.pull_request.head.sha` here -- that combination is the standard
+# pull_request_target privilege-escalation hole.
+name: Explain the mirror flow
+
+on:
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  comment:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post the contribution-flow explainer
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = [
+              "Thanks for this — and one thing worth knowing before it happens.",
+              "",
+              "**This repository is a mirror.** Development happens on Gitea at",
+              "`gitea.civilytics.org/Civilytics/uscogdata`. Your pull request will be fetched",
+              "from here, landed there, and synced back.",
+              "",
+              "Because that merge preserves your commits at their original SHAs, **GitHub will",
+              "mark this pull request \"Merged\" on its own** — without anyone visibly clicking",
+              "the Merge button, and possibly without a review comment on this page first.",
+              "",
+              "> If your pull request closes as \"Merged\" and nobody appears to have merged it,",
+              "> that is the normal, successful outcome — not a rejection.",
+              "",
+              "If it is *not* going to be merged, you will get an actual reply saying so.",
+              "",
+              "Substantial contributions get a `ctb` entry in `DESCRIPTION`, which surfaces in",
+              "`citation(\"uscogdata\")`. There is no CLA and no DCO sign-off.",
+              "",
+              "Full details: [CONTRIBUTING.md](https://github.com/civilytics/uscogdata/blob/main/CONTRIBUTING.md).",
+            ].join("\n");
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body,
+            });
