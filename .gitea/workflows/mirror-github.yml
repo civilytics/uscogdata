@@ -39,5 +39,17 @@ jobs:
             echo "PAT_GH is unset -- add it under Settings > Actions > Secrets." >&2
             exit 1
           fi
+          # On a tag-triggered run, checkout materializes refs/tags/<tag> as a
+          # LIGHTWEIGHT tag at the commit SHA -- the annotated tag object Gitea
+          # holds is never fetched. Mirroring that strips the annotation, and the
+          # NEXT run on main (which does fetch the real object) is then rejected
+          # with "already exists" trying to correct it, because git will not
+          # clobber an existing tag. That is why v0.4.0 failed to mirror.
+          #
+          # Re-fetch canonical tag objects from Gitea first. --force here rewrites
+          # LOCAL tag refs only; it is not a force push and does not weaken the
+          # non-force guarantee on main documented above.
+          git fetch --tags --force origin
+
           git push "https://x-access-token:${PAT_GH}@github.com/civilytics/uscogdata.git" \
             HEAD:refs/heads/main --tags
