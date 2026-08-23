@@ -4,7 +4,17 @@
 .Ruserdata
 *.Rproj
 inst/doc
-docs/
+# pkgdown output. Listed as children rather than `docs/` so compass's
+# docs/pm/ and docs/decisions/ can be re-included -- git cannot re-include
+# anything beneath an excluded directory.
+#
+# Note the anchoring change this forces: a bare `docs/` matches a directory of
+# that name at ANY depth, while `/docs/*` matches only at the repo root. The
+# fixture corpus's own docs/ therefore needs its own rule to stay excluded.
+/docs/*
+!/docs/pm/
+!/docs/decisions/
+inst/extdata/fixture_corpus/docs/
 /doc/
 /Meta/
 .DS_Store
@@ -12,3 +22,6 @@ docs/
 
 # SDD working artifacts (ledger, briefs, review packages) — plans/ stays tracked
 .superpowers/sdd/
+.compass-cache/
+# roborev snapshots
+/.roborev/

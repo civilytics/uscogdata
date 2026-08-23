@@ -1,0 +1,56 @@
+# roborev configuration, initialised by compass.
+# Reviews are queued to a background daemon -- they never block a commit.
+
+post_commit_review = 'commit'
+excluded_commit_patterns = ['WIP', 'chore:', 'docs:', 'Merge ']
+
+review_guidelines = '''
+# --- compass:begin (generated -- edit the sources, not this) ---
+- Prefer returning new values to mutating arguments in place. A function that edits
+  its caller's object is a bug waiting for a second caller.
+- Validate at system boundaries -- user input, API responses, file contents, config.
+  Fail fast with a message naming the field and the file.
+- Never swallow an error. Handle it or let it propagate; a bare catch that continues
+  is worse than a crash.
+- No hardcoded secrets, tokens, or credentials, and no secrets in log output or error
+  messages.
+- Parameterise every query. String-built SQL is a defect even when the input looks safe.
+- Keep functions under roughly 50 lines and files under roughly 400. Flag nesting
+  deeper than four levels.
+- No magic numbers or hardcoded paths -- name them as constants or read them from config.
+- New behaviour needs a test. A bug fix needs a test that fails without the fix.
+- Use the native pipe `|>`, not magrittr `%>%`.
+- snake_case for objects and functions; UPPER_SNAKE for constants. Never use `.` as a
+  word separator in a function name -- it collides with S3 dispatch.
+- Validate arguments at the top of exported functions with `stopifnot()` or an explicit
+  check, and say which argument was wrong.
+- Never `setDT()`, `set()`, or otherwise modify by reference a data.table the caller
+  still owns. `as.data.table()` copies; use it.
+- Prefer `vapply()` to `sapply()` -- `sapply()` silently returns a list when the type
+  varies, which turns a type error into a downstream mystery.
+- Use `seq_len(n)` / `seq_along(x)`, never `1:n`, which iterates backwards when n is 0.
+- Compare strings with `==` only after checking for NA; use `identical()` for scalars
+  where NA would be wrong.
+- Do not call `library()` inside package or module files; attach packages in scripts and
+  test helpers only.
+- Namespace-qualify calls into other packages (`stats::sd`) in code that is sourced.
+- Every exported function needs roxygen with `@param` for each argument (type, meaning,
+  and why the default is what it is) and `@return`. Add `@examples` for exported API.
+- Declare dependencies in DESCRIPTION. Prefer base R or an existing dependency over
+  adding a new one; a package with zero hard deps is worth keeping that way.
+- Signal errors with `stop()` carrying a condition class, so callers can catch the kind
+  rather than matching on message text.
+- Keep internals internal. Export only what a user needs; an accidentally exported
+  helper becomes an API you have to keep.
+- Tests use testthat edition 3. Each test is self-sufficient -- no reliance on state
+  left by an earlier test or on a fixture built elsewhere in the file.
+- Prefer duplication in tests over a helper that hides what is being asserted.
+- Every verb calls .ensure_session() first, then queries via DBI::dbGetQuery().
+- A verb's return value is always a tbl_df carrying a provenance attribute.
+- govid inputs always go through .coerce_govid_input(); it accepts a character vector or a data frame.
+- SQL has two layers: view definitions are numbered .sql files in inst/sql/ registered by .register_views(); query construction is inline sprintf() in R. Add a view as a file; build a query in R.
+- No arrow dependency -- DuckDB reads parquet natively.
+- withr is Suggests-only and must appear in tests alone.
+- Tests must pass offline against the bundled fixture; tests/testthat/setup.R sets USCOGDATA_URL for that.
+# --- compass:end ---
+'''

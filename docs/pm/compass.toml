@@ -1,0 +1,44 @@
+[project]
+name  = "uscogdata"
+forge = "Civilytics/uscogdata"
+
+# Three strands that go stale independently: what the verbs return, what the
+# corpus is and how it is mounted, and how both are explained to a reader.
+
+[[workstream]]
+id    = "api"
+title = "Query verbs and results"
+paths = [
+  "R/revenue.R", "R/spending.R", "R/balances.R", "R/peers.R", "R/search.R",
+  "R/categories.R", "R/recipes.R", "R/rollup.R", "R/explain.R", "R/basket.R",
+  "R/suggestions.R", "R/suppression.R", "R/complete.R", "R/cohort.R",
+  "R/basis.R", "R/adjust.R", "R/pagination.R",
+]
+docs  = ["vignettes/*.Rmd", "README.md"]
+
+[[workstream]]
+id    = "corpus"
+title = "Corpus, mirror, provenance"
+paths = [
+  "R/manifest.R", "R/mirror.R", "R/cache.R", "R/session.R", "R/provenance.R",
+  "R/coverage.R", "R/config.R", "R/views.R", "R/series_breaks.R",
+  "R/balance_caveats.R", "R/zzz.R", "data-raw/**", "inst/sql/**",
+]
+docs  = ["vignettes/*.Rmd", "NEWS.md"]
+
+[[workstream]]
+id    = "docs"
+title = "Vignettes and guides"
+paths = ["vignettes/**", "README.md", "_pkgdown.yml", "NEWS.md"]
+docs  = []
+
+[roborev]
+project_guidelines = [
+  "Every verb calls .ensure_session() first, then queries via DBI::dbGetQuery().",
+  "A verb's return value is always a tbl_df carrying a provenance attribute.",
+  "govid inputs always go through .coerce_govid_input(); it accepts a character vector or a data frame.",
+  "SQL has two layers: view definitions are numbered .sql files in inst/sql/ registered by .register_views(); query construction is inline sprintf() in R. Add a view as a file; build a query in R.",
+  "No arrow dependency -- DuckDB reads parquet natively.",
+  "withr is Suggests-only and must appear in tests alone.",
+  "Tests must pass offline against the bundled fixture; tests/testthat/setup.R sets USCOGDATA_URL for that.",
+]
