@@ -2,7 +2,7 @@
 # Reviews are queued to a background daemon -- they never block a commit.
 
 post_commit_review = 'commit'
-excluded_commit_patterns = ['WIP', 'chore:', 'docs:', 'Merge ']
+excluded_commit_patterns = ['WIP', 'chore:', 'chore(', 'docs:', 'Merge ']
 
 review_guidelines = '''
 # --- compass:begin (generated -- edit the sources, not this) ---
@@ -19,6 +19,10 @@ review_guidelines = '''
   deeper than four levels.
 - No magic numbers or hardcoded paths -- name them as constants or read them from config.
 - New behaviour needs a test. A bug fix needs a test that fails without the fix.
+- Prose a person reads -- an issue title or body, a journal entry, a decision record,
+  the narrative on the status board -- names the action or the thing, not the shape of
+  the machinery. Flag "gate", "seam", "surface area", "load-bearing", "first-class",
+  "primitive", "blast radius". A project's own defined vocabulary is not the target.
 - Use the native pipe `|>`, not magrittr `%>%`.
 - snake_case for objects and functions; UPPER_SNAKE for constants. Never use `.` as a
   word separator in a function name -- it collides with S3 dispatch.
