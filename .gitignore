@@ -4,17 +4,11 @@
 .Ruserdata
 *.Rproj
 inst/doc
-# pkgdown output. Listed as children rather than `docs/` so compass's
-# docs/pm/ and docs/decisions/ can be re-included -- git cannot re-include
-# anything beneath an excluded directory.
-#
-# Note the anchoring change this forces: a bare `docs/` matches a directory of
-# that name at ANY depth, while `/docs/*` matches only at the repo root. The
-# fixture corpus's own docs/ therefore needs its own rule to stay excluded.
-/docs/*
-!/docs/pm/
-!/docs/decisions/
-inst/extdata/fixture_corpus/docs/
+# pkgdown output. Compass used to keep its files in docs/pm/ and
+# docs/decisions/, which forced this to be written as children with two
+# re-includes -- git cannot re-include anything beneath an excluded directory.
+# Compass lives in pm/ now, so the whole directory can be excluded again.
+docs/
 /doc/
 /Meta/
 .DS_Store

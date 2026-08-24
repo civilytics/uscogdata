@@ -3,6 +3,7 @@
 ^\.Rproj\.user$
 ^_pkgdown\.yml$
 ^docs$
+^pm$
 ^Meta$
 ^doc$
 ^pkgdown$

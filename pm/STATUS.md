@@ -14,13 +14,22 @@ The six open issues split cleanly. Two are API work carried out of the #9 review
 and deliberately deferred there rather than fixed in that branch. Three concern the
 corpus layer, and the largest of them, partition-level caching, was named the single
 highest-leverage change on the remote path before being deferred. One, the
-data-correction intake, is a decision rather than a task: it was parked during the
-0.3.0 design and it gates the API announcement, because without it the corpus cannot
-make the "traceable and correctable" claim that most distinguishes it from Census's
-own files.
+data-correction intake (#52), is a decision rather than a task: it was parked during
+the 0.3.0 design, and the API announcement waits on it, because without it the corpus
+cannot make the "traceable and correctable" claim that most distinguishes it from
+Census's own files.
 
 Nothing here is blocked on anything else, so the ordering is a judgement about value
 rather than a dependency graph.
+
+Compass's own files moved out of `docs/` this session. They were sitting inside
+pkgdown's output directory, and `pkgdown::clean_site()` deletes every top-level entry
+there except `CNAME` and `dev` — asked directly, it listed `docs/pm` and
+`docs/decisions` among the 28 it would remove, with the guard that would have stopped
+it satisfied by `docs/pkgdown.yml`. They are in `pm/` now. Nothing was lost: the
+journal had no entries and there were no decision records yet, which made this the
+cheapest moment to move. The `.gitignore` workaround that re-included two children of
+an excluded `docs/` is gone with it.
 
 ## Ready to work on next
 
@@ -47,25 +56,10 @@ rather than a dependency graph.
 <details>
 <summary>Dependency graph and detail</summary>
 
-```mermaid
-graph TD
-  I34["#34 cog_revenue() offers expenditure recipes as sug…"]
-  I36["#36 n_units_reporting is category-conditional and c…"]
-  I2["#2 Extend population data to be households as an a…"]
-  I33["#33 Decompose .build_suggestions() (106 lines) into…"]
-  I52["#52 Release 11/11: design the data-correction intak…"]
-  I64["#64 Partition-level caching: R/cache.R is still a s…"]
-  class I34 ready;
-  class I36 ready;
-  class I2 ready;
-  class I33 ready;
-  class I52 ready;
-  class I64 ready;
-  classDef ready fill:#dafbe1,stroke:#2da44e;
-```
+_Nothing blocks anything else, so there is no graph to draw._
 
 - Marker: `none` (no journal entry yet)
-- Commits since: 164
+- Commits since: 165
 - Open issues: 6
 
 </details>
