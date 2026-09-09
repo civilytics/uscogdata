@@ -89,7 +89,7 @@
 #' project's "functions under 50 lines" convention:
 #' \itemize{
 #'   \item `.query_candidate_recipes()` -- candidate recipe lookup by
-#'     category/subtype scope + M/L exclusion.
+#'     category/subtype scope + `category_type` filter (#34) + M/L exclusion.
 #'   \item `.query_recipe_meta()` -- metadata (label, year spans).
 #'   \item `.query_covered_years()` -- Path 1 gap-year coverage via the
 #'     recipe's own generic join.
@@ -126,8 +126,16 @@
   # by `category` (`.ALL_CATEGORIES` is never a row in
   # `summary_categories.category`, so a category-keyed sub-select always
   # came back empty here). The M/L exclusion below is unchanged either way.
-  candidates <- .query_candidate_recipes(con, category, all_categories,
-                                          subtype_col, subtype_scope)
+  #
+  # Issue #34: scope the candidate query by `category_type` ('expenditure'
+  # vs 'revenue') to prevent cross-flow-family leakage -- e.g.
+  # `cog_revenue(category = "Corrections")` must not surface
+  # expenditure-only recipes (E04/E05) merely because they share the same
+  # category name in summary_categories. The type is derived from
+  # flow_prefixes: E/F/G -> 'expenditure', anything else -> 'revenue'.
+  candidates <- .query_candidate_recipes(con, category, flow_prefixes,
+                                          all_categories, subtype_col,
+                                          subtype_scope)
   if (length(candidates) == 0L) return(list())
 
   result_years <- if (is.null(result) || nrow(result) == 0L) {
@@ -217,8 +225,17 @@
 #' `summary_categories.category`, so a category-keyed sub-select always
 #' returns zero candidates and silently disables signposting.
 #'
+#' Scope is also by `category_type` ('expenditure' vs 'revenue', Issue #34)
+#' to prevent cross-flow-family leakage: `cog_revenue(category =
+#' "Corrections")` must not surface expenditure-only recipes (E04/E05)
+#' merely because they share the same category name in summary_categories.
+#' The type is derived from flow_prefixes: E/F/G -> 'expenditure', anything
+#' else -> 'revenue'.
+#'
 #' @param con Active DuckDB connection.
 #' @param category Category name, or `NULL`.
+#' @param flow_prefixes The calling verb's own flow-type prefixes (see
+#'   `.build_suggestions()`). Used to derive `category_type` (#34).
 #' @param all_categories `TRUE` when the caller used `.ALL_CATEGORIES`.
 #' @param subtype_col Name of the summary_categories subtype column to
 #'   scope by when `all_categories = TRUE`; ignored otherwise.
@@ -226,18 +243,31 @@
 #'   when `all_categories = TRUE`; ignored otherwise.
 #' @return Character vector of recipe IDs (possibly empty).
 #' @noRd
-.query_candidate_recipes <- function(con, category, all_categories = FALSE,
+.query_candidate_recipes <- function(con, category, flow_prefixes,
+                                      all_categories = FALSE,
                                       subtype_col = NULL,
                                       subtype_scope = NULL) {
+  # Issue #34: derive category_type from flow_prefixes to prevent
+  # cross-flow-family leakage -- e.g. cog_revenue(category = "Corrections")
+  # must not surface expenditure-only recipes merely because they share the
+  # same category name in summary_categories.
+  category_type <- if (all(flow_prefixes %in% c("E", "F", "G"))) {
+    "expenditure"
+  } else {
+    "revenue"
+  }
+
   candidate_scope_sql <- if (isTRUE(all_categories)) {
     sprintf(
-      "SELECT DISTINCT item_code FROM summary_categories WHERE %s IN (%s)",
-      subtype_col, .sql_lit_chr(subtype_scope)
+      "SELECT DISTINCT item_code FROM summary_categories
+       WHERE %s IN (%s) AND category_type = '%s'",
+      subtype_col, .sql_lit_chr(subtype_scope), category_type
     )
   } else {
     sprintf(
-      "SELECT DISTINCT item_code FROM summary_categories WHERE category IN (%s)",
-      .sql_lit_chr(category)
+      "SELECT DISTINCT item_code FROM summary_categories
+       WHERE category IN (%s) AND category_type = '%s'",
+      .sql_lit_chr(category), category_type
     )
   }
 

@@ -371,34 +371,25 @@ test_that("uscogdata#9: the revenue verb inherits the same trigger", {
   expect_null(sugg[[1]]$ig_recipe_id)
 })
 
-test_that("I1: cog_revenue never fabricates suppressed dollars for an expenditure-only recipe", {
+test_that("I1 + #34: cog_revenue never suggests expenditure-only recipes", {
   # uscogdata#9 review, finding I1: Corrections is an expenditure-only
-  # category (E04/E05). cog_revenue() naturally returns zero rows for it, so
-  # corrections_combined still fires as an empty_year suggestion (its own
-  # generic join finds real E04/E05 data for this government) -- but before
-  # the flow_prefixes fix, .suppressed_components() measured E04/E05 against
-  # cog_revenue()'s OWN view (which can never contain an E-coded row by
-  # construction) and reported the full $3,631,945,000 as "suppressed",
-  # when cog_spending() for the same gov/years/category actually returns
-  # $3,691,029,000 -- nothing was suppressed at all.
+  # category (E04/E05). Before the flow_prefixes fix (#9), .suppressed_components()
+  # measured E04/E05 against cog_revenue()'s OWN view and reported $3.6B as
+  # "suppressed" -- nothing was suppressed at all.
+  #
+  # Issue #34 builds on that: the candidate query now also filters by
+  # category_type ('revenue'), so expenditure-only recipes like corrections_combined
+  # (whose components E04/E05 are classified as 'expenditure' in summary_categories)
+  # are never even considered for a revenue verb. This is stronger than just
+  # suppressing the dollar claim -- it prevents the suggestion from firing at all.
   skip_if_no_corpus()
   r <- suppressMessages(
     cog_revenue("061037123085", years = 2019:2020, category = "Corrections"))
   sugg <- attr(r, "provenance")$suggestions
-  ids <- vapply(sugg, function(s) s$recipe_id, character(1))
-  expect_true("corrections_combined" %in% ids)
+  ids <- vapply(sugg, function(s) s$recipe_id %||% "", character(1))
 
-  hit <- sugg[[which(ids == "corrections_combined")]]
-  expect_equal(hit$suppressed_amount, 0)
-  expect_equal(hit$suppressed_years, integer(0))
-  expect_equal(hit$suppressed_codes, character(0))
-
-  # And cog_spending() for the identical gov/years/category is unaffected --
-  # it actually finds the E04/E05 dollars the buggy measurement claimed were
-  # excluded.
-  sp <- suppressMessages(
-    cog_spending("061037123085", years = 2019:2020, category = "Corrections"))
-  expect_equal(sum(sp$amt_nominal), 3691029000)
+  # corrections_combined should NOT appear -- its components are expenditure-only.
+  expect_false("corrections_combined" %in% ids)
 })
 
 test_that("uscogdata#9: no partial-coverage fire in a modern year", {
