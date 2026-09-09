@@ -84,6 +84,21 @@
 #' @return List of `list(recipe_id, label, available_years, hint,
 #'   ig_recipe_id, trigger, suppressed_amount, suppressed_years,
 #'   suppressed_codes)`, possibly empty.
+#'
+#' Decomposed (Issue #33) into three extracted helpers to stay within the
+#' project's "functions under 50 lines" convention:
+#' \itemize{
+#'   \item `.query_candidate_recipes()` -- candidate recipe lookup by
+#'     category/subtype scope + M/L exclusion.
+#'   \item `.query_recipe_meta()` -- metadata (label, year spans).
+#'   \item `.query_covered_years()` -- Path 1 gap-year coverage via the
+#'     recipe's own generic join.
+#' }
+#' The for-loop that merges covered-years + suppressed-components into
+#' suggestion objects stays inline here because it interleaves
+#' empty_hit/supp_hit precedence with field assembly. Likewise kept inline:
+#' the M/L-exclusion design-comment block and the final
+#' `.attach_ig_counterparts()` call.
 #' @noRd
 .build_suggestions <- function(con, cohort, years, category, result, basis,
                                 flow_prefixes, long_view,
@@ -111,28 +126,8 @@
   # by `category` (`.ALL_CATEGORIES` is never a row in
   # `summary_categories.category`, so a category-keyed sub-select always
   # came back empty here). The M/L exclusion below is unchanged either way.
-  candidate_scope_sql <- if (isTRUE(all_categories)) {
-    sprintf(
-      "SELECT DISTINCT item_code FROM summary_categories WHERE %s IN (%s)",
-      subtype_col, .sql_lit_chr(subtype_scope)
-    )
-  } else {
-    sprintf(
-      "SELECT DISTINCT item_code FROM summary_categories WHERE category IN (%s)",
-      .sql_lit_chr(category)
-    )
-  }
-  candidates <- DBI::dbGetQuery(con, sprintf(
-    "SELECT DISTINCT recipe_id FROM harmonization_recipes
-     WHERE component_code IN (
-       %s
-     )
-     AND recipe_id NOT IN (
-       SELECT DISTINCT recipe_id FROM harmonization_recipes
-       WHERE LEFT(component_code, 1) IN ('M', 'L')
-     )",
-    candidate_scope_sql
-  ))$recipe_id
+  candidates <- .query_candidate_recipes(con, category, all_categories,
+                                          subtype_col, subtype_scope)
   if (length(candidates) == 0L) return(list())
 
   result_years <- if (is.null(result) || nrow(result) == 0L) {
@@ -164,36 +159,11 @@
 
   if (length(gap_years) == 0L && nrow(supp) == 0L) return(list())
 
-  meta <- tibble::as_tibble(DBI::dbGetQuery(con, sprintf(
-    "SELECT recipe_id, any_value(label) AS label,
-            MIN(year_min) AS year_min, MAX(year_max) AS year_max
-     FROM harmonization_recipes
-     WHERE recipe_id IN (%s)
-     GROUP BY recipe_id",
-    .sql_lit_chr(candidates)
-  )))
+  meta <- .query_recipe_meta(con, candidates)
 
   # Path 1 (unchanged): (recipe, year) pairs the recipe's own generic join
   # covers for this government, restricted to the gap years.
-  covered <- if (length(gap_years) == 0L) {
-    data.frame(recipe_id = character(0), year = integer(0))
-  } else {
-    DBI::dbGetQuery(con, sprintf(
-      "SELECT DISTINCT r.recipe_id, l.year
-       FROM long l
-       JOIN harmonization_recipes r
-         ON l.item_code = r.component_code
-        AND l.year BETWEEN r.year_min AND r.year_max
-        AND (r.gov_type_scope = 'all'
-             OR (r.gov_type_scope = 'state' AND l.type = 0)
-             OR (r.gov_type_scope = 'local' AND l.type BETWEEN 1 AND 3))
-       WHERE r.recipe_id IN (%s)
-         AND %s
-         AND l.year IN (%s)",
-      .sql_lit_chr(candidates), .cohort_sql(cohort, "l.canonical_govid"),
-      paste(gap_years, collapse = ",")
-    ))
-  }
+  covered <- .query_covered_years(con, candidates, cohort, gap_years)
 
   suggestions <- list()
   for (rid in candidates) {
@@ -225,6 +195,122 @@
     )
   }
   .attach_ig_counterparts(con, suggestions, flow_prefixes)
+}
+
+#' Query candidate harmonization recipe IDs for a coverage-gap suggestion.
+#'
+#' Selects recipes whose component codes fall within the requested scope
+#' (category or subtype allowlist), excluding any recipe that is ITSELF an
+#' intergovernmental (M/L) recipe -- i.e. every one of its own component
+#' codes is M/L-prefixed. Without this exclusion, a category whose
+#' summary_categories rows span both a Direct family (e.g. E04/E05,
+#' "Corrections") and its M/L counterpart (M04/M05) makes the M/L recipe
+#' itself a raw top-level candidate for a plain `cog_spending()` call --
+#' following that hint would silently return intergovernmental dollars
+#' under `expenditure_concept = "direct"` provenance.
+#'
+#' In all-categories mode (`all_categories = TRUE`) the inner sub-select is
+#' scoped by `subtype_col`/`subtype_scope` -- the same allowlist
+#' `.build_verb_sql()` applies as a WHERE predicate to make the summed
+#' result a *concept* (see R/spending.R), not by `category`.
+#' `.ALL_CATEGORIES` ("All Categories") is never itself a row in
+#' `summary_categories.category`, so a category-keyed sub-select always
+#' returns zero candidates and silently disables signposting.
+#'
+#' @param con Active DuckDB connection.
+#' @param category Category name, or `NULL`.
+#' @param all_categories `TRUE` when the caller used `.ALL_CATEGORIES`.
+#' @param subtype_col Name of the summary_categories subtype column to
+#'   scope by when `all_categories = TRUE`; ignored otherwise.
+#' @param subtype_scope Character vector of subtype values to scope by
+#'   when `all_categories = TRUE`; ignored otherwise.
+#' @return Character vector of recipe IDs (possibly empty).
+#' @noRd
+.query_candidate_recipes <- function(con, category, all_categories = FALSE,
+                                      subtype_col = NULL,
+                                      subtype_scope = NULL) {
+  candidate_scope_sql <- if (isTRUE(all_categories)) {
+    sprintf(
+      "SELECT DISTINCT item_code FROM summary_categories WHERE %s IN (%s)",
+      subtype_col, .sql_lit_chr(subtype_scope)
+    )
+  } else {
+    sprintf(
+      "SELECT DISTINCT item_code FROM summary_categories WHERE category IN (%s)",
+      .sql_lit_chr(category)
+    )
+  }
+
+  DBI::dbGetQuery(con, sprintf(
+    "SELECT DISTINCT recipe_id FROM harmonization_recipes
+     WHERE component_code IN (
+       %s
+     )
+     AND recipe_id NOT IN (
+       SELECT DISTINCT recipe_id FROM harmonization_recipes
+       WHERE LEFT(component_code, 1) IN ('M', 'L')
+     )",
+    candidate_scope_sql
+  ))$recipe_id
+}
+
+#' Query gap-year coverage: which (recipe, year) pairs the recipe's own
+#' generic join covers for this government, restricted to `gap_years`.
+#'
+#' This is Path 1 of a suggestion (unchanged): it finds recipes whose
+#' component codes' generic join produces at least one row for this
+#' government in each gap year -- i.e. the category returned nothing in
+#' that year but a recipe would fill it.
+#'
+#' @param con Active DuckDB connection.
+#' @param candidates Character vector of recipe IDs to check coverage for.
+#' @param cohort The verb's cohort object (see `.make_cohort()`), rendered
+#'   into the govid predicate on the joined `long` scan via `.cohort_sql()`.
+#' @param gap_years Integer vector of requested years absent from the
+#'   result.
+#' @return Data frame with columns `recipe_id` (character) and `year`
+#'   (integer). Returns an empty data frame (`recipe_id = character(0)`,
+#'   `year = integer(0)`) when `gap_years` is empty, so callers can safely
+#'   reference `$recipe_id`.
+#' @noRd
+.query_covered_years <- function(con, candidates, cohort, gap_years) {
+  if (length(gap_years) == 0L) {
+    return(data.frame(recipe_id = character(0), year = integer(0)))
+  }
+  DBI::dbGetQuery(con, sprintf(
+    "SELECT DISTINCT r.recipe_id, l.year
+     FROM long l
+     JOIN harmonization_recipes r
+       ON l.item_code = r.component_code
+      AND l.year BETWEEN r.year_min AND r.year_max
+      AND (r.gov_type_scope = 'all'
+           OR (r.gov_type_scope = 'state' AND l.type = 0)
+           OR (r.gov_type_scope = 'local' AND l.type BETWEEN 1 AND 3))
+     WHERE r.recipe_id IN (%s)
+       AND %s
+       AND l.year IN (%s)",
+    .sql_lit_chr(candidates), .cohort_sql(cohort, "l.canonical_govid"),
+    paste(gap_years, collapse = ",")
+  ))
+}
+
+#' Query recipe metadata: labels and year spans for a set of candidate
+#' recipes.
+#'
+#' @param con Active DuckDB connection.
+#' @param candidates Character vector of recipe IDs to look up.
+#' @return Tibble with columns `recipe_id`, `label`, `year_min` (int), and
+#'   `year_max` (int).
+#' @noRd
+.query_recipe_meta <- function(con, candidates) {
+  tibble::as_tibble(DBI::dbGetQuery(con, sprintf(
+    "SELECT recipe_id, any_value(label) AS label,
+            MIN(year_min) AS year_min, MAX(year_max) AS year_max
+     FROM harmonization_recipes
+     WHERE recipe_id IN (%s)
+     GROUP BY recipe_id",
+    .sql_lit_chr(candidates)
+  )))
 }
 
 #' Attach `ig_recipe_id` to each suggestion: the intergovernmental-expenditure
@@ -272,7 +358,7 @@
 #'      `R/basis.R`). This blocks a recipe surfaced through a mis-scoped
 #'      category from ever reaching the M/L search, e.g. `cog_spending()`'s
 #'      flow_prefixes are `c("E","F","G")`, which `ig_federal_b47_wide`'s own
-#'      `"B"` is not part of.
+#'      "B" is not part of.
 #'   2. `own_prefix %in% c("E","F","G")`: M/L only ever pairs with the
 #'      DIRECT-expenditure family, never with revenue (`cog_revenue()`'s
 #'      flow_prefixes already fold B/C/D in as ordinary revenue -- there is
@@ -280,10 +366,6 @@
 #'      adds one for spending) and never with ANOTHER M/L recipe (without
 #'      this check, `ige_local_m47_wide` would wrongly match sibling
 #'      `ige_state_l47_wide` on their shared {"47","94"} suffix set).
-#'      Condition 1 alone does not catch this: under `cog_revenue()`,
-#'      `ig_federal_b47_wide`'s own `"B"` IS inside revenue's own
-#'      `flow_prefixes`, so only this second, family-specific check blocks
-#'      the search.
 #' @noRd
 .attach_ig_counterparts <- function(con, suggestions, flow_prefixes) {
   if (length(suggestions) == 0L) return(suggestions)
