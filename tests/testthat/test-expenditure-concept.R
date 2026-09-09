@@ -315,15 +315,17 @@ test_that("a mis-scoped cog_spending() call never attaches an M/L counterpart to
   # (SB194, cog_pipeline#64), so the recipe stopped being a candidate there.
   # FL state carries a real FY2011 B47 amount, so this exercises the guard
   # against a suggestion that genuinely fires.
+  #
+  # Issue #34: "IG Federal" maps to B-prefixed codes in summary_categories
+  # with category_type = 'revenue'. A spending verb (flow_prefixes E/F/G)
+  # now scopes its candidate query by category_type = 'expenditure', so it
+  # correctly finds NO candidates for this revenue-only category -- the
+  # suggestion machinery cannot fire, and no M/L counterpart is attached.
   r <- suppressMessages(
     cog_spending("120000226351", years = c(2005, 2011), category = "IG Federal")
   )
   sugg <- attr(r, "provenance")$suggestions
-  expect_gt(length(sugg), 0L)
-  ids <- vapply(sugg, function(s) s$recipe_id %||% "", character(1))
-  expect_true("ig_federal_b47_wide" %in% ids)
-  ig <- unlist(lapply(sugg, function(s) s$ig_recipe_id))
-  expect_length(ig, 0L)
+  expect_length(sugg, 0L)
 })
 
 test_that("C1: 'total' on a legacy aggregate-only family reports the IG-only figure honestly, not as Direct + IG", {
