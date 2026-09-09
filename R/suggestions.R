@@ -390,7 +390,7 @@
 #'      `R/basis.R`). This blocks a recipe surfaced through a mis-scoped
 #'      category from ever reaching the M/L search, e.g. `cog_spending()`'s
 #'      flow_prefixes are `c("E","F","G")`, which `ig_federal_b47_wide`'s own
-#'      "B" is not part of.
+#'      `"B"` is not part of.
 #'   2. `own_prefix %in% c("E","F","G")`: M/L only ever pairs with the
 #'      DIRECT-expenditure family, never with revenue (`cog_revenue()`'s
 #'      flow_prefixes already fold B/C/D in as ordinary revenue -- there is
@@ -398,6 +398,10 @@
 #'      adds one for spending) and never with ANOTHER M/L recipe (without
 #'      this check, `ige_local_m47_wide` would wrongly match sibling
 #'      `ige_state_l47_wide` on their shared {"47","94"} suffix set).
+#'      Condition 1 alone does not catch this: under `cog_revenue()`,
+#'      `ig_federal_b47_wide`'s own `"B"` IS inside revenue's own
+#'      `flow_prefixes`, so only this second, family-specific check blocks
+#'      the search.
 #' @noRd
 .attach_ig_counterparts <- function(con, suggestions, flow_prefixes) {
   if (length(suggestions) == 0L) return(suggestions)
