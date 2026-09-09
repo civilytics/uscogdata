@@ -49,11 +49,13 @@
 #'     a balanced panel.
 #'
 #'   Regardless of mode, `provenance$coverage` always carries per-year
-#'   `n_units_reporting`, `n_units_expected` and `is_census_year`, and
-#'   `provenance$coverage_mode` records the mode. `is_census_year` is a
-#'   statement about the **survey calendar**, never a claim of completeness:
-#'   FY1967 is a census year in which only 97 of Wisconsin's 608 cities
-#'   report. `n_units_reporting` is the number that tells the truth.
+#'   `n_units_expected`, `n_units_collected`, `n_units_reporting` and
+#'   `is_census_year`, and `provenance$coverage_mode` records the mode.
+#'   `is_census_year` is a statement about the **survey calendar**, never a
+#'   claim of completeness: FY1967 is a census year in which only 97 of
+#'   Wisconsin's 608 cities report. `n_units_reporting` is
+#'   category-conditional and is not a response rate on its own -- see
+#'   "Reading `coverage`" below for what each counter answers.
 #' @return Tibble with columns `year`, `layer`, `canonical_govid`, `gov_name`,
 #'   `spend_subtype`, `category`, `amt_nominal`, optional `amt_real` /
 #'   `amt_per_capita_nominal` / `amt_per_capita_real`, optional `pop_source`,
@@ -61,14 +63,23 @@
 #'   `provenance` attribute with `verb = "cog_geographic_rollup"`, `layers`,
 #'   and `rollup$included_govids` / `rollup$excluded_govids`.
 #' @section Reading `coverage`:
-#' `provenance$coverage` reports `n_units_reporting` against
-#' `n_units_expected` per year. **`n_units_reporting` is category-conditional:
-#' it counts governments with rows for the category you asked for, not
-#' governments collected that year.** A government that was surveyed and
-#' genuinely spends nothing in that category is indistinguishable here from one
-#' that was never surveyed.
+#' `provenance$coverage` carries three per-year counters:
 #'
-#' The ratio is therefore **not a response rate** and must not be used as one.
+#'   * `n_units_expected` -- how many governments you asked about.
+#'   * `n_units_collected` -- how many of those appear in the corpus at all
+#'     that year (in ANY category), separating sampling from real zeros.
+#'   * `n_units_reporting` -- how many have rows for the SPECIFIC category you
+#'     requested. This is always <= n_units_collected: a government can be
+#'     collected but have no rows for "Police" because it contracts policing
+#'     to the county sheriff, not because it wasn't surveyed.
+#'
+#' **`n_units_reporting` is category-conditional** and therefore **not a
+#' response rate**: `n_units_reporting / n_units_expected` conflates sampling
+#' (never collected) with real zeros (collected but spends nothing in your
+#' category). Use `n_units_collected / n_units_expected` for the true
+#' collection rate, and `n_units_reporting / n_units_collected` for category
+#' participation among collected units.
+#'
 #' In FY2022 — a complete census year — Georgia reports 393 of 567 cities for
 #' `category = "Police"`; the 174-city gap is overwhelmingly cities that
 #' contract policing to the county sheriff, not non-response.
@@ -137,8 +148,20 @@ cog_geographic_rollup <- function(govids, category, years,
   # n_units_expected is the universe the CALLER named -- the govids passed in
   # -- not the national universe. That is what makes the ratio meaningful:
   # "597 of the 608 Wisconsin cities you asked about reported in FY2012".
+  # n_units_collected is looked up against the spending long view matching
+  # whatever basis cog_spending() actually resolved above (prov$basis) --
+  # NOT hardcoded to spending_long_harmonized, which does not exist on a
+  # corpus with schema_version < 5 (R/basis.R resolves basis = "raw" there,
+  # and only *_long, not *_long_harmonized, is registered; see R/views.R).
+  # The con comes from .ensure_session() already called inside cog_spending().
+  con <- .ensure_session()
   prov$coverage_mode <- coverage
-  prov$coverage <- .coverage_table(r, years, length(unique(all_govids)))
+  prov$coverage <- .coverage_table(
+    r, years, length(unique(all_govids)),
+    con = con,
+    long_view = .select_long_view("spending_annotated", prov$basis),
+    expected_ids = all_govids
+  )
   attr(r, "provenance") <- prov
 
   r

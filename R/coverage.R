@@ -84,22 +84,92 @@
 #' `n_units_reporting = 0`, which is precisely the disclosure a silently
 #' missing year fails to make.
 #'
-#' `n_units_reporting` describes the result the caller actually received, so
-#' under `coverage = "consistent"` it reports the balanced count. `is_census_year`
-#' is a statement about the SURVEY CALENDAR, never a claim of completeness:
-#' FY1967 is a census year in which only 97 of Wisconsin's 608 cities report.
-#' `n_units_reporting` is the number that tells the truth.
+#' Three counters are returned, each answering a different question:
+#'
+#'   * `n_units_expected` -- the universe the caller named (govids passed in,
+#'     or peers for cog_peer_compare). "How many governments did you ask
+#'     about?"
+#'   * `n_units_collected` -- how many of those appear in the corpus at all
+#'     that year, in ANY category. This is a statement about survey collection,
+#'     independent of what was asked for: "of the governments you named, how
+#'     many did Census actually collect data from this year?" It separates
+#'     sampling (not collected) from real zeros (collected but spends nothing
+#'     in your category).
+#'   * `n_units_reporting` -- how many of those appear with rows for the
+#'     SPECIFIC category you requested. This is always <= n_units_collected:
+#'     a government can be collected but have no rows for "Police" because it
+#'     contracts policing to the county sheriff, not because it wasn't
+#'     surveyed.
+#'
+#' `n_units_reporting` therefore conflates two very different things: a unit
+#' that was not collected (sampling) and a unit that was collected but spends
+#' nothing in that category. The ratio n_units_collected / n_units_expected is
+#' the true collection rate; n_units_reporting / n_units_collected measures
+#' category participation among collected units.
+#'
+#' `is_census_year` is a statement about the SURVEY CALENDAR, never a claim of
+#' completeness: FY1967 is a census year in which only 97 of Wisconsin's 608
+#' cities report. The counters are what tell the truth.
+#'
+#' @param con Active DuckDB connection (used to look up n_units_collected).
+#' @param long_view The verb's own long view, used for the collection query;
+#'   NULL skips the lookup and leaves n_units_collected as NA_integer_.
+#' @param expected_ids The full EXPECTED cohort (govids the caller named),
+#'   used as the candidate list for the collection query. Required alongside
+#'   `con`/`long_view` for a correct count -- see the note below on why it
+#'   must not be derived from `result`/`rows`. `NULL`, or non-`NULL` but
+#'   empty after dropping `NA`/`""` entries, skips the lookup and leaves
+#'   n_units_collected as NA_integer_.
 #' @noRd
 .coverage_table <- function(result, years, n_expected,
-                            id_col = "canonical_govid", rows = NULL) {
+                            id_col = "canonical_govid", rows = NULL,
+                            con = NULL, long_view = NULL,
+                            expected_ids = NULL) {
   years <- sort(unique(as.integer(years)))
   src <- if (is.null(rows)) result else rows
   reporting <- vapply(years, function(y) {
     ids <- src[[id_col]][as.integer(src$year) == y]
     length(unique(ids[!is.na(ids)]))
   }, integer(1))
+
+  # n_units_collected: count EXPECTED cohort members present in the corpus
+  # for ANY category that year, not just the requested one. This separates
+  # sampling (not collected at all) from real zeros (collected but no rows
+  # for this category). Only computed when a connection, long_view, AND
+  # expected_ids are all provided; otherwise NA_integer_.
+  #
+  # The candidate list MUST be expected_ids, not derived from `result`/
+  # `rows`: a government with zero rows in the requested category across
+  # EVERY requested year never appears in `result` at all, so deriving
+  # candidates from it would silently exclude exactly the "collected but
+  # real zero" governments this counter exists to count -- collapsing
+  # n_units_collected back to n_units_reporting for precisely the case #36
+  # was filed over.
+  if (!is.null(con) && !is.null(long_view) && length(expected_ids) > 0L) {
+    cohort_chr <- .sql_lit_chr(unique(expected_ids[!is.na(expected_ids) &
+                                                       nzchar(expected_ids)]))
+    years_lit <- paste(years, collapse = ",")
+    collected_q <- sprintf(
+      "SELECT year, COUNT(DISTINCT canonical_govid) AS n
+       FROM %s
+       WHERE canonical_govid IN (%s)
+         AND year IN (%s)
+       GROUP BY year",
+      long_view, cohort_chr, years_lit
+    )
+    collected_df <- DBI::dbGetQuery(con, collected_q)
+    collected_map <- setNames(collected_df$n, as.integer(collected_df$year))
+    collected <- vapply(years, function(y) {
+      val <- collected_map[as.character(y)]
+      if (is.na(val)) 0L else as.integer(val)
+    }, integer(1))
+  } else {
+    collected <- rep(NA_integer_, length(years))
+  }
+
   tibble::tibble(
     year              = years,
+    n_units_collected = collected,
     n_units_reporting = as.integer(reporting),
     n_units_expected  = rep(as.integer(n_expected), length(years)),
     is_census_year    = .is_census_year(years)
