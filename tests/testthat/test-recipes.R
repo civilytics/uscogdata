@@ -392,6 +392,26 @@ test_that("I1 + #34: cog_revenue never suggests expenditure-only recipes", {
   expect_false("corrections_combined" %in% ids)
 })
 
+test_that(".query_candidate_recipes() scopes candidates by category_type (#34)", {
+  # Direct assertion on the mechanism the two tests above exercise
+  # end-to-end: corrections_combined's own components (E04/E05) are
+  # category_type = 'expenditure' in summary_categories, so an
+  # expenditure-flavored flow_prefixes call must surface it and a
+  # revenue-flavored one must not. This queries only summary_categories/
+  # harmonization_recipes (no government data), so it runs against the
+  # bundled fixture with no skip_if_no_corpus() needed.
+  con <- uscogdata:::.ensure_session()
+
+  expenditure <- uscogdata:::.query_candidate_recipes(
+    con, category = "Corrections", flow_prefixes = c("E", "F", "G"))
+  expect_true("corrections_combined" %in% expenditure)
+
+  revenue <- uscogdata:::.query_candidate_recipes(
+    con, category = "Corrections",
+    flow_prefixes = c("T", "A", "U", "B", "C", "D"))
+  expect_false("corrections_combined" %in% revenue)
+})
+
 test_that("uscogdata#9: no partial-coverage fire in a modern year", {
   skip_if_no_corpus()
   r <- cog_spending("061037123085", years = 2019L, category = "Public Welfare")

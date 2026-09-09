@@ -300,14 +300,14 @@
 #'   result.
 #' @return Data frame with columns `recipe_id` (character) and `year`
 #'   (integer). Returns an empty data frame (`recipe_id = character(0)`,
-#'   `year = integer(0)`) when `gap_years` is empty, so callers can safely
-#'   reference `$recipe_id`.
+#'   `year = integer(0)`) when `gap_years` or `candidates` is empty, so
+#'   callers can safely reference `$recipe_id`.
 #' @noRd
 .query_covered_years <- function(con, candidates, cohort, gap_years) {
-  if (length(gap_years) == 0L) {
+  if (length(gap_years) == 0L || length(candidates) == 0L) {
     return(data.frame(recipe_id = character(0), year = integer(0)))
   }
-  DBI::dbGetQuery(con, sprintf(
+  res <- DBI::dbGetQuery(con, sprintf(
     "SELECT DISTINCT r.recipe_id, l.year
      FROM long l
      JOIN harmonization_recipes r
@@ -322,6 +322,8 @@
     .sql_lit_chr(candidates), .cohort_sql(cohort, "l.canonical_govid"),
     paste(gap_years, collapse = ",")
   ))
+  res$year <- as.integer(res$year)
+  res
 }
 
 #' Query recipe metadata: labels and year spans for a set of candidate
