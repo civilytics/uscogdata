@@ -46,15 +46,26 @@ jobs:
 
       - name: Drop the unused google-chrome apt source
         if: runner.os == 'Linux'
-        run: sudo rm -f /etc/apt/sources.list.d/google-chrome.list
+        run: |
+          set -x
+          grep -rl 'dl\.google\.com' /etc/apt/sources.list.d/ /etc/apt/sources.list 2>/dev/null || true
+          sudo sh -c "grep -rl 'dl\.google\.com' /etc/apt/sources.list.d/ /etc/apt/sources.list 2>/dev/null | xargs -r rm -f"
+          grep -rl 'dl\.google\.com' /etc/apt/sources.list.d/ /etc/apt/sources.list 2>/dev/null && exit 1 || true
         # setup-r@v2 runs `sudo apt-get update` before installing R, and that
         # command fails outright if ANY configured apt source is broken --
         # even one we never use. The google-chrome source baked into GitHub's
         # ubuntu-latest image intermittently serves a stale Packages.gz that
         # doesn't match its own Release file's hash (a Google CDN sync race,
         # not anything about R or this repo), which took down every ubuntu
-        # leg of this matrix on 2026-09-09. Removing the source we don't need
-        # makes that whole failure class impossible here.
+        # leg of this matrix on 2026-09-09. `rm -f` on a guessed filename
+        # (google-chrome.list) reported success but removed nothing -- the
+        # file it actually is on this image apparently doesn't match that
+        # name, since the source kept showing up in setup-r's `apt-get
+        # update` afterward. Find-by-content instead of guessing the
+        # filename, and fail loudly here (before setup-r even runs) if a
+        # matching source is still present, so a future runner-image change
+        # surfaces as a clear failure in this step instead of a confusing
+        # one in setup-r.
 
       - uses: r-lib/actions/setup-r@v2
         with:
