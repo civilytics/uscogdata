@@ -166,12 +166,30 @@ cog_explain <- function(result, format = c("print", "list")) {
     cli::cli_h2("Reporting coverage")
     cli::cli_text("Mode: {prov$coverage_mode %||% 'all'}")
     cov <- prov$coverage
-    cli::cli_ul(sprintf(
-      "%d: %d of %d units reporting (%.0f%%) -- %s year",
-      cov$year, cov$n_units_reporting, cov$n_units_expected,
-      100 * cov$n_units_reporting / pmax(cov$n_units_expected, 1L),
-      ifelse(cov$is_census_year, "census", "sample")
-    ))
+    has_collected <- "n_units_collected" %in% names(cov)
+    if (has_collected) {
+      # Three counters: collected separates sampling from real zeros;
+      # reporting is category-conditional and never a response rate.
+      cli::cli_ul(sprintf(
+        "%d: %d of %d units collected, %d reporting in this category -- %s year",
+        cov$year,
+        cov$n_units_collected,
+        cov$n_units_expected,
+        cov$n_units_reporting,
+        ifelse(cov$is_census_year, "census", "sample")
+      ))
+    } else {
+      cli::cli_ul(sprintf(
+        "%d: %d of %d units reporting (%.0f%%) -- %s year",
+        cov$year, cov$n_units_reporting, cov$n_units_expected,
+        100 * cov$n_units_reporting / pmax(cov$n_units_expected, 1L),
+        ifelse(cov$is_census_year, "census", "sample")
+      ))
+    }
+    # Explains what the per-row "-- sample year" tag means, regardless of
+    # which branch above rendered it -- not gated on has_collected, which
+    # would make this permanently unreachable now that both real callers
+    # (cog_geographic_rollup(), cog_peer_compare()) always supply it.
     if (any(!cov$is_census_year)) {
       cli::cli_text(
         "Note: the Census of Governments is a complete census only in years ending in 2 or 7; every other year is a sample."

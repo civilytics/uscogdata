@@ -195,11 +195,13 @@ cog_find_peers <- function(target_govid,
 #'     a balanced panel.
 #'
 #'   Regardless of mode, `provenance$coverage` always carries per-year
-#'   `n_units_reporting`, `n_units_expected` and `is_census_year`, and
-#'   `provenance$coverage_mode` records the mode. `is_census_year` is a
-#'   statement about the **survey calendar**, never a claim of completeness:
-#'   FY1967 is a census year in which only 97 of Wisconsin's 608 cities
-#'   report. `n_units_reporting` is the number that tells the truth.
+#'   `n_units_expected`, `n_units_collected`, `n_units_reporting` and
+#'   `is_census_year`, and `provenance$coverage_mode` records the mode.
+#'   `is_census_year` is a statement about the **survey calendar**, never a
+#'   claim of completeness: FY1967 is a census year in which only 97 of
+#'   Wisconsin's 608 cities report. `n_units_reporting` is
+#'   category-conditional and is not a response rate on its own -- see
+#'   "Reading `coverage`" below for what each counter answers.
 #'
 #'   The comparison target is exempt from `"consistent"` balancing -- it is the
 #'   subject of the comparison, not a member of the cohort -- and the
@@ -241,14 +243,23 @@ cog_find_peers <- function(target_govid,
 #'     summarise(p50 = quantile(total, 0.5, na.rm = TRUE))
 #'   ```
 #' @section Reading `coverage`:
-#' `provenance$coverage` reports `n_units_reporting` against
-#' `n_units_expected` per year. **`n_units_reporting` is category-conditional:
-#' it counts cohort members with rows for the category you asked for, not
-#' cohort members collected that year.** A government that was surveyed and
-#' genuinely spends nothing in that category is indistinguishable here from one
-#' that was never surveyed.
+#' `provenance$coverage` carries three per-year counters:
 #'
-#' The ratio is therefore **not a response rate** and must not be used as one.
+#'   * `n_units_expected` -- how many governments you asked about.
+#'   * `n_units_collected` -- how many of those appear in the corpus at all
+#'     that year (in ANY category), separating sampling from real zeros.
+#'   * `n_units_reporting` -- how many have rows for the SPECIFIC category you
+#'     requested. This is always <= n_units_collected: a government can be
+#'     collected but have no rows for "Police" because it contracts policing
+#'     to the county sheriff, not because it wasn't surveyed.
+#'
+#' **`n_units_reporting` is category-conditional** and therefore **not a
+#' response rate**: `n_units_reporting / n_units_expected` conflates sampling
+#' (never collected) with real zeros (collected but spends nothing in your
+#' category). Use `n_units_collected / n_units_expected` for the true
+#' collection rate, and `n_units_reporting / n_units_collected` for category
+#' participation among collected units.
+#'
 #' In FY2022 — a complete census year — Georgia reports 393 of 567 cities for
 #' `category = "Police"`; the 174-city gap is overwhelmingly cities that
 #' contract policing to the county sheriff, not non-response.
@@ -325,10 +336,20 @@ cog_peer_compare <- function(target_govid, peers, category, years,
   # Counted over PEER rows only, against the cohort size: "3 of your 15 peers
   # reported in FY2019". Including the target would inflate every count by one
   # and make a cohort that has entirely stopped reporting look non-empty.
+  # n_units_collected is looked up against the spending long view matching
+  # whatever basis cog_spending() actually resolved above (prov$basis) --
+  # NOT hardcoded to spending_long_harmonized, which does not exist on a
+  # corpus with schema_version < 5 (R/basis.R resolves basis = "raw" there,
+  # and only *_long, not *_long_harmonized, is registered; see R/views.R).
+  # The con comes from .ensure_session() already called inside cog_spending().
+  con <- .ensure_session()
   prov$coverage_mode <- coverage
   prov$coverage <- .coverage_table(
     out, years, length(peer_govids),
-    rows = r[r$role == "peer", , drop = FALSE]
+    rows = r[r$role == "peer", , drop = FALSE],
+    con = con,
+    long_view = .select_long_view("spending_annotated", prov$basis),
+    expected_ids = peer_govids
   )
   attr(out, "provenance") <- prov
   out

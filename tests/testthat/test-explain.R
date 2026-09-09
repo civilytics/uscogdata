@@ -118,3 +118,17 @@ test_that("cog_explain prints denominator + popyear_range + counts", {
     expect_false(grepl("popyear range: 19-20", out, fixed = TRUE))
   })
 })
+
+test_that("cog_explain reports units collected alongside units reporting (uscogdata#36)", {
+  skip_if_no_corpus()
+  wi <- cog_gov_search(name = NULL, state = "WI", type = "city")
+  roll <- suppressMessages(cog_geographic_rollup(
+    govids = list(city = wi$canonical_govid), category = "Police",
+    years = 2012L))
+  out <- paste(c(
+    capture.output(cog_explain(roll)),
+    capture.output(cog_explain(roll), type = "message")
+  ), collapse = "\n")
+  expect_true(grepl("597 of 608 units collected", out, fixed = TRUE))
+  expect_true(grepl("485 reporting in this category", out, fixed = TRUE))
+})

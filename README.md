@@ -227,7 +227,8 @@ A statewide total resting on a fifth of the universe looks exactly like one
 resting on all of it, so every multi-government result now says which it is:
 
 ```r
-attr(rollup, "provenance")$coverage   # per-year n_units_reporting, is_census_year
+attr(rollup, "provenance")$coverage
+# per-year n_units_expected, n_units_collected, n_units_reporting, is_census_year
 ```
 
 `cog_geographic_rollup()`, `cog_peer_compare()` and `cog_find_peers()` take a
@@ -235,8 +236,14 @@ attr(rollup, "provenance")$coverage   # per-year n_units_reporting, is_census_ye
 `"consistent"` (only units reporting in every requested year, a balanced
 panel).
 
-`n_units_reporting` is **category-conditional**, and it is not a response rate. A government that was surveyed and genuinely spends
-nothing in the requested category is indistinguishable from one never surveyed.
+`n_units_reporting` is **category-conditional**: it counts governments with
+rows for the *specific* category you asked for, so a government that was
+surveyed and genuinely spends nothing in that category is indistinguishable
+from one never surveyed — it is not a response rate on its own.
+`n_units_collected` is the number that separates them: governments present in
+the corpus that year for *any* category. `n_units_collected / n_units_expected`
+is the true collection rate; `n_units_reporting / n_units_collected` is
+category participation among collected units.
 
 ### Absent cells mean two different things
 
