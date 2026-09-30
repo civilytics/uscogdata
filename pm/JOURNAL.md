@@ -13,6 +13,24 @@ file carries the reasoning and the pointers.
 
 ---
 
+## 2026-09-30 · repo · moved out of Nextcloud; code syncs only through Gitea
+
+**Why:** Nextcloud was syncing this repo's `.git`, which risks conflict copies inside
+it and stalls the client's cold scan across dozens of repos. Nothing untracked is
+data, so nothing is linked (`--no-data`); the move changed no test result (1,101
+pass, 2 skip before and after).
+**Obligates:** #73, #74
+**Refs:** 4bedf85 (ci/apt-https pushed to clear the move's preflight), 63b421a
+
+## 2026-09-09 · ci · Linux R-CMD-check legs unblocked (recorded 2026-09-30)
+
+**Why:** GitHub's ubuntu-latest image carries a google-chrome apt source that
+intermittently fails its own hash check, and setup-r's `apt-get update` died on it for
+every R version; the source is now found by URL and removed, and the step fails
+loudly if it survives.
+**Obligates:** (none)
+**Refs:** d83301b, d1165a5
+
 ## 2026-09-09 · model · #36 coverage counter finished, two bugs caught before merge
 
 **Why:** the drafted n_units_collected fix (uncommitted) derived its candidate
