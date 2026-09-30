@@ -5,11 +5,12 @@
 R package providing a curated reader API for the Civilytics US Census of
 Governments finance corpus. Reads Hive-partitioned parquet + `manifest.json`
 published by `cog_pipeline` via DuckDB (local path or remote URL). This is a
-standalone Gitea repo, sibling to `cog_explorer/cog_pipeline/`.
+standalone Gitea repo, sibling to the pipeline repo,
+`Civilytics/census_of_governments_finance_pipeline`, cloned beside this one.
 
 **Gitea remote:** `gitea.civilytics.org/Civilytics/uscogdata`  
-**Full implementation plan:** `../cog_pipeline/docs/plan_phase_n_tasks.md` (Tasks 2.1–2.8 + Phase 3)  
-**Reader contract spec:** `../cog_pipeline/docs/reader-specification.md`
+**Full implementation plan (archived):** `../census_of_governments_finance_pipeline/docs/archive/plan_phase_n_tasks.md` (Tasks 2.1–2.8 + Phase 3)  
+**Reader contract spec:** `../census_of_governments_finance_pipeline/docs/reader-specification.md`
 
 ## Architecture
 
