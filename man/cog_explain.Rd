@@ -7,18 +7,18 @@
 cog_explain(result, format = c("print", "list"))
 }
 \arguments{
-\item{result}{A tibble returned by a `cog_*` verb.}
+\item{result}{A tibble returned by a \verb{cog_*} verb.}
 
-\item{format}{`"print"` (default) for a human-readable cli summary;
-returns `result` invisibly for chaining. `"list"` returns the raw
-provenance list (identical to `attr(result, "provenance")`).}
+\item{format}{\code{"print"} (default) for a human-readable cli summary;
+returns \code{result} invisibly for chaining. \code{"list"} returns the raw
+provenance list (identical to \code{attr(result, "provenance")}).}
 }
 \value{
-Either `result` (invisibly) or the provenance list.
+Either \code{result} (invisibly) or the provenance list.
 }
 \description{
 Prints the structured provenance attached to a tibble returned by any
-`cog_*` verb, or returns it as a list for downstream use (MCP tools,
+\verb{cog_*} verb, or returns it as a list for downstream use (MCP tools,
 dashboards, JSON export).
 }
 \section{Two kinds of series break}{
@@ -26,28 +26,29 @@ dashboards, JSON export).
 Catalogued breaks reach you without being asked for, in two disjoint
 fields, because a caveat about one series and a caveat about the whole
 corpus are different claims:
+\itemize{
+\item \strong{\code{series_break_refs}} — breaks matched against the item codes actually
+present in this result. A break in one code you queried.
+\item \strong{\code{corpus_break_refs}} — breaks catalogued with \code{fin_code = "ALL"},
+which are statements about the corpus rather than about any one code:
+dollar precision across the 1976/1977 boundary (\code{SB085}), imputation
+exclusion from FY2002 (\code{SB087}), the FY2012 dense-to-sparse
+representation change (\code{SB194}), and the FY2017 government-identifier
+change (\code{SB086}). These are selected on the break-year window alone.
+}
 
-* **`series_break_refs`** — breaks matched against the item codes actually
-  present in this result. A break in one code you queried.
-* **`corpus_break_refs`** — breaks catalogued with `fin_code = "ALL"`,
-  which are statements about the corpus rather than about any one code:
-  dollar precision across the 1976/1977 boundary (`SB085`), imputation
-  exclusion from FY2002 (`SB087`), the FY2012 dense-to-sparse
-  representation change (`SB194`), and the FY2017 government-identifier
-  change (`SB086`). These are selected on the break-year window alone.
-
-`SB194` is the one most likely to matter: a query spanning FY2011 to FY2012
+\code{SB194} is the one most likely to matter: a query spanning FY2011 to FY2012
 crosses the boundary where an absent cell stops meaning "Census published
 $0" and starts meaning "not reported".
 }
 
 \section{Other provenance blocks}{
 
-`transformations$units_conversion` records the `$1,000s`-to-dollars
+\code{transformations$units_conversion} records the \verb{$1,000s}-to-dollars
 multiply that every amount column has already had applied.
-`transformations$per_capita` records the population denominator and its
-year range. `coverage` and `coverage_mode` appear on multi-government
-results (see [cog_geographic_rollup()]). `completion` appears when
-`complete = TRUE`. `balance_caveats` appears on [cog_balances()] results.
+\code{transformations$per_capita} records the population denominator and its
+year range. \code{coverage} and \code{coverage_mode} appear on multi-government
+results (see \code{\link[=cog_geographic_rollup]{cog_geographic_rollup()}}). \code{completion} appears when
+\code{complete = TRUE}. \code{balance_caveats} appears on \code{\link[=cog_balances]{cog_balances()}} results.
 }
 

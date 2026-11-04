@@ -7,12 +7,12 @@
 cog_manifest()
 }
 \value{
-Named list: `schema_version`, `built_at`, `pipeline_commit`,
-  `data_vintage`, `scope`, `years` (schema v5+), `schema`, `files`.
+Named list: \code{schema_version}, \code{built_at}, \code{pipeline_commit},
+\code{data_vintage}, \code{scope}, \code{years} (schema v5+), \code{schema}, \code{files}.
 }
 \description{
 Opens a session (connecting to the configured corpus) if none is active,
-then returns the manifest exactly as parsed from `manifest.json`. Useful
-for consumers that need the published year range (`years` block, schema
+then returns the manifest exactly as parsed from \code{manifest.json}. Useful
+for consumers that need the published year range (\code{years} block, schema
 v5+) or the partition list without issuing a data query.
 }

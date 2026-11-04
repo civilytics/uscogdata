@@ -16,41 +16,41 @@ cog_find_peers(
 )
 }
 \arguments{
-\item{target_govid}{Character scalar — `canonical_govid` of the target.}
+\item{target_govid}{Character scalar — \code{canonical_govid} of the target.}
 
-\item{year}{Integer scalar. Cohort vintage. When `NULL` (default), uses the
+\item{year}{Integer scalar. Cohort vintage. When \code{NULL} (default), uses the
 most recent year for which the target has an observed population in
-`gov_population_yearly`.}
+\code{gov_population_yearly}.}
 
-\item{same_type}{If `TRUE` (default) restrict peers to the target's
-`govs_type`.}
+\item{same_type}{If \code{TRUE} (default) restrict peers to the target's
+\code{govs_type}.}
 
-\item{same_state}{If `TRUE` restrict peers to the target's `fips_state`.
-Default `FALSE`.}
+\item{same_state}{If \code{TRUE} restrict peers to the target's \code{fips_state}.
+Default \code{FALSE}.}
 
 \item{pop_range}{Length-2 numeric vector giving lower/upper bounds.}
 
-\item{is_ratio}{If `TRUE` (default) `pop_range` is multiplied by the
-target's population at `year` to produce absolute bounds. If `FALSE`,
-`pop_range` is interpreted as absolute population counts.}
+\item{is_ratio}{If \code{TRUE} (default) \code{pop_range} is multiplied by the
+target's population at \code{year} to produce absolute bounds. If \code{FALSE},
+\code{pop_range} is interpreted as absolute population counts.}
 
 \item{max_peers}{Integer cap on the number of peers returned.}
 
-\item{coverage}{Survey-cycle handling; see [cog_peer_compare()]. Here it
-governs the cohort VINTAGE when `year` is `NULL`: `"census"` snaps to the
+\item{coverage}{Survey-cycle handling; see \code{\link[=cog_peer_compare]{cog_peer_compare()}}. Here it
+governs the cohort VINTAGE when \code{year} is \code{NULL}: \code{"census"} snaps to the
 most recent census year with an observed population, so a cohort is not
 built from a sample year in which most of the candidate universe is
-absent. `"consistent"` needs a year range, which cohort selection does not
-have, so it selects like `"all"` and is carried on the result as
-`attr(x, "coverage")` for [cog_peer_compare()].}
+absent. \code{"consistent"} needs a year range, which cohort selection does not
+have, so it selects like \code{"all"} and is carried on the result as
+\code{attr(x, "coverage")} for \code{\link[=cog_peer_compare]{cog_peer_compare()}}.}
 }
 \value{
-Tibble with columns `canonical_govid`, `gov_name`, `fips_state`,
-  `population`, `pop_ratio`, `rank`. The cohort year is attached as
-  `attr(x, "cohort_year")`.
+Tibble with columns \code{canonical_govid}, \code{gov_name}, \code{fips_state},
+\code{population}, \code{pop_ratio}, \code{rank}. The cohort year is attached as
+\code{attr(x, "cohort_year")}.
 }
 \description{
 Selects peer governments by combinations of government type, state, and
-population range at a chosen `year`. Peers are ordered by `|log(pop_ratio)|`
+population range at a chosen \code{year}. Peers are ordered by \verb{|log(pop_ratio)|}
 ascending (closest to the target's population first).
 }

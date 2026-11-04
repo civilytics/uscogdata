@@ -7,29 +7,29 @@
 cog_survey_year(govid, date)
 }
 \arguments{
-\item{govid}{Character vector of `canonical_govid` values, or a data frame
-with a `canonical_govid` column.}
+\item{govid}{Character vector of \code{canonical_govid} values, or a data frame
+with a \code{canonical_govid} column.}
 
-\item{date}{Dates, or character strings in `"YYYY-MM-DD"` form. `govid`
-and `date` must have the same length, or one of them must have length 1.}
+\item{date}{Dates, or character strings in \code{"YYYY-MM-DD"} form. \code{govid}
+and \code{date} must have the same length, or one of them must have length 1.}
 }
 \value{
-Tibble with one row per (`govid`, `date`) pair, in input order:
-  `canonical_govid`, `date`, `year` (the survey year, `NA` when it cannot
-  be determined), `fiscal_year_end`, `period_start` and `period_end`.
+Tibble with one row per (\code{govid}, \code{date}) pair, in input order:
+\code{canonical_govid}, \code{date}, \code{year} (the survey year, \code{NA} when it cannot
+be determined), \code{fiscal_year_end}, \code{period_start} and \code{period_end}.
 }
 \description{
 Maps a date to the survey year whose fiscal period, for that government,
-contains it. This is the reverse of [cog_fiscal_periods()]: use it to place
-an event that happened on a known date against the corpus's `year`.
+contains it. This is the reverse of \code{\link[=cog_fiscal_periods]{cog_fiscal_periods()}}: use it to place
+an event that happened on a known date against the corpus's \code{year}.
 }
 \details{
 The date can fall in survey year Y, Y+1 or Y+2 of its own calendar year Y,
 depending on the government's fiscal year end. Each candidate is looked up
-with the `fiscal_year_end` the corpus records for that government-year, so
+with the \code{fiscal_year_end} the corpus records for that government-year, so
 a change of fiscal year is respected. When the government has no rows, or
-no `fiscal_year_end`, in the survey year that would cover the date, the
-result is `NA`; the function does not borrow another year's value. If a
+no \code{fiscal_year_end}, in the survey year that would cover the date, the
+result is \code{NA}; the function does not borrow another year's value. If a
 change of fiscal year makes two survey years' periods overlap, the earlier
 survey year is returned.
 }
@@ -38,17 +38,18 @@ survey year is returned.
 Census assigns each government's fiscal year to a survey year by when the
 fiscal year ended. Survey year Y holds the fiscal year that ended between
 July 1 of Y-1 and June 30 of Y. The corpus records each government-year's
-fiscal year end as `fiscal_year_end`, an MMDD integer such as `630` or
-`1231`.
+fiscal year end as \code{fiscal_year_end}, an MMDD integer such as \code{630} or
+\code{1231}.
 
 Survey year 2017 therefore covers, for a county, city or township:
-
-  * `fiscal_year_end = 630` (June 30): the fiscal year ending June 30,
-    2017, so July 2016 to June 2017.
-  * `930` (September 30): the fiscal year ending September 30, 2016, so
-    October 2015 to September 2016.
-  * `1231` (December 31): the fiscal year ending December 31, 2016, so
-    January to December 2016.
+\itemize{
+\item \code{fiscal_year_end = 630} (June 30): the fiscal year ending June 30,
+2017, so July 2016 to June 2017.
+\item \code{930} (September 30): the fiscal year ending September 30, 2016, so
+October 2015 to September 2016.
+\item \code{1231} (December 31): the fiscal year ending December 31, 2016, so
+January to December 2016.
+}
 
 A city with a December year end and a city with a June year end are both
 "2017" in the corpus, but their figures are six months apart. A September
@@ -68,11 +69,11 @@ rests on the documentation alone. For New York (March 31) and the 46 states
 with a June 30 year end, the two rules give the same months.
 
 A government can change its fiscal year end, so the periods are looked up
-per government-year. Where the corpus has no `fiscal_year_end` for a
+per government-year. Where the corpus has no \code{fiscal_year_end} for a
 government-year, or the government has no rows that year, the period is
-`NA`. Most of FY1993 is `NA`: 99% of its government-years have no usable
-value in the public corpus as of November 2026. So do 5% to 11% in FY1978
-and FY1987 to FY1990, and under 3% in every other year.
+\code{NA}. Most of FY1993 is \code{NA}: 99\% of its government-years have no usable
+value in the public corpus as of November 2026. So do 5\% to 11\% in FY1978
+and FY1987 to FY1990, and under 3\% in every other year.
 
 From FY2023 the source files mark some rows as estimates carried forward
 from an earlier year. The periods here describe the survey year, not the
@@ -86,5 +87,5 @@ cog_survey_year(c("121011212191", "010000226085"), as.Date("2020-04-15"))
 }
 }
 \seealso{
-[cog_fiscal_periods()]
+\code{\link[=cog_fiscal_periods]{cog_fiscal_periods()}}
 }

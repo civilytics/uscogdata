@@ -14,66 +14,66 @@ cog_suggestions(
 )
 }
 \arguments{
-\item{govid}{Character vector of `canonical_govid` values, or a data frame
-with a `canonical_govid` column, such as a [cog_find_peers()] or
-[cog_gov_search()] result. The suggestions cover these governments as one
-cohort, as they do in a verb call over the same `govid`.}
+\item{govid}{Character vector of \code{canonical_govid} values, or a data frame
+with a \code{canonical_govid} column, such as a \code{\link[=cog_find_peers]{cog_find_peers()}} or
+\code{\link[=cog_gov_search]{cog_gov_search()}} result. The suggestions cover these governments as one
+cohort, as they do in a verb call over the same \code{govid}.}
 
 \item{years}{Integer vector of requested years.}
 
 \item{category}{Character vector of category names from
-`summary_categories.category`, or the reserved `"All Categories"` alone.
-The verbs build suggestions only when a category is named, so `NULL` is
+\code{summary_categories.category}, or the reserved \code{"All Categories"} alone.
+The verbs build suggestions only when a category is named, so \code{NULL} is
 refused here.}
 
-\item{flow}{`"spending"` for the suggestions [cog_spending()] would attach,
-or `"revenue"` for [cog_revenue()]'s.}
+\item{flow}{\code{"spending"} for the suggestions \code{\link[=cog_spending]{cog_spending()}} would attach,
+or \code{"revenue"} for \code{\link[=cog_revenue]{cog_revenue()}}'s.}
 
-\item{concept}{The verb's concept argument: `expenditure_concept` for
-spending (`"primary"`, `"direct"` or `"total"`) or `revenue_concept` for
-revenue (`"general"` or `"total"`). `NULL`, the default, uses the verb's
-own default, `"primary"` or `"general"`. The concept changes the result
-only when `category = "All Categories"`, where its subtype scope decides
+\item{concept}{The verb's concept argument: \code{expenditure_concept} for
+spending (\code{"primary"}, \code{"direct"} or \code{"total"}) or \code{revenue_concept} for
+revenue (\code{"general"} or \code{"total"}). \code{NULL}, the default, uses the verb's
+own default, \code{"primary"} or \code{"general"}. The concept changes the result
+only when \code{category = "All Categories"}, where its subtype scope decides
 which recipes are candidates.}
 
 \item{years_present}{Integer vector of the years in which your rows for
-`category` have at least one row. Pass `integer(0)` when there are no
-rows. Years outside `years` are ignored. With `flow = "spending"` and
-`concept = "total"`, count only rows whose `spend_subtype` is not
-`"intergovernmental"`. [cog_spending()] measures gaps on the Direct leg
+\code{category} have at least one row. Pass \code{integer(0)} when there are no
+rows. Years outside \code{years} are ignored. With \code{flow = "spending"} and
+\code{concept = "total"}, count only rows whose \code{spend_subtype} is not
+\code{"intergovernmental"}. \code{\link[=cog_spending]{cog_spending()}} measures gaps on the Direct leg
 alone, because an intergovernmental row can survive in a year whose
 Direct rows Census published only as an aggregate.}
 }
 \value{
-A list with one element per suggestion, ordered by `recipe_id`,
-  and identical to `attr(x, "provenance")$suggestions` for the same
-  inputs. Each element is a list with `recipe_id`, `label`,
-  `available_years` (first and last year the recipe covers), `hint`,
-  `trigger` (`"empty_year"` or `"suppressed_component"`),
-  `suppressed_amount` (full US dollars), `suppressed_years`,
-  `suppressed_codes`, and `ig_recipe_id` (the intergovernmental
-  counterpart recipe, or `NULL`). The list is empty when nothing qualifies.
+A list with one element per suggestion, ordered by \code{recipe_id},
+and identical to \code{attr(x, "provenance")$suggestions} for the same
+inputs. Each element is a list with \code{recipe_id}, \code{label},
+\code{available_years} (first and last year the recipe covers), \code{hint},
+\code{trigger} (\code{"empty_year"} or \code{"suppressed_component"}),
+\code{suppressed_amount} (full US dollars), \code{suppressed_years},
+\code{suppressed_codes}, and \code{ig_recipe_id} (the intergovernmental
+counterpart recipe, or \code{NULL}). The list is empty when nothing qualifies.
 }
 \description{
-Builds the harmonization-recipe suggestions that [cog_spending()] and
-[cog_revenue()] attach as `attr(x, "provenance")$suggestions`, without
-running the verb again. Call a verb once with no `category`, filter its
+Builds the harmonization-recipe suggestions that \code{\link[=cog_spending]{cog_spending()}} and
+\code{\link[=cog_revenue]{cog_revenue()}} attach as \code{attr(x, "provenance")$suggestions}, without
+running the verb again. Call a verb once with no \code{category}, filter its
 rows yourself, and call this when you need the suggestions for one
 category.
 }
 \details{
-A suggestion names a recipe (see [cog_recipes()]) that would fill a gap in
-the result. A recipe qualifies in two ways. Its `trigger` is
-`"empty_year"` when the result has no rows in a requested year and the
+A suggestion names a recipe (see \code{\link[=cog_recipes]{cog_recipes()}}) that would fill a gap in
+the result. A recipe qualifies in two ways. Its \code{trigger} is
+\code{"empty_year"} when the result has no rows in a requested year and the
 recipe's own join finds rows for these governments in that year. Its
-`trigger` is `"suppressed_component"` when one of the recipe's component
+\code{trigger} is \code{"suppressed_component"} when one of the recipe's component
 codes carries dollars that the verb's own view excludes, because Census
 published them only as an aggregate or because the code is absent from
-`summary_categories`.
+\code{summary_categories}.
 
-Suggestions are built only for the verbs' default `basis = "harmonized"`.
-On a corpus with `schema_version < 5` that basis is unavailable, the verbs
-fall back to `"raw"`, and this function returns an empty list, as the
+Suggestions are built only for the verbs' default \code{basis = "harmonized"}.
+On a corpus with \code{schema_version < 5} that basis is unavailable, the verbs
+fall back to \code{"raw"}, and this function returns an empty list, as the
 verbs do. It also returns an empty list when nothing qualifies.
 
 The verbs also print the suggestions as a message. This function returns
@@ -92,6 +92,6 @@ cog_suggestions(
 }
 }
 \seealso{
-[cog_spending()], [cog_revenue()], [cog_recipes()],
-  [cog_explain()]
+\code{\link[=cog_spending]{cog_spending()}}, \code{\link[=cog_revenue]{cog_revenue()}}, \code{\link[=cog_recipes]{cog_recipes()}},
+\code{\link[=cog_explain]{cog_explain()}}
 }

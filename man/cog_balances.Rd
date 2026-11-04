@@ -21,109 +21,109 @@ cog_balances(
 }
 \arguments{
 \item{govid}{Canonical govid(s): a character vector, or a data frame with a
-`canonical_govid` column (e.g. from [cog_gov_search()]). `NULL` to name
-the cohort by `state`/`type` instead.}
+\code{canonical_govid} column (e.g. from \code{\link[=cog_gov_search]{cog_gov_search()}}). \code{NULL} to name
+the cohort by \code{state}/\code{type} instead.}
 
 \item{years}{Integer vector of fiscal years.}
 
 \item{category}{Optional character vector of categories to keep. One of
-`"Fund Balances"`, `"Insurance Trust Balances"`,
-`"Retirement System Holdings"`. There is deliberately no `subtype`
-argument: for holdings, `category` is a strict coarsening of
-`balance_subtype` (unlike the money verbs, where the two axes cross), so
+\code{"Fund Balances"}, \code{"Insurance Trust Balances"},
+\code{"Retirement System Holdings"}. There is deliberately no \code{subtype}
+argument: for holdings, \code{category} is a strict coarsening of
+\code{balance_subtype} (unlike the money verbs, where the two axes cross), so
 every combination would be either redundant or empty.
-`category = "Fund Balances"` is exactly the `general` family
-(`W01`/`W31`/`W61`). `balance_subtype` is returned, so a finer split is
-one `dplyr::filter()` away. The reserved pseudo-category
-`"All Categories"` (see [cog_spending()]) is **not** supported here and
-errors with class `uscogdata_all_categories_unsupported`: it sums a
+\code{category = "Fund Balances"} is exactly the \code{general} family
+(\code{W01}/\code{W31}/\code{W61}). \code{balance_subtype} is returned, so a finer split is
+one \code{dplyr::filter()} away. The reserved pseudo-category
+\code{"All Categories"} (see \code{\link[=cog_spending]{cog_spending()}}) is \strong{not} supported here and
+errors with class \code{uscogdata_all_categories_unsupported}: it sums a
 concept's subtype scope, and holdings are a stock with no concept
-vocabulary to sum across. Omit `category` to get every category broken
+vocabulary to sum across. Omit \code{category} to get every category broken
 out instead.}
 
-\item{per_capita}{Divide holdings by population. Note this is a **stock per
-resident** (reserves per person), which is *not* comparable to
-[cog_spending()]'s per-capita figures -- those are a flow per person.}
+\item{per_capita}{Divide holdings by population. Note this is a \strong{stock per
+resident} (reserves per person), which is \emph{not} comparable to
+\code{\link[=cog_spending]{cog_spending()}}'s per-capita figures -- those are a flow per person.}
 
 \item{adjust_to_year}{Deflate to this year's dollars (CPI-U).}
 
 \item{basis}{Accepted for uniformity with the money verbs, but currently a
-**no-op**: `harmonization_map` carries no balance-code rows, so harmonized
+\strong{no-op}: \code{harmonization_map} carries no balance-code rows, so harmonized
 and raw space are identical for holdings. Reported in
-`provenance$basis_note`.}
+\code{provenance$basis_note}.}
 
-\item{recipe}{Optional harmonization recipe id (see [cog_recipes()]).
-`"cash_securities_z77_wide"` and `"cash_securities_z78_wide"` bridge the
+\item{recipe}{Optional harmonization recipe id (see \code{\link[=cog_recipes]{cog_recipes()}}).
+\code{"cash_securities_z77_wide"} and \code{"cash_securities_z78_wide"} bridge the
 wide era to the modern one.}
 
-\item{state, type}{Name the cohort by predicate instead of by id: `state` is
-  a 2-letter USPS abbreviation (or a FIPS code) and `type` is one of
-  `"state"`, `"county"`, `"city"`, `"township"` (or the integer `0:3`) --
-  the same vocabulary, and the same internal coercion, as
-  [cog_gov_search()]. Both default to `NULL`.
+\item{state, type}{Name the cohort by predicate instead of by id: \code{state} is
+a 2-letter USPS abbreviation (or a FIPS code) and \code{type} is one of
+\code{"state"}, \code{"county"}, \code{"city"}, \code{"township"} (or the integer \code{0:3}) --
+the same vocabulary, and the same internal coercion, as
+\code{\link[=cog_gov_search]{cog_gov_search()}}. Both default to \code{NULL}.
 
-  The cohort is then expressed as a subquery against `canonical_fips_xwalk`
-  inside each statement rather than round-tripped through R as a literal id
-  list. For a fleet-scale cohort that is the difference between a
-  301,591-character `IN` list re-parsed in 5--8 statements per call and a
-  constant-size predicate: measured at **94 ms versus 449 ms** for the same
-  FY2022 aggregate over the 20,106-government `type = "city"` cohort, within
-  7% of the no-filter floor.
+The cohort is then expressed as a subquery against \code{canonical_fips_xwalk}
+inside each statement rather than round-tripped through R as a literal id
+list. For a fleet-scale cohort that is the difference between a
+301,591-character \code{IN} list re-parsed in 5--8 statements per call and a
+constant-size predicate: measured at \strong{94 ms versus 449 ms} for the same
+FY2022 aggregate over the 20,106-government \code{type = "city"} cohort, within
+7\% of the no-filter floor.
 
-  Supplying `govid` **and** `state`/`type` INTERSECTS them -- the
-  governments in `govid` that also match the predicate -- rather than one
-  silently taking precedence. Naming no cohort at all (`govid`, `state` and
-  `type` all `NULL`) aborts with class `uscogdata_no_cohort`.
+Supplying \code{govid} \strong{and} \code{state}/\code{type} INTERSECTS them -- the
+governments in \code{govid} that also match the predicate -- rather than one
+silently taking precedence. Naming no cohort at all (\code{govid}, \code{state} and
+\code{type} all \code{NULL}) aborts with class \code{uscogdata_no_cohort}.
 
-  When the cohort is named by predicate, `provenance$scope$govids_found`
-  and `govids_missing` are empty -- there is no id list to report against --
-  and `provenance$scope$cohort` carries `state`, `type` and
-  `n_governments` instead. A `govid`-named cohort reports exactly as before.}
+When the cohort is named by predicate, \code{provenance$scope$govids_found}
+and \code{govids_missing} are empty -- there is no id list to report against --
+and \code{provenance$scope$cohort} carries \code{state}, \code{type} and
+\code{n_governments} instead. A \code{govid}-named cohort reports exactly as before.}
 
 \item{limit}{Maximum number of result rows to return, pushed into the SQL
-rather than applied after materializing every row. `NULL` (default)
-returns everything. Cannot be combined with `recipe` -- see `offset` and
-`total_rows`.}
+rather than applied after materializing every row. \code{NULL} (default)
+returns everything. Cannot be combined with \code{recipe} -- see \code{offset} and
+\code{total_rows}.}
 
-\item{offset}{Rows to skip before `limit` starts counting (0-based).
-Ignored if `limit` is `NULL`; defaults to `0L` when `limit` is set.}
+\item{offset}{Rows to skip before \code{limit} starts counting (0-based).
+Ignored if \code{limit} is \code{NULL}; defaults to \code{0L} when \code{limit} is set.}
 
-\item{fiscal_period}{If `TRUE`, add `fiscal_year_end`, `period_start` and
-`period_end` to every row, as [cog_spending()] does. Holdings are a stock
-measured at the end of the fiscal year, so `period_end` is the date the
-balance describes and `period_start` is the start of that fiscal year.
-Defaults to `FALSE`, which leaves the result unchanged.}
+\item{fiscal_period}{If \code{TRUE}, add \code{fiscal_year_end}, \code{period_start} and
+\code{period_end} to every row, as \code{\link[=cog_spending]{cog_spending()}} does. Holdings are a stock
+measured at the end of the fiscal year, so \code{period_end} is the date the
+balance describes and \code{period_start} is the start of that fiscal year.
+Defaults to \code{FALSE}, which leaves the result unchanged.}
 }
 \value{
-Tibble with columns `year`, `canonical_govid`, `gov_name`,
-  `balance_subtype`, `category`, `amt_nominal`, `codes_included`,
-  `aggregate_fallback`, plus optional `amt_per_capita_nominal` and
-  `pop_source` (when `per_capita = TRUE`), optional `amt_real` (when
-  `adjust_to_year` is set), and optional `amt_per_capita_real` (only when
-  **both** `per_capita = TRUE` and `adjust_to_year` are set -- there is no
-  nominal per-capita column to deflate otherwise), and `fiscal_year_end`,
-  `period_start` and `period_end` when `fiscal_period = TRUE`. Amounts are
-  full US dollars.
+Tibble with columns \code{year}, \code{canonical_govid}, \code{gov_name},
+\code{balance_subtype}, \code{category}, \code{amt_nominal}, \code{codes_included},
+\code{aggregate_fallback}, plus optional \code{amt_per_capita_nominal} and
+\code{pop_source} (when \code{per_capita = TRUE}), optional \code{amt_real} (when
+\code{adjust_to_year} is set), and optional \code{amt_per_capita_real} (only when
+\strong{both} \code{per_capita = TRUE} and \code{adjust_to_year} are set -- there is no
+nominal per-capita column to deflate otherwise), and \code{fiscal_year_end},
+\code{period_start} and \code{period_end} when \code{fiscal_period = TRUE}. Amounts are
+full US dollars.
 
-  Carries a `provenance` attribute matching
-  `inst/schemas/provenance-v1.json`, whose `balance_caveats` block reports
-  `not_gaap`, `not_gaap_note`, `coverage_window` (measured year extents for
-  every balance subtype in the mounted corpus, not only the observed ones)
-  and `truncated` (the observed subtypes whose coverage falls short of the
-  requested years). `expenditure_concept`/`revenue_concept` are `NA` --
-  holdings are a stock, not a flow, so neither concept vocabulary applies.
+Carries a \code{provenance} attribute matching
+\code{inst/schemas/provenance-v1.json}, whose \code{balance_caveats} block reports
+\code{not_gaap}, \code{not_gaap_note}, \code{coverage_window} (measured year extents for
+every balance subtype in the mounted corpus, not only the observed ones)
+and \code{truncated} (the observed subtypes whose coverage falls short of the
+requested years). \code{expenditure_concept}/\code{revenue_concept} are \code{NA} --
+holdings are a stock, not a flow, so neither concept vocabulary applies.
 
-  When `limit` is set, also carries a `total_rows` attribute: the full
-  unpaginated row count, computed by the same query (`COUNT(*) OVER()`)
-  rather than a second scan.
+When \code{limit} is set, also carries a \code{total_rows} attribute: the full
+unpaginated row count, computed by the same query (\verb{COUNT(*) OVER()})
+rather than a second scan.
 }
 \description{
-Returns Census cash-and-security holdings (`category_type = "balance"`):
+Returns Census cash-and-security holdings (\code{category_type = "balance"}):
 fund balances, retirement system holdings and insurance trust balances.
 }
 \section{Holdings are not GAAP fund balance}{
 
-Census holdings are **gross** -- no liabilities are netted -- so a reserve
+Census holdings are \strong{gross} -- no liabilities are netted -- so a reserve
 ratio built from them overstates what is actually available. They are not
 comparable to a GAAP fund balance from an ACFR.
 }
