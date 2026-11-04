@@ -22,6 +22,13 @@ reference:
       - cog_find_peers
       - cog_peer_compare
       - cog_geographic_rollup
+  - title: Fiscal years
+    desc: >
+      Which calendar months a survey year covers for each government, and the
+      survey year that covers a given date.
+    contents:
+      - cog_fiscal_periods
+      - cog_survey_year
   - title: Corpus metadata
     desc: >
       What the corpus contains, where a given result came from, and how to

@@ -15,7 +15,8 @@ cog_balances(
   state = NULL,
   type = NULL,
   limit = NULL,
-  offset = NULL
+  offset = NULL,
+  fiscal_period = FALSE
 )
 }
 \arguments{
@@ -86,6 +87,12 @@ returns everything. Cannot be combined with `recipe` -- see `offset` and
 
 \item{offset}{Rows to skip before `limit` starts counting (0-based).
 Ignored if `limit` is `NULL`; defaults to `0L` when `limit` is set.}
+
+\item{fiscal_period}{If `TRUE`, add `fiscal_year_end`, `period_start` and
+`period_end` to every row, as [cog_spending()] does. Holdings are a stock
+measured at the end of the fiscal year, so `period_end` is the date the
+balance describes and `period_start` is the start of that fiscal year.
+Defaults to `FALSE`, which leaves the result unchanged.}
 }
 \value{
 Tibble with columns `year`, `canonical_govid`, `gov_name`,
@@ -94,8 +101,9 @@ Tibble with columns `year`, `canonical_govid`, `gov_name`,
   `pop_source` (when `per_capita = TRUE`), optional `amt_real` (when
   `adjust_to_year` is set), and optional `amt_per_capita_real` (only when
   **both** `per_capita = TRUE` and `adjust_to_year` are set -- there is no
-  nominal per-capita column to deflate otherwise). Amounts are full US
-  dollars.
+  nominal per-capita column to deflate otherwise), and `fiscal_year_end`,
+  `period_start` and `period_end` when `fiscal_period = TRUE`. Amounts are
+  full US dollars.
 
   Carries a `provenance` attribute matching
   `inst/schemas/provenance-v1.json`, whose `balance_caveats` block reports
