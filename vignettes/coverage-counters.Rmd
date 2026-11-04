@@ -1,0 +1,270 @@
+---
+title: "Coverage counters: expected, collected, reporting"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Coverage counters: expected, collected, reporting}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+# What `provenance$coverage` holds
+
+`cog_geographic_rollup()` and `cog_peer_compare()` attach a coverage table to their
+provenance at `provenance$coverage`. It has one row per requested year and five
+columns: `year`, `n_units_collected`, `n_units_reporting`, `n_units_expected` and
+`is_census_year`. A second field, `provenance$coverage_mode`, records the `coverage`
+argument you passed.
+
+The table is built from the years you requested. A year in which none of your
+governments has a row still gets a row in the table, with `n_units_reporting` equal
+to zero.
+
+Point `USCOGDATA_URL` at the bundled fixture corpus to run the examples without
+network access or credentials. The fixture carries FY2011, FY2012, FY2019 and FY2020
+for all 50 states. Every count computed from it is fixture output and not a real
+Georgia figure.
+
+```{r}
+library(uscogdata)
+
+# Point at the bundled offline fixture. In real use, USCOGDATA_URL is set to the
+# published corpus URL instead -- see README.md.
+Sys.setenv(USCOGDATA_URL = paste0(
+  system.file("extdata/fixture_corpus", package = "uscogdata"), "/"
+))
+```
+
+# What each counter counts
+
+Each counter answers a different question about the governments you named.
+
+`n_units_expected` counts the governments you asked about. For
+`cog_geographic_rollup()` it is the number of distinct ids across every layer of
+`govids`. For `cog_peer_compare()` it is the number of peers. The target is the
+subject of the comparison and is not counted.
+
+`n_units_collected` counts how many of those governments have at least one spending
+row in the corpus that year, in any category. The verb looks this up in the long view
+behind `cog_spending()`, which holds every non-aggregate, non-intergovernmental
+expenditure row. A government that Census did not collect from that year has no rows
+there, whatever category you asked about.
+
+`n_units_reporting` counts how many of those governments have at least one row in
+the result for that year. The result holds only the category you requested, so this
+counter depends on the category.
+
+A government with a row in the result also has a row in the long view, so in every
+year `n_units_reporting <= n_units_collected <= n_units_expected`.
+
+# Three groups of governments
+
+The counters split the governments you named into three groups each year:
+
+1. `n_units_expected - n_units_collected` governments have no spending rows in the
+   corpus that year. The Census of Governments collects from every government only
+   in years ending in 2 or 7 and from a sample in other years, so in a sample year
+   this group includes every government outside that year's sample.
+2. `n_units_collected - n_units_reporting` governments were collected that year but
+   have no rows in your category. A city that contracts its policing to the county
+   sheriff lands here for `category = "Police"`. Its Police spending is a real zero.
+3. `n_units_reporting` governments have rows in your category.
+
+A government in the first group and a government in the second group look the same in
+the result: neither has a row. Only `n_units_collected` tells them apart.
+
+# Georgia cities and Police spending
+
+Build the list of Georgia cities with `cog_gov_search()` and roll their Police
+spending up for all four fixture years:
+
+```{r}
+ga_cities <- cog_gov_search(state = "GA", type = "city")
+nrow(ga_cities)
+
+police <- cog_geographic_rollup(
+  govids   = list(city = ga_cities$canonical_govid),
+  category = "Police",
+  years    = c(2011, 2012, 2019, 2020)
+)
+
+coverage <- attr(police, "provenance")$coverage
+coverage
+```
+
+On the fixture, `n_units_expected` is 566 in every year, because it counts the ids
+you passed. FY2012 is a census year. Census collected 534 of the 566 cities, and 398
+of those have Police rows. That leaves 32 cities in the first group and 136 in the
+second. In the three sample years, Census collected 60 or 103 cities, and nearly all
+of them have Police rows.
+
+You can rebuild `n_units_collected` from the public verbs. The `"direct"` concept
+covers every non-intergovernmental expenditure subtype, so asking `cog_spending()`
+for every Direct category returns a row for each collected government:
+
+```{r, message = FALSE}
+direct <- cog_spending(
+  ga_cities$canonical_govid,
+  years = c(2011, 2012, 2019, 2020),
+  category = "All Categories",
+  expenditure_concept = "direct"
+)
+collected <- unique(direct[, c("year", "canonical_govid")])
+table(collected$year)
+```
+
+The counts match the `n_units_collected` column above.
+
+# Two ratios
+
+Divide the counters to get two rates:
+
+```{r}
+coverage$collection_rate <- coverage$n_units_collected / coverage$n_units_expected
+coverage$participation   <- coverage$n_units_reporting / coverage$n_units_collected
+coverage[, c("year", "is_census_year", "collection_rate", "participation")]
+```
+
+The collection rate, `n_units_collected / n_units_expected`, is the share of the
+governments you named that Census collected that year. It depends on the survey
+calendar and the sample, and it is the same for every category. On the fixture it is
+0.94 in FY2012 and between 0.11 and 0.18 in the sample years.
+
+Category participation, `n_units_reporting / n_units_collected`, is the share of the
+collected governments that have rows in your category. On the fixture, 0.75 of the
+cities collected in FY2012 have Police rows.
+
+Do not read `n_units_reporting / n_units_expected` as a response rate. It equals the
+collection rate times category participation, so a low value can come from a sample
+year, from a category many governments do not fund, or from both. For FY2012 it is
+398 / 566, about 0.70, and the counters show that most of the shortfall is the 136
+collected cities with no Police rows.
+
+# Comparing a census year with a sample year
+
+Participation is higher in the fixture's sample years than in FY2012: 1.00 in FY2011
+and 0.93 in FY2019 and FY2020. The cities Census collects in a sample year are a
+different set from the full universe. Join the collected cities to the population
+estimate that `cog_gov_search()` returns:
+
+```{r}
+collected <- merge(collected, ga_cities[, c("canonical_govid", "population_acs")])
+tapply(collected$population_acs, collected$year, median, na.rm = TRUE)
+```
+
+On the fixture, the median collected city has about 1,500 residents in FY2012 and
+about 17,500 in FY2019 and FY2020. The sample years collect much larger cities than
+the typical Georgia city, and a larger share of them report Police spending. A
+sample-year participation rate describes the cities Census sampled that year, so use
+a census year to estimate the share of all Georgia cities with Police spending.
+
+The collection rate shows which kind of year you are looking at. When it is low, treat
+both the amounts and the participation rate as statements about the sampled
+governments.
+
+# The FY2022 example on the published corpus
+
+The reference pages for `cog_geographic_rollup()` and `cog_peer_compare()` describe
+the same query for FY2022, a census year. The fixture does not carry FY2022, so the
+query needs the published corpus:
+
+```{r, eval = FALSE}
+# Not run: needs USCOGDATA_URL set to the published corpus. The fixture has no FY2022.
+ga_cities <- cog_gov_search(state = "GA", type = "city")
+police_2022 <- cog_geographic_rollup(
+  govids   = list(city = ga_cities$canonical_govid),
+  category = "Police",
+  years    = 2022
+)
+attr(police_2022, "provenance")$coverage
+```
+
+Those pages report 393 of 567 Georgia cities with Police rows in FY2022 and attribute
+most of the 174-city gap to cities that contract policing to the county sheriff. Run
+the chunk and read `n_units_collected` to split the 174 into the two groups: the
+cities Census did not collect, and the collected cities with no Police rows.
+
+# Peer comparisons count peers only
+
+In `cog_peer_compare()`, `n_units_expected` is the number of peers, and
+`n_units_reporting` counts peer rows only. The target is left out of all three
+counters. Compare Fitzgerald, Georgia, with the 12 Georgia cities closest to it in
+FY2012 population:
+
+```{r}
+fitzgerald <- "132017204209"
+peers <- cog_find_peers(fitzgerald, year = 2012, same_state = TRUE, max_peers = 12)
+nrow(peers)
+
+cmp <- cog_peer_compare(fitzgerald, peers, category = "Police", years = c(2012, 2019))
+attr(cmp, "provenance")$coverage
+```
+
+All 12 peers were collected and report Police spending in FY2012. In FY2019, Census
+collected four of them and three have Police rows. Eight peers fall in the first group
+and one in the second. The `summary_p25`, `summary_p50` and `summary_p75` rows for
+FY2019 are computed from those three peers' rows.
+
+# What else changes the counters
+
+`coverage = "census"` drops the sample years before the query runs, so the table has
+one row per requested census year:
+
+```{r}
+census_only <- cog_geographic_rollup(
+  govids   = list(city = ga_cities$canonical_govid),
+  category = "Police",
+  years    = c(2011, 2012, 2019, 2020),
+  coverage = "census"
+)
+attr(census_only, "provenance")$coverage
+```
+
+`coverage = "consistent"` keeps only the governments with rows in every requested
+year. The filter runs before the counters are computed, so `n_units_reporting` is the
+same in every year. `n_units_expected` and `n_units_collected` are not filtered:
+
+```{r}
+balanced <- cog_geographic_rollup(
+  govids   = list(city = ga_cities$canonical_govid),
+  category = "Police",
+  years    = c(2012, 2019),
+  coverage = "consistent"
+)
+attr(balanced, "provenance")$coverage
+```
+
+On the fixture, 93 Georgia cities have Police rows in both FY2012 and FY2019. Under
+`"consistent"`, `n_units_reporting / n_units_collected` no longer measures category
+participation, because the numerator is filtered and the denominator is not.
+
+`cog_peer_compare()` exempts the target from the `"consistent"` filter, and its
+`summary_*` quantiles are computed after the filter.
+
+With `per_capita = TRUE`, `cog_geographic_rollup()` drops rows whose government has
+no population for that year before it counts `n_units_reporting`. Such a government
+still counts as expected and collected. `cog_peer_compare()` does not drop these
+rows.
+
+# `is_census_year`
+
+`is_census_year` is `TRUE` for years ending in 2 or 7. It describes the survey
+calendar. Read `n_units_collected` to see how complete a year is: in FY2012, a census
+year, the fixture has spending rows for 534 of its 566 Georgia cities.
+
+# Summary
+
+- `n_units_expected` is the number of governments you named, or the number of peers
+  in `cog_peer_compare()`.
+- `n_units_collected` is how many of them have any spending row that year.
+- `n_units_reporting` is how many of them have a row in your category that year.
+- `n_units_collected / n_units_expected` is the collection rate.
+  `n_units_reporting / n_units_collected` is category participation among collected
+  governments.
+- `n_units_reporting / n_units_expected` mixes the two, so read the counters
+  separately before you explain a gap.
+- A sample year collects a different set of governments from a census year, so
+  compare participation rates across those years with care.
