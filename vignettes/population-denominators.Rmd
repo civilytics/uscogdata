@@ -59,6 +59,12 @@ out <- purrr::map_dfr(years, function(y) {
 
 Each row in `out` has `cohort_year == year`, so a faceted plot shows cohort drift directly.
 
+Each `year` is a Census survey year, which covers different months for different
+governments: a city with a June 30 fiscal year end and one with a December 31 year end
+report figures six months apart under the same `year`. Pass `fiscal_period = TRUE` to
+`cog_spending()` to get each row's `period_start` and `period_end`, and see
+`?cog_fiscal_periods` for the rule.
+
 # Future direction
 
 `pop_source` is a column on the result, not a fixed value, so adding a new denominator (PEP from tidycensus, decennial counts, ACS time-series) is a join change rather than an API change. A future release may add `cog_spending(..., pop_source = "pep")` for users who need a single externally-audited series.

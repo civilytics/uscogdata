@@ -1,3 +1,37 @@
+# uscogdata (development version)
+
+## Fiscal-year periods for each row
+
+`year` is the Census survey year, and a survey year covers different months for
+different governments. Census files a government's fiscal year under survey year Y
+when it ended between July 1 of Y-1 and June 30 of Y. For a county, city or township,
+"2017" means July 2016 to June 2017 with a June 30 year end, October 2015 to
+September 2016 with a September 30 year end, and January to December 2016 with a
+December 31 year end.
+
+`cog_spending()`, `cog_revenue()` and `cog_balances()` gain `fiscal_period = FALSE`.
+With `fiscal_period = TRUE`, every row gains three columns at the end:
+`fiscal_year_end`, an MMDD integer such as `630`, and `period_start` and `period_end`,
+the first and last day the row covers. They come from that government-year's own
+fiscal year end, so a change of fiscal year is respected, and they are `NA` where the
+corpus has no value. The provenance gains `transformations$fiscal_period`. The default
+returns the same columns and provenance as before.
+
+```r
+cog_spending("121011212191", years = 2020, category = "Police", fiscal_period = TRUE)
+```
+
+`cog_fiscal_periods(govid, years)` returns the months each survey year covers for
+each government. `cog_survey_year(govid, date)` returns the survey year whose period
+contains a date, which places an event against the corpus's `year`.
+
+State governments follow a different rule: survey year Y holds the fiscal year ending
+in calendar year Y. It changes the months for three states, Alabama and Michigan
+(September 30) and Texas (August 31). Census's 2004 and 2006 technical documentation
+lists them as exceptions to the June 30 window, and the published corpus agrees for
+survey year 2020. The same documentation lists the District of Columbia, so it gets
+the state rule too, although the data has not confirmed it.
+
 # uscogdata 0.4.0
 
 ## Cohorts can be named by predicate, not just by id

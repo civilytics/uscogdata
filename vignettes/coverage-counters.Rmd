@@ -287,6 +287,26 @@ rows.
 calendar. Read `n_units_collected` to see how complete a year is: in FY2012, a census
 year, the fixture has spending rows for 534 of its 566 Georgia cities.
 
+# Survey years and fiscal years
+
+The counters count governments per survey year, and a survey year covers different
+months for different governments. Census files a fiscal year under survey year Y when
+it ended between July 1 of Y-1 and June 30 of Y. Count the fiscal year ends of the
+Georgia cities in FY2012:
+
+```{r}
+fy2012 <- cog_fiscal_periods(ga_cities$canonical_govid, years = 2012)
+table(fy2012$fiscal_year_end, useNA = "ifany")
+```
+
+In FY2012, 273 of the 566 Georgia cities close their books on December 31, 196 on
+June 30 and 36 on September 30. Their FY2012 figures cover calendar 2011, July 2011 to
+June 2012, and October 2010 to September 2011. The 31 cities with no value have no rows
+in the corpus that year or no recorded year end. A city with a July 31 year end has an
+FY2012 that ends on July 31, 2011, 11 months before the June cities' FY2012 ends.
+Pass `fiscal_period = TRUE` to `cog_spending()` to see each row's months, and see
+`?cog_fiscal_periods` for the rule.
+
 # Summary
 
 - `n_units_expected` is the number of governments you named, or the number of peers
