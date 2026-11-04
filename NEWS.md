@@ -31,6 +31,37 @@ in calendar year Y. It changes the months for three states, Alabama and Michigan
 lists them as exceptions to the June 30 window, and the published corpus agrees for
 survey year 2020. The same documentation lists the District of Columbia, so it gets
 the state rule too, although the data has not confirmed it.
+## `cog_suggestions()` builds coverage suggestions without a second verb call
+
+`cog_spending()` and `cog_revenue()` attach harmonization-recipe suggestions as
+`attr(x, "provenance")$suggestions` when you name a category. `cog_suggestions()`
+returns the same list for a set of governments, years, categories, a flow and a
+concept, given the years your rows cover. You can call a verb once with no
+`category`, filter its rows yourself, and build the suggestions for one category
+only when you need them.
+
+```r
+govids <- c("061037123085", "121011212191")
+spend <- cog_spending(govids, years = 2011:2012)
+
+corrections <- spend[spend$category == "Corrections", ]
+cog_suggestions(
+  govids, years = 2011:2012, category = "Corrections",
+  flow = "spending", years_present = unique(corrections$year)
+)
+```
+
+`cog_suggestions()` checks its arguments before it opens a session and raises
+`cli` errors for a malformed call. It returns the list without printing the
+message the verbs print.
+
+## Suggestions come back in a stable order
+
+`cog_spending()`, `cog_revenue()` and `cog_suggestions()` order suggestions by
+`recipe_id`. The query that picks candidate recipes used `SELECT DISTINCT` with no
+`ORDER BY`, so DuckDB returned them in whatever order its parallel aggregate
+finished, and two identical calls could list the same suggestions in different
+orders. The query now sorts them.
 
 # uscogdata 0.4.0
 

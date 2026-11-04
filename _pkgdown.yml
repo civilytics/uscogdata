@@ -36,6 +36,7 @@ reference:
     contents:
       - cog_categories
       - cog_recipes
+      - cog_suggestions
       - cog_manifest
       - cog_explain
       - cog_mirror
