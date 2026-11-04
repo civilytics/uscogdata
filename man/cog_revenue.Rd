@@ -17,7 +17,8 @@ cog_revenue(
   limit = NULL,
   offset = NULL,
   state = NULL,
-  type = NULL
+  type = NULL,
+  fiscal_period = FALSE
 )
 }
 \arguments{
@@ -154,13 +155,26 @@ Ignored if `limit` is `NULL`; defaults to `0L` when `limit` is set.}
   and `govids_missing` are empty -- there is no id list to report against --
   and `provenance$scope$cohort` carries `state`, `type` and
   `n_governments` instead. A `govid`-named cohort reports exactly as before.}
+
+\item{fiscal_period}{If `TRUE`, add three columns to every row:
+`fiscal_year_end` (the government's fiscal year end that survey year, an
+MMDD integer such as `630`), and `period_start` and `period_end` (Dates,
+inclusive), the calendar months the row covers. `year` is the Census
+survey year, which covers different months for different governments;
+see "The survey-year rule" in [cog_fiscal_periods()]. The columns come
+from each government-year's own `fiscal_year_end`, so a change of fiscal
+year is respected, and are `NA` where the corpus has no value. The result
+also gains `provenance$transformations$fiscal_period`. Defaults to
+`FALSE`, which returns exactly the columns and provenance this verb
+returned before the argument existed.}
 }
 \value{
 Tibble with columns `year`, `canonical_govid`, `gov_name`,
   `revenue_subtype`, `category`, `amt_nominal`, optional `amt_real`,
   optional `amt_per_capita_nominal`, optional `amt_per_capita_real`,
   optional `pop_source`, `codes_included`, `aggregate_fallback`, `notes`,
-  and `value_source` when `complete = TRUE`.
+  `value_source` when `complete = TRUE`, and `fiscal_year_end`,
+  `period_start` and `period_end` when `fiscal_period = TRUE`.
 }
 \description{
 Mirror of [cog_spending()] for revenue categories. One row per

@@ -53,6 +53,11 @@
 #'   `total_rows`.
 #' @param offset Rows to skip before `limit` starts counting (0-based).
 #'   Ignored if `limit` is `NULL`; defaults to `0L` when `limit` is set.
+#' @param fiscal_period If `TRUE`, add `fiscal_year_end`, `period_start` and
+#'   `period_end` to every row, as [cog_spending()] does. Holdings are a stock
+#'   measured at the end of the fiscal year, so `period_end` is the date the
+#'   balance describes and `period_start` is the start of that fiscal year.
+#'   Defaults to `FALSE`, which leaves the result unchanged.
 #'
 #' @return Tibble with columns `year`, `canonical_govid`, `gov_name`,
 #'   `balance_subtype`, `category`, `amt_nominal`, `codes_included`,
@@ -60,8 +65,9 @@
 #'   `pop_source` (when `per_capita = TRUE`), optional `amt_real` (when
 #'   `adjust_to_year` is set), and optional `amt_per_capita_real` (only when
 #'   **both** `per_capita = TRUE` and `adjust_to_year` are set -- there is no
-#'   nominal per-capita column to deflate otherwise). Amounts are full US
-#'   dollars.
+#'   nominal per-capita column to deflate otherwise), and `fiscal_year_end`,
+#'   `period_start` and `period_end` when `fiscal_period = TRUE`. Amounts are
+#'   full US dollars.
 #'
 #'   Carries a `provenance` attribute matching
 #'   `inst/schemas/provenance-v1.json`, whose `balance_caveats` block reports
@@ -79,7 +85,7 @@ cog_balances <- function(govid = NULL, years, category = NULL,
                          per_capita = FALSE, adjust_to_year = NULL,
                          basis = c("harmonized", "raw"), recipe = NULL,
                          state = NULL, type = NULL,
-                         limit = NULL, offset = NULL) {
+                         limit = NULL, offset = NULL, fiscal_period = FALSE) {
   call <- match.call()
   basis <- match.arg(basis, c("harmonized", "raw"))
   # Coerce FIRST, validate second: .validate_verb_inputs() asserts
@@ -102,6 +108,7 @@ cog_balances <- function(govid = NULL, years, category = NULL,
   # validator's own doc comment for the incident that made that matter.
   .validate_verb_inputs(govid, years, category, per_capita, adjust_to_year,
                         recipe)
+  .validate_fiscal_period_arg(fiscal_period)
 
   # Same semantics as the money verbs (R/pagination.R). Only the `recipe`
   # conflict applies here: cog_balances() has no `complete` argument, and a
@@ -174,6 +181,7 @@ cog_balances <- function(govid = NULL, years, category = NULL,
   if (!is.null(adjust_to_year)) {
     result <- .attach_real_dollars(result, adjust_to_year, per_capita)
   }
+  if (fiscal_period) result <- .attach_fiscal_period(result, con)
 
   prov <- .build_provenance(
     verb = "cog_balances", call = call, govid = govid, years = years,
@@ -189,6 +197,9 @@ cog_balances <- function(govid = NULL, years, category = NULL,
   prov$scope$govids_found   <- scope$found
   prov$scope$govids_missing <- scope$missing
   prov$scope$cohort <- .cohort_provenance(con, cohort)
+  if (fiscal_period) {
+    prov$transformations$fiscal_period <- .fiscal_period_provenance(result)
+  }
 
   prov$balance_caveats <- .balance_caveats(
     con, prov$codes_summed$observed, years

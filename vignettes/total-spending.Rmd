@@ -132,6 +132,23 @@ ga_state <- cog_spending(
 ga_state
 ```
 
+The rollup also mixes fiscal calendars. `year` is the Census survey year, and Census
+files a fiscal year under survey year Y when it ended between July 1 of Y-1 and
+June 30 of Y. `cog_fiscal_periods()` shows the months each government's 2020 covers:
+
+```{r}
+cog_fiscal_periods(
+  c("120000226351", "121011212191", "121099101897"), # Florida, Broward, Palm Beach
+  years = 2020
+)
+```
+
+Florida's state government closes its books on June 30, so its 2020 covers July 2019
+to June 2020. Broward and Palm Beach counties close on September 30, so their 2020
+covers October 2018 to September 2019, and their figures end nine months before the
+state's. Pass `fiscal_period = TRUE` to `cog_spending()` to get these columns on every
+row, and see `?cog_fiscal_periods` for the rule and its exceptions.
+
 Now the same rollup, but asking for `expenditure_concept = "total"`:
 
 ```{r, error = TRUE}

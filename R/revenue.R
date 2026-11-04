@@ -48,14 +48,15 @@
 #'   `revenue_subtype`, `category`, `amt_nominal`, optional `amt_real`,
 #'   optional `amt_per_capita_nominal`, optional `amt_per_capita_real`,
 #'   optional `pop_source`, `codes_included`, `aggregate_fallback`, `notes`,
-#'   and `value_source` when `complete = TRUE`.
+#'   `value_source` when `complete = TRUE`, and `fiscal_year_end`,
+#'   `period_start` and `period_end` when `fiscal_period = TRUE`.
 #' @export
 cog_revenue <- function(govid = NULL, years, category = NULL,
                         per_capita = FALSE, adjust_to_year = NULL,
                         basis = c("harmonized", "raw"), recipe = NULL,
                         revenue_concept = c("general", "total"),
                         complete = FALSE, limit = NULL, offset = NULL,
-                        state = NULL, type = NULL) {
+                        state = NULL, type = NULL, fiscal_period = FALSE) {
   # flow_prefixes no longer classifies rows (crosswalk revenue_subtype
   # membership does -- General Revenue, i.e. everything except
   # insurance_trust) -- it only scopes the recipe-suggestion machinery to
@@ -78,6 +79,7 @@ cog_revenue <- function(govid = NULL, years, category = NULL,
     limit          = limit,
     offset         = offset,
     state          = state,
-    type           = type
+    type           = type,
+    fiscal_period  = fiscal_period
   )
 }

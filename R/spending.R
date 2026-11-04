@@ -210,11 +210,23 @@
 #'   and `govids_missing` are empty -- there is no id list to report against --
 #'   and `provenance$scope$cohort` carries `state`, `type` and
 #'   `n_governments` instead. A `govid`-named cohort reports exactly as before.
+#' @param fiscal_period If `TRUE`, add three columns to every row:
+#'   `fiscal_year_end` (the government's fiscal year end that survey year, an
+#'   MMDD integer such as `630`), and `period_start` and `period_end` (Dates,
+#'   inclusive), the calendar months the row covers. `year` is the Census
+#'   survey year, which covers different months for different governments;
+#'   see "The survey-year rule" in [cog_fiscal_periods()]. The columns come
+#'   from each government-year's own `fiscal_year_end`, so a change of fiscal
+#'   year is respected, and are `NA` where the corpus has no value. The result
+#'   also gains `provenance$transformations$fiscal_period`. Defaults to
+#'   `FALSE`, which returns exactly the columns and provenance this verb
+#'   returned before the argument existed.
 #' @return Tibble with columns `year`, `canonical_govid`, `gov_name`,
 #'   `spend_subtype`, `category`, `amt_nominal`, optional `amt_real`,
 #'   optional `amt_per_capita_nominal`, optional `amt_per_capita_real`,
 #'   optional `pop_source`, `codes_included`, `aggregate_fallback`, `notes`,
-#'   and `value_source` when `complete = TRUE`.
+#'   `value_source` when `complete = TRUE`, and `fiscal_year_end`,
+#'   `period_start` and `period_end` when `fiscal_period = TRUE`.
 #'   Carries a `provenance` attribute matching `inst/schemas/provenance-v1.json`,
 #'   whose `completion` block reports `applied`, `rows_filled`, and the
 #'   per-year `absence_means` rule that was applied. When `limit` is set,
@@ -228,7 +240,7 @@ cog_spending <- function(govid = NULL, years, category = NULL,
                          basis = c("harmonized", "raw"), recipe = NULL,
                          expenditure_concept = c("primary", "direct", "total"),
                          complete = FALSE, limit = NULL, offset = NULL,
-                         state = NULL, type = NULL) {
+                         state = NULL, type = NULL, fiscal_period = FALSE) {
   # flow_prefixes no longer classifies rows (crosswalk subtype membership
   # does, per expenditure_concept) -- it only scopes the recipe-suggestion
   # machinery to this verb's recipe families (see R/suggestions.R; the
@@ -251,7 +263,8 @@ cog_spending <- function(govid = NULL, years, category = NULL,
     limit         = limit,
     offset        = offset,
     state         = state,
-    type          = type
+    type          = type,
+    fiscal_period = fiscal_period
   )
 }
 
@@ -280,7 +293,7 @@ cog_spending <- function(govid = NULL, years, category = NULL,
                            expenditure_concept = c("primary", "direct", "total"),
                            revenue_concept = c("general", "total"),
                            complete = FALSE, limit = NULL, offset = NULL,
-                           state = NULL, type = NULL) {
+                           state = NULL, type = NULL, fiscal_period = FALSE) {
   basis_explicit <- length(basis) == 1L
   basis <- match.arg(basis, c("harmonized", "raw"))
   # match.arg() itself throws a base `simpleError`, not an rlang-classed
@@ -373,6 +386,7 @@ cog_spending <- function(govid = NULL, years, category = NULL,
     )
   }
 
+  .validate_fiscal_period_arg(fiscal_period)
   complete <- isTRUE(complete)
   if (complete && !is.null(recipe)) {
     .abort_complete_unsupported(
@@ -572,6 +586,10 @@ cog_spending <- function(govid = NULL, years, category = NULL,
 
   result$notes <- .notes_column(result, direct_suppressed_info$notes)
 
+  # Appended last, after every other column, so the opt-in columns never move
+  # an existing one; FALSE (the default) leaves the result untouched.
+  if (fiscal_period) result <- .attach_fiscal_period(result, con)
+
   # Determine expenditure_concept_note: only non-empty for "total", explains
   # how the IG leg was assembled from legacy-era aggregates. When the Direct
   # leg is suppressed for at least one requested (year, category), append an
@@ -636,6 +654,9 @@ cog_spending <- function(govid = NULL, years, category = NULL,
   # every fleet-scale response body, which is the cost this path exists to
   # remove. NULL for a govid-named cohort, so that output is untouched.
   prov$scope$cohort <- .cohort_provenance(con, cohort)
+  if (fiscal_period) {
+    prov$transformations$fiscal_period <- .fiscal_period_provenance(result)
+  }
   attr(result, "provenance") <- prov
   attr(result, ".popyear_range") <- NULL
   # Attached here, after every downstream transform (per_capita/real-dollar
