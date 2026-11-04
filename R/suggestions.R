@@ -38,6 +38,202 @@
 # an IG row surviving on a legacy aggregate that Direct excludes must not
 # read as coverage and cancel the very suggestion that would recover it.
 
+#' Coverage suggestions for a spending or revenue query
+#'
+#' Builds the harmonization-recipe suggestions that [cog_spending()] and
+#' [cog_revenue()] attach as `attr(x, "provenance")$suggestions`, without
+#' running the verb again. Call a verb once with no `category`, filter its
+#' rows yourself, and call this when you need the suggestions for one
+#' category.
+#'
+#' A suggestion names a recipe (see [cog_recipes()]) that would fill a gap in
+#' the result. A recipe qualifies in two ways. Its `trigger` is
+#' `"empty_year"` when the result has no rows in a requested year and the
+#' recipe's own join finds rows for these governments in that year. Its
+#' `trigger` is `"suppressed_component"` when one of the recipe's component
+#' codes carries dollars that the verb's own view excludes, because Census
+#' published them only as an aggregate or because the code is absent from
+#' `summary_categories`.
+#'
+#' Suggestions are built only for the verbs' default `basis = "harmonized"`.
+#' On a corpus with `schema_version < 5` that basis is unavailable, the verbs
+#' fall back to `"raw"`, and this function returns an empty list, as the
+#' verbs do. It also returns an empty list when nothing qualifies.
+#'
+#' The verbs also print the suggestions as a message. This function returns
+#' them without printing.
+#'
+#' @param govid Character vector of `canonical_govid` values, or a data frame
+#'   with a `canonical_govid` column, such as a [cog_find_peers()] or
+#'   [cog_gov_search()] result. The suggestions cover these governments as one
+#'   cohort, as they do in a verb call over the same `govid`.
+#' @param years Integer vector of requested years.
+#' @param category Character vector of category names from
+#'   `summary_categories.category`, or the reserved `"All Categories"` alone.
+#'   The verbs build suggestions only when a category is named, so `NULL` is
+#'   refused here.
+#' @param flow `"spending"` for the suggestions [cog_spending()] would attach,
+#'   or `"revenue"` for [cog_revenue()]'s.
+#' @param concept The verb's concept argument: `expenditure_concept` for
+#'   spending (`"primary"`, `"direct"` or `"total"`) or `revenue_concept` for
+#'   revenue (`"general"` or `"total"`). `NULL`, the default, uses the verb's
+#'   own default, `"primary"` or `"general"`. The concept changes the result
+#'   only when `category = "All Categories"`, where its subtype scope decides
+#'   which recipes are candidates.
+#' @param years_present Integer vector of the years in which your rows for
+#'   `category` have at least one row. Pass `integer(0)` when there are no
+#'   rows. Years outside `years` are ignored. With `flow = "spending"` and
+#'   `concept = "total"`, count only rows whose `spend_subtype` is not
+#'   `"intergovernmental"`. [cog_spending()] measures gaps on the Direct leg
+#'   alone, because an intergovernmental row can survive in a year whose
+#'   Direct rows Census published only as an aggregate.
+#' @return A list with one element per suggestion, ordered by `recipe_id`,
+#'   and identical to `attr(x, "provenance")$suggestions` for the same
+#'   inputs. Each element is a list with `recipe_id`, `label`,
+#'   `available_years` (first and last year the recipe covers), `hint`,
+#'   `trigger` (`"empty_year"` or `"suppressed_component"`),
+#'   `suppressed_amount` (full US dollars), `suppressed_years`,
+#'   `suppressed_codes`, and `ig_recipe_id` (the intergovernmental
+#'   counterpart recipe, or `NULL`). The list is empty when nothing qualifies.
+#' @seealso [cog_spending()], [cog_revenue()], [cog_recipes()],
+#'   [cog_explain()]
+#' @examples
+#' \dontrun{
+#' govids <- c("061037123085", "121011212191")
+#' spend <- cog_spending(govids, years = 2011:2012)
+#'
+#' corrections <- spend[spend$category == "Corrections", ]
+#' cog_suggestions(
+#'   govids, years = 2011:2012, category = "Corrections",
+#'   flow = "spending", years_present = unique(corrections$year)
+#' )
+#' }
+#' @export
+cog_suggestions <- function(govid, years, category,
+                            flow = c("spending", "revenue"),
+                            concept = NULL, years_present) {
+  args <- .validate_suggestion_inputs(govid, years, category, flow, concept,
+                                      years_present)
+
+  con <- .ensure_session()
+  # The verbs' default basis, resolved the way .verb_spendrev() resolves it
+  # when the caller leaves `basis` unset: "raw" on a schema_version < 5
+  # corpus, where .build_suggestions() returns list() before touching the
+  # harmonization tables that corpus does not have.
+  resolved <- .resolve_basis("harmonized", explicit = FALSE,
+                             .uscogdata_env$manifest)
+
+  .build_suggestions(
+    con, .make_cohort(args$govid), args$years, args$category,
+    data.frame(year = args$years_present), resolved$basis,
+    args$spec$flow_prefixes,
+    .select_long_view(args$spec$view_base, resolved$basis),
+    all_categories = args$all_categories,
+    subtype_col = args$spec$subtype_col,
+    subtype_scope = args$subtype_scope
+  )
+}
+
+# What cog_spending() and cog_revenue() pass to .verb_spendrev() for the
+# arguments .build_suggestions() reads. tests/testthat/test-suggestions.R
+# checks that cog_suggestions() returns what each verb attaches, so a change
+# to either verb's flow family that is not mirrored here fails there.
+.SUGGESTION_FLOWS <- list(
+  spending = list(view_base     = "spending_annotated",
+                  subtype_col   = "spend_subtype",
+                  flow_prefixes = c("E", "F", "G"),
+                  concepts      = c("primary", "direct", "total"),
+                  concept_arg   = "expenditure_concept"),
+  revenue  = list(view_base     = "revenue_annotated",
+                  subtype_col   = "revenue_subtype",
+                  flow_prefixes = c("T", "A", "U", "B", "C", "D"),
+                  concepts      = c("general", "total"),
+                  concept_arg   = "revenue_concept")
+)
+
+#' Validate and normalize `cog_suggestions()` arguments.
+#'
+#' Every check runs before `.ensure_session()`, so a malformed call costs no
+#' I/O. Returns the coerced inputs plus the flow's spec from
+#' `.SUGGESTION_FLOWS` and the concept's subtype scope.
+#' @noRd
+.validate_suggestion_inputs <- function(govid, years, category, flow,
+                                        concept, years_present) {
+  if (missing(govid)) cli::cli_abort("{.arg govid} is required.")
+  if (missing(years)) cli::cli_abort("{.arg years} is required.")
+  if (missing(category)) cli::cli_abort("{.arg category} is required.")
+  if (missing(years_present)) {
+    cli::cli_abort(c(
+      "{.arg years_present} is required.",
+      "i" = "Pass the years in which your rows for {.arg category} have at least one row, or {.code integer(0)} when there are none."
+    ))
+  }
+
+  govid <- .coerce_govid_input(govid, arg = "govid")
+  if (length(govid) == 0L || anyNA(govid) || !all(nzchar(govid))) {
+    cli::cli_abort("{.arg govid} must name at least one government, with no missing or empty ids.")
+  }
+
+  if (!is.numeric(years) || length(years) == 0L || anyNA(years)) {
+    cli::cli_abort("{.arg years} must be a non-empty integer vector with no missing values.")
+  }
+
+  if (is.null(category)) {
+    cli::cli_abort(c(
+      "{.arg category} must name at least one category.",
+      "i" = "The verbs build suggestions only when a category is named, so a {.code NULL} category has none."
+    ))
+  }
+  if (!is.character(category) || length(category) == 0L || anyNA(category)) {
+    cli::cli_abort("{.arg category} must be a non-empty character vector with no missing values.")
+  }
+  all_categories <- .ALL_CATEGORIES %in% category
+  if (all_categories && length(category) > 1L) {
+    cli::cli_abort(c(
+      "{.val {(.ALL_CATEGORIES)}} cannot be combined with other categories.",
+      "i" = "It already covers every category in the requested concept's scope.",
+      "*" = "Ask for it alone, or list the specific categories you want."
+    ), class = "uscogdata_all_categories_not_combinable")
+  }
+
+  flow <- tryCatch(
+    match.arg(flow, names(.SUGGESTION_FLOWS)),
+    error = function(e) {
+      cli::cli_abort(
+        "{.arg flow} must be one of {.val spending} or {.val revenue}.",
+        class = "uscogdata_invalid_flow", parent = e
+      )
+    }
+  )
+  spec <- .SUGGESTION_FLOWS[[flow]]
+
+  if (is.null(concept)) concept <- spec$concepts[[1]]
+  if (!is.character(concept) || length(concept) != 1L ||
+      !concept %in% spec$concepts) {
+    cli::cli_abort(
+      "With {.code flow = \"{flow}\"}, {.arg concept} must be {.code NULL} or one of {.val {spec$concepts}}.",
+      class = paste0("uscogdata_invalid_", spec$concept_arg)
+    )
+  }
+  subtype_scope <- if (identical(flow, "spending")) {
+    .expenditure_concept_subtypes(concept)
+  } else {
+    .revenue_concept_subtypes(concept)
+  }
+
+  if (!is.numeric(years_present) || anyNA(years_present)) {
+    cli::cli_abort(c(
+      "{.arg years_present} must be an integer vector with no missing values.",
+      "i" = "Use {.code integer(0)} when your rows cover no years."
+    ))
+  }
+
+  list(govid = govid, years = as.integer(years), category = category,
+       all_categories = all_categories, spec = spec,
+       subtype_scope = subtype_scope,
+       years_present = as.integer(years_present))
+}
+
 #' Build the `prov$suggestions` list for a (non-recipe) basis = "harmonized"
 #' verb call: recipes whose generic join would fill a real gap in `result`.
 #'
