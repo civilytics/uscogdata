@@ -102,8 +102,8 @@ cog_gov_search <- function(name = NULL, state = NULL, type = NULL,
 
   if (!is.null(type) && length(type) == 1L && .is_excluded_type(type)) {
     cli::cli_inform(c(
-      i = "v0.1 covers gov_types 0-3 (state/county/city/township) only.",
-      i = "Types 4 (special districts) and 5 (school districts) are excluded; see vignette('coverage-scope')."
+      i = "uscogdata covers gov_types 0-3 (state/county/city/township) only.",
+      i = "Types 4 (special districts) and 5 (school districts) are excluded pending validation."
     ))
     return(.empty_xwalk_tibble())
   }

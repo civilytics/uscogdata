@@ -128,13 +128,16 @@ category). Use `n_units_collected / n_units_expected` for the true
 collection rate, and `n_units_reporting / n_units_collected` for category
 participation among collected units.
 
-In FY2022 — a complete census year — Georgia reports 393 of 567 cities for
-`category = "Police"`; the 174-city gap is overwhelmingly cities that
-contract policing to the county sheriff, not non-response.
+In FY2022, a census year, 393 of Georgia's 567 cities report
+`category = "Police"`. Of the other 174, 32 were not collected and 142 were
+collected with no Police rows. Contracting policing to the county sheriff is
+one reason a city lands in the second group; the counters do not say how many
+of the 142 do.
 
-The comparison that *is* valid is the same category across a census year
-(ending in 2 or 7) and a sample year, where the real-zero component is
-roughly constant and the difference reflects the survey cycle. `is_census_year`
-marks which is which.
+A census year and a sample year collect different sets of governments, so
+participation across the two mixes a change in which governments were
+collected with any change in spending. Compare census years with each other,
+or the same governments across years. `is_census_year` marks which is which,
+and `vignette("coverage-counters")` has worked examples.
 }
 

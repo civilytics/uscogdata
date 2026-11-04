@@ -63,6 +63,13 @@ test_that("cog_gov_search sorts by population desc", {
   expect_true(all(diff(nonNA) <= 0))
 })
 
+test_that("cog_gov_search excluded-type message states the scope without a dead link", {
+  skip_if_no_corpus()
+  msgs <- testthat::capture_messages(cog_gov_search(type = 4L))
+  expect_match(paste(msgs, collapse = " "), "types 0-3")
+  expect_no_match(paste(msgs, collapse = " "), "coverage-scope|v0\\.1")
+})
+
 test_that("cog_gov_search rejects unknown type string", {
   expect_error(cog_gov_search(type = "galaxy"), "Unknown type")
 })

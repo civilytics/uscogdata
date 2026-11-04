@@ -136,3 +136,10 @@ test_that("cog_peer_compare cohort_year is NA for bare character peers", {
   )
   expect_true(all(is.na(r$cohort_year)))
 })
+
+test_that("cog_find_peers unknown-govid error states the scope without a dead link", {
+  skip_if_no_corpus()
+  err <- expect_error(cog_find_peers("000000000000"), "not found in corpus")
+  expect_match(conditionMessage(err), "types 0-3")
+  expect_no_match(conditionMessage(err), "coverage-scope|v0\\.1")
+})

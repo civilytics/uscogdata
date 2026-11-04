@@ -215,9 +215,9 @@ attr(police_2022, "provenance")$coverage
 
 On the published corpus, as of its 2026-10-26 build, the chunk returns 567 expected,
 535 collected and 393 reporting. The 174 cities without Police rows split into 32
-that Census did not collect and 142 that were collected and have no Police rows. The
-reference pages attribute most of the gap to cities that contract policing to the
-county sheriff, and the counters place 142 of the 174 in the second group.
+that Census did not collect and 142 that were collected and have no Police rows.
+Contracting policing to the county sheriff is one reason a city lands in the second
+group; the counters do not say how many of the 142 do.
 
 # Peer comparisons count peers only
 
