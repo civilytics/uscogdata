@@ -227,7 +227,9 @@
 #' A government can change its fiscal year end, so the periods are looked up
 #' per government-year. Where the corpus has no `fiscal_year_end` for a
 #' government-year, or the government has no rows that year, the period is
-#' `NA`.
+#' `NA`. Most of FY1993 is `NA`: 99% of its government-years have no usable
+#' value in the public corpus as of November 2026. So do 5% to 11% in FY1978
+#' and FY1987 to FY1990, and under 3% in every other year.
 #'
 #' From FY2023 the source files mark some rows as estimates carried forward
 #' from an earlier year. The periods here describe the survey year, not the
