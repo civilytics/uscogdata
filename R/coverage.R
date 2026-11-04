@@ -93,17 +93,21 @@
 #'     that year, in ANY category. This is a statement about survey collection,
 #'     independent of what was asked for: "of the governments you named, how
 #'     many did Census actually collect data from this year?" It separates
-#'     sampling (not collected) from real zeros (collected but spends nothing
-#'     in your category).
+#'     sampling (not collected) from collected governments with no rows in
+#'     your category.
 #'   * `n_units_reporting` -- how many of those appear with rows for the
-#'     SPECIFIC category you requested. This is always <= n_units_collected:
-#'     a government can be collected but have no rows for "Police" because it
-#'     contracts policing to the county sheriff, not because it wasn't
-#'     surveyed.
+#'     SPECIFIC category you requested. This is always <= n_units_collected.
+#'     A collected government can have no "Police" rows and still pay for
+#'     policing: the rows leave out intergovernmental expenditure, so a city
+#'     that pays the county sheriff and reports the payment as
+#'     intergovernmental (code `M62`) has none. Of 34 cities with documented
+#'     sheriff contracts, nine of 102 city-years (FY2012, FY2017 and FY2022;
+#'     corpus build of 2026-10-26) looked like this, and the other 93 reported
+#'     direct Police spending (uscogdata#80).
 #'
 #' `n_units_reporting` therefore conflates two very different things: a unit
-#' that was not collected (sampling) and a unit that was collected but spends
-#' nothing in that category. The ratio n_units_collected / n_units_expected is
+#' that was not collected (sampling) and a unit that was collected but has no
+#' rows in that category, which need not mean it spends nothing there. The ratio n_units_collected / n_units_expected is
 #' the true collection rate; n_units_reporting / n_units_collected measures
 #' category participation among collected units.
 #'

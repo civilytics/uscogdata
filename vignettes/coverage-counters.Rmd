@@ -71,12 +71,24 @@ The counters split the governments you named into three groups each year:
    in years ending in 2 or 7 and from a sample in other years, so in a sample year
    this group includes every government outside that year's sample.
 2. `n_units_collected - n_units_reporting` governments were collected that year but
-   have no rows in your category. A city that contracts its policing to the county
-   sheriff lands here for `category = "Police"`. Its Police spending is a real zero.
+   have no rows in your category. The rows come from the concept you asked for, and
+   the default `"primary"` concept leaves out intergovernmental expenditure. A city
+   that pays the county sheriff to police it and reports the payment as
+   intergovernmental expenditure lands here for `category = "Police"`, although it
+   spends money on policing.
 3. `n_units_reporting` governments have rows in your category.
 
 A government in the first group and a government in the second group look the same in
 the result: neither has a row. Only `n_units_collected` tells them apart.
+
+A government in the second group does not necessarily spend nothing in your category.
+The published corpus, as of its 2026-10-26 build, has Police spending for every one of
+34 cities with documented county sheriff contracts in California and Washington, in
+each of FY2012, FY2017 and FY2022. In 93 of those 102 city-years the city reports
+direct Police spending and counts as reporting. In the other nine it reports the
+payment only as intergovernmental Police expenditure, code `M62`, and lands in the
+second group. For a single government, `cog_spending()` with
+`expenditure_concept = "total"` adds the intergovernmental rows.
 
 # Georgia cities and Police spending
 
@@ -216,8 +228,9 @@ attr(police_2022, "provenance")$coverage
 On the published corpus, as of its 2026-10-26 build, the chunk returns 567 expected,
 535 collected and 393 reporting. The 174 cities without Police rows split into 32
 that Census did not collect and 142 that were collected and have no Police rows.
-Contracting policing to the county sheriff is one reason a city lands in the second
-group; the counters do not say how many of the 142 do.
+A city that contracts with the county sheriff lands in the second group only when it
+reports no direct Police spending, for example when it files the payment as
+intergovernmental expenditure. The counters do not say how many of the 142 do.
 
 # Peer comparisons count peers only
 
