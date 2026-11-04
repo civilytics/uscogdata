@@ -241,7 +241,12 @@
 #'   scope by when `all_categories = TRUE`; ignored otherwise.
 #' @param subtype_scope Character vector of subtype values to scope by
 #'   when `all_categories = TRUE`; ignored otherwise.
-#' @return Character vector of recipe IDs (possibly empty).
+#' @return Character vector of recipe IDs (possibly empty), sorted by
+#'   `recipe_id`. `.build_suggestions()` emits suggestions in this order, so
+#'   the sort is what makes two identical calls return the same list in the
+#'   same order (uscogdata#75). Without the `ORDER BY`, DuckDB returns
+#'   `SELECT DISTINCT` rows in whatever order its parallel hash aggregate
+#'   finishes in.
 #' @noRd
 .query_candidate_recipes <- function(con, category, flow_prefixes,
                                       all_categories = FALSE,
@@ -279,7 +284,8 @@
      AND recipe_id NOT IN (
        SELECT DISTINCT recipe_id FROM harmonization_recipes
        WHERE LEFT(component_code, 1) IN ('M', 'L')
-     )",
+     )
+     ORDER BY recipe_id",
     candidate_scope_sql
   ))$recipe_id
 }

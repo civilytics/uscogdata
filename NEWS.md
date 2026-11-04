@@ -1,3 +1,12 @@
+# uscogdata (development version)
+
+## Suggestions come back in a stable order
+
+`cog_spending()` and `cog_revenue()` now order suggestions by `recipe_id`. The query
+that picks candidate recipes used `SELECT DISTINCT` with no `ORDER BY`, so DuckDB
+returned them in whatever order its parallel aggregate finished, and two identical
+calls could list the same suggestions in different orders. The query now sorts them.
+
 # uscogdata 0.4.0
 
 ## Cohorts can be named by predicate, not just by id
