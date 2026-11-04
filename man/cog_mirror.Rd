@@ -14,22 +14,22 @@ cog_mirror(
 \arguments{
 \item{dest}{Destination directory. Created if missing.}
 
-\item{include}{Subset of `c("long", "metadata", "docs")` controlling
+\item{include}{Subset of \code{c("long", "metadata", "docs")} controlling
 which manifest sections to mirror.}
 
-\item{overwrite}{If `TRUE`, re-copy even when the local SHA matches.}
+\item{overwrite}{If \code{TRUE}, re-copy even when the local SHA matches.}
 
-\item{progress}{If `TRUE`, show a cli progress bar.}
+\item{progress}{If \code{TRUE}, show a cli progress bar.}
 }
 \value{
-Invisibly, a tibble of `(path, sha256, size_bytes, status)`
-  rows where `status` is `"downloaded"` or `"cached"`.
+Invisibly, a tibble of \verb{(path, sha256, size_bytes, status)}
+rows where \code{status} is \code{"downloaded"} or \code{"cached"}.
 }
 \description{
 Downloads (or copies, for local-path fixture URLs) every file listed in
-the session's `manifest.json` into `dest`, preserving the relative path
+the session's \code{manifest.json} into \code{dest}, preserving the relative path
 structure. Files already present with a matching SHA-256 hash are
-skipped unless `overwrite = TRUE`. The resulting directory can be
-pointed at via `options(uscogdata.url = paste0(dest, "/"))` for offline
+skipped unless \code{overwrite = TRUE}. The resulting directory can be
+pointed at via \code{options(uscogdata.url = paste0(dest, "/"))} for offline
 analysis.
 }

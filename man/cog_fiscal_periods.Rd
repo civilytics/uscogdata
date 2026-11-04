@@ -7,19 +7,19 @@
 cog_fiscal_periods(govid, years)
 }
 \arguments{
-\item{govid}{Character vector of `canonical_govid` values, or a data frame
-with a `canonical_govid` column.}
+\item{govid}{Character vector of \code{canonical_govid} values, or a data frame
+with a \code{canonical_govid} column.}
 
 \item{years}{Integer vector of survey years.}
 }
 \value{
 Tibble with one row per requested government and year, in the
-  order `govid` x `years`: `canonical_govid`, `year`, `fiscal_year_end`
-  (integer MMDD), `period_start` and `period_end` (Dates, inclusive).
+order \code{govid} x \code{years}: \code{canonical_govid}, \code{year}, \code{fiscal_year_end}
+(integer MMDD), \code{period_start} and \code{period_end} (Dates, inclusive).
 }
 \description{
 Returns the calendar months each survey year covers for each government.
-The corpus's `year` is the Census survey year, and a survey year covers
+The corpus's \code{year} is the Census survey year, and a survey year covers
 different months for different governments.
 }
 \section{The survey-year rule}{
@@ -27,17 +27,18 @@ different months for different governments.
 Census assigns each government's fiscal year to a survey year by when the
 fiscal year ended. Survey year Y holds the fiscal year that ended between
 July 1 of Y-1 and June 30 of Y. The corpus records each government-year's
-fiscal year end as `fiscal_year_end`, an MMDD integer such as `630` or
-`1231`.
+fiscal year end as \code{fiscal_year_end}, an MMDD integer such as \code{630} or
+\code{1231}.
 
 Survey year 2017 therefore covers, for a county, city or township:
-
-  * `fiscal_year_end = 630` (June 30): the fiscal year ending June 30,
-    2017, so July 2016 to June 2017.
-  * `930` (September 30): the fiscal year ending September 30, 2016, so
-    October 2015 to September 2016.
-  * `1231` (December 31): the fiscal year ending December 31, 2016, so
-    January to December 2016.
+\itemize{
+\item \code{fiscal_year_end = 630} (June 30): the fiscal year ending June 30,
+2017, so July 2016 to June 2017.
+\item \code{930} (September 30): the fiscal year ending September 30, 2016, so
+October 2015 to September 2016.
+\item \code{1231} (December 31): the fiscal year ending December 31, 2016, so
+January to December 2016.
+}
 
 A city with a December year end and a city with a June year end are both
 "2017" in the corpus, but their figures are six months apart. A September
@@ -55,11 +56,11 @@ way. That treatment has not been checked against the data. For New York
 the same months.
 
 A government can change its fiscal year end, so the periods are looked up
-per government-year. Where the corpus has no `fiscal_year_end` for a
+per government-year. Where the corpus has no \code{fiscal_year_end} for a
 government-year, or the government has no rows that year, the period is
-`NA`. Most of FY1993 is `NA`: 99% of its government-years have no usable
-value in the public corpus as of November 2026. So do 5% to 11% in FY1978
-and FY1987 to FY1990, and under 3% in every other year.
+\code{NA}. Most of FY1993 is \code{NA}: 99\% of its government-years have no usable
+value in the public corpus as of November 2026. So do 5\% to 11\% in FY1978
+and FY1987 to FY1990, and under 3\% in every other year.
 
 From FY2023 the source files mark some rows as estimates carried forward
 from an earlier year. The periods here describe the survey year, not the
@@ -76,7 +77,7 @@ cog_fiscal_periods(
 }
 }
 \seealso{
-[cog_survey_year()] for the reverse mapping; the `fiscal_period`
-  argument of [cog_spending()], [cog_revenue()] and [cog_balances()] to get
-  the same columns on every row.
+\code{\link[=cog_survey_year]{cog_survey_year()}} for the reverse mapping; the \code{fiscal_period}
+argument of \code{\link[=cog_spending]{cog_spending()}}, \code{\link[=cog_revenue]{cog_revenue()}} and \code{\link[=cog_balances]{cog_balances()}} to get
+the same columns on every row.
 }

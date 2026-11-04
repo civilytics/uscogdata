@@ -8,15 +8,15 @@ cog_recipes(pattern = NULL)
 }
 \arguments{
 \item{pattern}{Optional regex matched case-insensitively against
-`recipe_id` or `label`.}
+\code{recipe_id} or \code{label}.}
 }
 \value{
-Tibble with columns `recipe_id`, `label`, `n_components`,
-  `year_min`, `year_max` (the min/max component year coverage), sorted by
-  `recipe_id`.
+Tibble with columns \code{recipe_id}, \code{label}, \code{n_components},
+\code{year_min}, \code{year_max} (the min/max component year coverage), sorted by
+\code{recipe_id}.
 }
 \description{
-Recipes are multi-code cross-vintage series (see [cog_spending()]'s
-`recipe` argument) catalogued in the corpus's `harmonization_recipes`
-table. Use this to discover valid `recipe` ids.
+Recipes are multi-code cross-vintage series (see \code{\link[=cog_spending]{cog_spending()}}'s
+\code{recipe} argument) catalogued in the corpus's \code{harmonization_recipes}
+table. Use this to discover valid \code{recipe} ids.
 }

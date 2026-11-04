@@ -18,123 +18,123 @@ cog_peer_compare(
 \arguments{
 \item{target_govid}{Character scalar.}
 
-\item{peers}{A tibble from [cog_find_peers()] or a character vector of
-`canonical_govid`s.}
+\item{peers}{A tibble from \code{\link[=cog_find_peers]{cog_find_peers()}} or a character vector of
+\code{canonical_govid}s.}
 
 \item{category}{Character scalar or vector.}
 
 \item{years}{Integer vector.}
 
-\item{per_capita}{Default `TRUE` — peer compare usually normalizes by
+\item{per_capita}{Default \code{TRUE} — peer compare usually normalizes by
 population.}
 
-\item{adjust_to_year}{Integer base year for CPI-U conversion or `NULL`.}
+\item{adjust_to_year}{Integer base year for CPI-U conversion or \code{NULL}.}
 
-\item{expenditure_concept}{`"primary"` (default), `"direct"`, or
-`"total"` -- see [cog_spending()] for the three concepts. `"total"` is
+\item{expenditure_concept}{\code{"primary"} (default), \code{"direct"}, or
+\code{"total"} -- see \code{\link[=cog_spending]{cog_spending()}} for the three concepts. \code{"total"} is
 refused here because combining Total across peer sets counts
-intergovernmental transfers twice; `"primary"` and `"direct"` combine
+intergovernmental transfers twice; \code{"primary"} and \code{"direct"} combine
 safely.}
 
 \item{coverage}{How to handle the Census of Governments survey cycle,
-  which is a **complete census only in years ending in 2 and 7** -- every
-  other year is a sample, and the sample varies enormously (on the bundled
-  fixture, Wisconsin's 608-city universe reports 597 governments in FY2012
-  and 112 in FY2019).
+which is a \strong{complete census only in years ending in 2 and 7} -- every
+other year is a sample, and the sample varies enormously (on the bundled
+fixture, Wisconsin's 608-city universe reports 597 governments in FY2012
+and 112 in FY2019).
+\itemize{
+\item \code{"all"} (default) -- every unit that reported that year. Unchanged
+behaviour, so existing code keeps working.
+\item \code{"census"} -- census years only. Aborts if the requested range holds
+none, rather than silently returning nothing.
+\item \code{"consistent"} -- only units reporting in \emph{every} requested year, giving
+a balanced panel.
+}
 
-  * `"all"` (default) -- every unit that reported that year. Unchanged
-    behaviour, so existing code keeps working.
-  * `"census"` -- census years only. Aborts if the requested range holds
-    none, rather than silently returning nothing.
-  * `"consistent"` -- only units reporting in *every* requested year, giving
-    a balanced panel.
+Regardless of mode, \code{provenance$coverage} always carries per-year
+\code{n_units_expected}, \code{n_units_collected}, \code{n_units_reporting} and
+\code{is_census_year}, and \code{provenance$coverage_mode} records the mode.
+\code{is_census_year} is a statement about the \strong{survey calendar}, never a
+claim of completeness: FY1967 is a census year in which only 97 of
+Wisconsin's 608 cities report. \code{n_units_reporting} is
+category-conditional and is not a response rate on its own -- see
+"Reading \code{coverage}" below for what each counter answers.
 
-  Regardless of mode, `provenance$coverage` always carries per-year
-  `n_units_expected`, `n_units_collected`, `n_units_reporting` and
-  `is_census_year`, and `provenance$coverage_mode` records the mode.
-  `is_census_year` is a statement about the **survey calendar**, never a
-  claim of completeness: FY1967 is a census year in which only 97 of
-  Wisconsin's 608 cities report. `n_units_reporting` is
-  category-conditional and is not a response rate on its own -- see
-  "Reading `coverage`" below for what each counter answers.
-
-  The comparison target is exempt from `"consistent"` balancing -- it is the
-  subject of the comparison, not a member of the cohort -- and the
-  `summary_*` quantiles are computed AFTER the filter, so they describe the
-  cohort actually returned. `n_units_reporting` counts peers only, against
-  the cohort size: "3 of your 15 peers reported in FY2019".}
+The comparison target is exempt from \code{"consistent"} balancing -- it is the
+subject of the comparison, not a member of the cohort -- and the
+\verb{summary_*} quantiles are computed AFTER the filter, so they describe the
+cohort actually returned. \code{n_units_reporting} counts peers only, against
+the cohort size: "3 of your 15 peers reported in FY2019".}
 }
 \value{
-Tibble matching [cog_spending()]'s columns, plus a `role`
-  column taking values `"target"`, `"peer"`, `"summary_p25"`,
-  `"summary_p50"`, or `"summary_p75"`, `target_rank` (target's rank
-  among target+peers at `max(years)`, NA for other rows), and
-  `cohort_year` (the year used to build the peer cohort, read from
-  `attr(peers, "cohort_year")`; `NA` when `peers` was a bare character
-  vector). Provenance reports `verb = "cog_peer_compare"`, `peer_count`,
-  `cohort_year`, and `cohort_govids`.
+Tibble matching \code{\link[=cog_spending]{cog_spending()}}'s columns, plus a \code{role}
+column taking values \code{"target"}, \code{"peer"}, \code{"summary_p25"},
+\code{"summary_p50"}, or \code{"summary_p75"}, \code{target_rank} (target's rank
+among target+peers at \code{max(years)}, NA for other rows), and
+\code{cohort_year} (the year used to build the peer cohort, read from
+\code{attr(peers, "cohort_year")}; \code{NA} when \code{peers} was a bare character
+vector). Provenance reports \code{verb = "cog_peer_compare"}, \code{peer_count},
+\code{cohort_year}, and \code{cohort_govids}.
 
-  **The `summary_*` rows are per-category quantiles: they are not additive.**
-  Each one is computed **within each `(year, spend_subtype,
-  category)` cell** across the peer set, so a `summary_p50` row is *the
-  median peer's value in that one category*, not *the value of the median
-  peer's total*. The median peer for Police and the median peer for Fire
-  are usually different governments, so summing `summary_*` rows across
-  categories does not give any peer's total and misstates the band it
-  appears to describe — measured at −32.7% to +251.0% across 24 years on
-  one cohort, with a sign flip at FY2012.
+\strong{The \verb{summary_*} rows are per-category quantiles: they are not additive.}
+Each one is computed \strong{within each \verb{(year, spend_subtype, category)} cell} across the peer set, so a \code{summary_p50} row is \emph{the
+median peer's value in that one category}, not \emph{the value of the median
+peer's total}. The median peer for Police and the median peer for Fire
+are usually different governments, so summing \verb{summary_*} rows across
+categories does not give any peer's total and misstates the band it
+appears to describe — measured at −32.7\% to +251.0\% across 24 years on
+one cohort, with a sign flip at FY2012.
 
-  Facet by `role` **and** `category` (the documented use, and what the
-  rows are built for). For a genuine "median peer's total spending" line,
-  sum each peer's own categories first and take the quantile of those
-  per-government totals:
+Facet by \code{role} \strong{and} \code{category} (the documented use, and what the
+rows are built for). For a genuine "median peer's total spending" line,
+sum each peer's own categories first and take the quantile of those
+per-government totals:
 
-  ```r
-  library(dplyr)
-  cmp |>
-    filter(role %in% c("target", "peer")) |>
-    group_by(year, role, canonical_govid) |>
-    summarise(total = sum(amt_per_capita_real, na.rm = TRUE), .groups = "drop") |>
-    filter(role == "peer") |>
-    group_by(year) |>
-    summarise(p50 = quantile(total, 0.5, na.rm = TRUE))
-  ```
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{library(dplyr)
+cmp |>
+  filter(role \%in\% c("target", "peer")) |>
+  group_by(year, role, canonical_govid) |>
+  summarise(total = sum(amt_per_capita_real, na.rm = TRUE), .groups = "drop") |>
+  filter(role == "peer") |>
+  group_by(year) |>
+  summarise(p50 = quantile(total, 0.5, na.rm = TRUE))
+}\if{html}{\out{</div>}}
 }
 \description{
 Pulls spending for the target plus a peer set (either a
-[cog_find_peers()] result or a character vector of `canonical_govid`) and
-appends peer-distribution summary rows (`summary_p25`, `summary_p50`,
-`summary_p75`) so the result can be faceted by `role` in a single ggplot
-call. Those summary rows are quantiles **within each category**, not
-quantiles of each peer's total — see the `@return` section before summing
+\code{\link[=cog_find_peers]{cog_find_peers()}} result or a character vector of \code{canonical_govid}) and
+appends peer-distribution summary rows (\code{summary_p25}, \code{summary_p50},
+\code{summary_p75}) so the result can be faceted by \code{role} in a single ggplot
+call. Those summary rows are quantiles \strong{within each category}, not
+quantiles of each peer's total — see the \verb{@return} section before summing
 them.
 }
-\section{Reading `coverage`}{
+\section{Reading \code{coverage}}{
 
-`provenance$coverage` carries three per-year counters:
+\code{provenance$coverage} carries three per-year counters:
+\itemize{
+\item \code{n_units_expected} -- how many governments you asked about.
+\item \code{n_units_collected} -- how many of those appear in the corpus at all
+that year (in ANY category), separating governments Census did not
+collect from governments it did.
+\item \code{n_units_reporting} -- how many have rows for the SPECIFIC category you
+requested. This is always <= n_units_collected. A collected government
+can have no "Police" rows and still pay for policing: the rows leave out
+intergovernmental expenditure, so a city that pays the county sheriff
+and reports the payment as intergovernmental (code \code{M62}) has none. Of
+34 cities with documented sheriff contracts, nine of 102 city-years
+(FY2012, FY2017 and FY2022; corpus build of 2026-10-26) looked like
+this, and the other 93 reported direct Police spending.
+}
 
-  * `n_units_expected` -- how many governments you asked about.
-  * `n_units_collected` -- how many of those appear in the corpus at all
-    that year (in ANY category), separating governments Census did not
-    collect from governments it did.
-  * `n_units_reporting` -- how many have rows for the SPECIFIC category you
-    requested. This is always <= n_units_collected. A collected government
-    can have no "Police" rows and still pay for policing: the rows leave out
-    intergovernmental expenditure, so a city that pays the county sheriff
-    and reports the payment as intergovernmental (code `M62`) has none. Of
-    34 cities with documented sheriff contracts, nine of 102 city-years
-    (FY2012, FY2017 and FY2022; corpus build of 2026-10-26) looked like
-    this, and the other 93 reported direct Police spending.
-
-**`n_units_reporting` is category-conditional** and therefore **not a
-response rate**: `n_units_reporting / n_units_expected` conflates sampling
+\strong{\code{n_units_reporting} is category-conditional} and therefore \strong{not a
+response rate}: \code{n_units_reporting / n_units_expected} conflates sampling
 (never collected) with collected governments that have no rows in your
-category. Use `n_units_collected / n_units_expected` for the true
-collection rate, and `n_units_reporting / n_units_collected` for category
+category. Use \code{n_units_collected / n_units_expected} for the true
+collection rate, and \code{n_units_reporting / n_units_collected} for category
 participation among collected units.
 
 In FY2022, a census year, 393 of Georgia's 567 cities report
-`category = "Police"`. Of the other 174, 32 were not collected and 142 were
+\code{category = "Police"}. Of the other 174, 32 were not collected and 142 were
 collected with no Police rows. A city that contracts with the county sheriff
 lands in the second group only when it reports no direct Police spending, for
 example when it files the payment as intergovernmental expenditure; the
@@ -143,7 +143,7 @@ counters do not say how many of the 142 do.
 A census year and a sample year collect different sets of governments, so
 participation across the two mixes a change in which governments were
 collected with any change in spending. Compare census years with each other,
-or the same governments across years. `is_census_year` marks which is which,
-and `vignette("coverage-counters")` has worked examples.
+or the same governments across years. \code{is_census_year} marks which is which,
+and \code{vignette("coverage-counters")} has worked examples.
 }
 

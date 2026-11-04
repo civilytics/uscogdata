@@ -22,191 +22,192 @@ cog_spending(
 )
 }
 \arguments{
-\item{govid}{Character vector of `canonical_govid` values, or `NULL` to name
-the cohort by `state`/`type` instead. One of `govid`, `state`, or `type`
+\item{govid}{Character vector of \code{canonical_govid} values, or \code{NULL} to name
+the cohort by \code{state}/\code{type} instead. One of \code{govid}, \code{state}, or \code{type}
 is required.}
 
 \item{years}{Integer vector of years.}
 
 \item{category}{Character vector of category names (from
-`summary_categories.category`), or `NULL` for all categories broken out
-one row each. The reserved value `"All Categories"` instead returns a
-single summed row per `(year, canonical_govid, subtype)`, covering every
+\code{summary_categories.category}), or \code{NULL} for all categories broken out
+one row each. The reserved value \code{"All Categories"} instead returns a
+single summed row per \verb{(year, canonical_govid, subtype)}, covering every
 category inside the requested concept's subtype scope. It cannot be
 combined with other category names, and it is not the same thing as
-`expenditure_concept = "total"`: the concept chooses which subtypes are in
-scope, `"All Categories"` chooses whether rows inside that scope are
+\code{expenditure_concept = "total"}: the concept chooses which subtypes are in
+scope, \code{"All Categories"} chooses whether rows inside that scope are
 broken out or summed. Because the result keeps one row per
-`spend_subtype`, filtering the returned frame to
-`spend_subtype == "operations"` gives an operating-expenditure total.}
+\code{spend_subtype}, filtering the returned frame to
+\code{spend_subtype == "operations"} gives an operating-expenditure total.}
 
-\item{per_capita}{If `TRUE`, adds `amt_per_capita_nominal` (and
-`amt_per_capita_real` when `adjust_to_year` is set) using the per-year
-Census F-33 population from `gov_population_yearly`. Result also gains
-a `pop_source` column with values `"census_f33"` or `"unavailable"`
+\item{per_capita}{If \code{TRUE}, adds \code{amt_per_capita_nominal} (and
+\code{amt_per_capita_real} when \code{adjust_to_year} is set) using the per-year
+Census F-33 population from \code{gov_population_yearly}. Result also gains
+a \code{pop_source} column with values \code{"census_f33"} or \code{"unavailable"}
 (the latter for gov types 4/5 and any row whose population is missing
 in that year).}
 
 \item{adjust_to_year}{Integer base year for CPI-U real-dollar conversion,
-or `NULL` for nominal only.}
+or \code{NULL} for nominal only.}
 
-\item{basis}{`"harmonized"` (default) sums item codes through the
+\item{basis}{\code{"harmonized"} (default) sums item codes through the
 cross-vintage harmonization mapping (folding series-break-affected
 codes onto a comparable target and excluding aggregate / discontinued
-rows -- see the `harmonization` block in `cog_explain()`); `"raw"`
+rows -- see the \code{harmonization} block in \code{cog_explain()}); \code{"raw"}
 reproduces the pre-Phase-R2 behavior (published item codes, no
-folding). On a corpus with `schema_version < 5` (no harmonization
-tables), `basis` silently resolves to `"raw"` when left at its default
+folding). On a corpus with \code{schema_version < 5} (no harmonization
+tables), \code{basis} silently resolves to \code{"raw"} when left at its default
 and the resolution is recorded in the provenance; explicitly passing
-`basis = "harmonized"` on such a corpus aborts. Ignored when `recipe`
+\code{basis = "harmonized"} on such a corpus aborts. Ignored when \code{recipe}
 is set (see below).}
 
-\item{recipe}{Optional harmonization recipe id (see [cog_recipes()]) for
+\item{recipe}{Optional harmonization recipe id (see \code{\link[=cog_recipes]{cog_recipes()}}) for
 multi-code cross-vintage series that a 1:1 harmonized_code mapping
 can't express (e.g. a wide-era aggregate that only splits into leaf
-codes in the modern era). Mutually exclusive with `category`. The
-result's subtype column reads `"recipe"` and `category` reads the
-recipe's label. Requires `schema_version >= 5`. A recipe query bypasses
-`basis` entirely (it joins `long` directly rather than going through
-the `*_annotated`/`*_annotated_harmonized` views), so the `basis`
+codes in the modern era). Mutually exclusive with \code{category}. The
+result's subtype column reads \code{"recipe"} and \code{category} reads the
+recipe's label. Requires \code{schema_version >= 5}. A recipe query bypasses
+\code{basis} entirely (it joins \code{long} directly rather than going through
+the \verb{*_annotated}/\verb{*_annotated_harmonized} views), so the \code{basis}
 argument is ignored and the result's provenance reports
-`basis = "recipe"` with an inert `harmonization` block (`applied =
-FALSE`, pointing at the `recipe` block instead) rather than a
-possibly-misleading `"harmonized"`/`"raw"` value.}
+\code{basis = "recipe"} with an inert \code{harmonization} block (\code{applied = FALSE}, pointing at the \code{recipe} block instead) rather than a
+possibly-misleading \code{"harmonized"}/\code{"raw"} value.}
 
 \item{expenditure_concept}{Which spending concept to return. Concepts are
-  defined as sets of the crosswalk's `spend_subtype` values -- never as
-  item-code first letters, which cannot classify correctly (prefix `Y`
-  alone spans revenue, expenditure, and balance codes):
+defined as sets of the crosswalk's \code{spend_subtype} values -- never as
+item-code first letters, which cannot classify correctly (prefix \code{Y}
+alone spans revenue, expenditure, and balance codes):
+\itemize{
+\item \code{"primary"} (default) -- the government's own service provision:
+\code{operations} + \code{capital} + \code{assistance} subtypes.
+\item \code{"direct"} -- Census's published Direct Expenditure: \code{primary} plus
+\code{interest} (interest on debt) and \code{insurance_benefits} (insurance
+trust benefit payments, e.g. pensions -- Census manual section
+5.2.2.1 includes payments to retirees in Direct).
+\item \code{"total"} -- \code{direct} plus the intergovernmental leg: payments to
+local governments (\code{M} codes), to the state government (\code{L} codes,
+excluding the \verb{L--} family-total rollup), and state payments to
+school systems (\code{Q11}/\code{Q12}/\code{Q18}), so results gain rows with
+\code{spend_subtype == "intergovernmental"}. Requires the active corpus's
+\code{summary_categories} to carry M/L rows (added by cog_pipeline PR
+#59); aborts with class \code{uscogdata_ig_categories_unsupported} on an
+older corpus rather than silently under-reporting. Mutually
+exclusive with \code{recipe} (a recipe already defines its own component
+codes).
+}
 
-  * `"primary"` (default) -- the government's own service provision:
-    `operations` + `capital` + `assistance` subtypes.
-  * `"direct"` -- Census's published Direct Expenditure: `primary` plus
-    `interest` (interest on debt) and `insurance_benefits` (insurance
-    trust benefit payments, e.g. pensions -- Census manual section
-    5.2.2.1 includes payments to retirees in Direct).
-  * `"total"` -- `direct` plus the intergovernmental leg: payments to
-    local governments (`M` codes), to the state government (`L` codes,
-    excluding the `L--` family-total rollup), and state payments to
-    school systems (`Q11`/`Q12`/`Q18`), so results gain rows with
-    `spend_subtype == "intergovernmental"`. Requires the active corpus's
-    `summary_categories` to carry M/L rows (added by cog_pipeline PR
-    #59); aborts with class `uscogdata_ig_categories_unsupported` on an
-    older corpus rather than silently under-reporting. Mutually
-    exclusive with `recipe` (a recipe already defines its own component
-    codes).
+\strong{Do not sum \code{"total"} results across levels of government} (e.g.
+state + county + city): a state's \code{M12} payment to a school district is
+the same dollar the district reports as its own direct \code{E12}, so
+summing both double-counts it. This matters in particular with
+\code{\link[=cog_geographic_rollup]{cog_geographic_rollup()}}, which sums across exactly that kind of
+multi-layer government set.
 
-  **Do not sum `"total"` results across levels of government** (e.g.
-  state + county + city): a state's `M12` payment to a school district is
-  the same dollar the district reports as its own direct `E12`, so
-  summing both double-counts it. This matters in particular with
-  [cog_geographic_rollup()], which sums across exactly that kind of
-  multi-layer government set.
+In the legacy wide era (<= FY2011), some functions are published ONLY
+as an aggregate-flagged family total (e.g. Corrections' \code{E04}/\code{E05}
+split), which the Direct leg excludes by construction but the IG leg
+deliberately keeps (see \code{inst/sql/24-ig_long.sql}). For a \code{"total"}
+query, any (year, category) where this leaves intergovernmental rows
+with NO Direct counterpart is flagged: the affected rows' \code{notes}
+name the harmonization recipe that recovers the missing Direct
+component (when one exists), and
+\code{provenance$expenditure_concept_direct_suppressed} is \code{TRUE} -- the
+figure in those rows is the intergovernmental leg alone, not Direct +
+IG. When \code{category = "All Categories"} is combined with
+\code{expenditure_concept = "total"}, this detection cannot run (it keys on
+per-category rows, which all-categories mode collapses to one literal
+value), so \code{expenditure_concept_direct_suppressed} is \code{NA} rather than a
+possibly-false \code{FALSE}; query an explicit \code{category} to get a real
+answer.}
 
-  In the legacy wide era (<= FY2011), some functions are published ONLY
-  as an aggregate-flagged family total (e.g. Corrections' `E04`/`E05`
-  split), which the Direct leg excludes by construction but the IG leg
-  deliberately keeps (see `inst/sql/24-ig_long.sql`). For a `"total"`
-  query, any (year, category) where this leaves intergovernmental rows
-  with NO Direct counterpart is flagged: the affected rows' `notes`
-  name the harmonization recipe that recovers the missing Direct
-  component (when one exists), and
-  `provenance$expenditure_concept_direct_suppressed` is `TRUE` -- the
-  figure in those rows is the intergovernmental leg alone, not Direct +
-  IG. When `category = "All Categories"` is combined with
-  `expenditure_concept = "total"`, this detection cannot run (it keys on
-  per-category rows, which all-categories mode collapses to one literal
-  value), so `expenditure_concept_direct_suppressed` is `NA` rather than a
-  possibly-false `FALSE`; query an explicit `category` to get a real
-  answer.}
+\item{complete}{If \code{TRUE}, fill the requested grid so that a cell the
+corpus does not carry still appears, labelled with \strong{why} it is
+missing, and add a \code{value_source} column to every row:
+\itemize{
+\item \code{"reported"} — the corpus carries this cell.
+\item \code{"census_zero"} — dense-source year (\verb{<= FY2011}), cell absent:
+Census published \verb{$0}. \code{amt_nominal} is \code{0}.
+\item \code{"not_reported"} — sparse-source year (\verb{>= FY2012}), cell absent: the
+government did not report, and the value is unknown. \code{amt_nominal} is
+\code{NA}, \strong{not} \code{0} — writing a zero there would invent data.
+}
 
-\item{complete}{If `TRUE`, fill the requested grid so that a cell the
-  corpus does not carry still appears, labelled with **why** it is
-  missing, and add a `value_source` column to every row:
+The grid comes from the corpus's \code{code_set} table, scoped to each
+government's own type, so a county is never filled with cells only a
+state can report. Reported rows are passed through untouched.
 
-  * `"reported"` — the corpus carries this cell.
-  * `"census_zero"` — dense-source year (`<= FY2011`), cell absent:
-    Census published `$0`. `amt_nominal` is `0`.
-  * `"not_reported"` — sparse-source year (`>= FY2012`), cell absent: the
-    government did not report, and the value is unknown. `amt_nominal` is
-    `NA`, **not** `0` — writing a zero there would invent data.
-
-  The grid comes from the corpus's `code_set` table, scoped to each
-  government's own type, so a county is never filled with cells only a
-  state can report. Reported rows are passed through untouched.
-
-  Defaults to `FALSE` (the historical behaviour: absent cells simply do
-  not appear). Needs a corpus published from 2026-07-29 onward, which is
-  when `representation`/`code_set` began shipping; aborts with class
-  `uscogdata_representation_unavailable` otherwise. Not available with
-  `recipe` or with `expenditure_concept = "total"` (class
-  `uscogdata_complete_unsupported`) — neither draws its cells from
-  `code_set`.}
+Defaults to \code{FALSE} (the historical behaviour: absent cells simply do
+not appear). Needs a corpus published from 2026-07-29 onward, which is
+when \code{representation}/\code{code_set} began shipping; aborts with class
+\code{uscogdata_representation_unavailable} otherwise. Not available with
+\code{recipe} or with \code{expenditure_concept = "total"} (class
+\code{uscogdata_complete_unsupported}) — neither draws its cells from
+\code{code_set}.}
 
 \item{limit}{Maximum number of result rows to return, pushed into the SQL
-query itself (`LIMIT`/`OFFSET`) rather than applied after the full
-result is materialized. `NULL` (the default) returns every matching row,
+query itself (\code{LIMIT}/\code{OFFSET}) rather than applied after the full
+result is materialized. \code{NULL} (the default) returns every matching row,
 exactly as before this parameter existed. Mutually exclusive with
-`recipe` and with `complete = TRUE` -- see `offset` and `total_rows`.}
+\code{recipe} and with \code{complete = TRUE} -- see \code{offset} and \code{total_rows}.}
 
-\item{offset}{Rows to skip before `limit` starts counting (0-based).
-Ignored if `limit` is `NULL`; defaults to `0L` when `limit` is set.}
+\item{offset}{Rows to skip before \code{limit} starts counting (0-based).
+Ignored if \code{limit} is \code{NULL}; defaults to \code{0L} when \code{limit} is set.}
 
-\item{state, type}{Name the cohort by predicate instead of by id: `state` is
-  a 2-letter USPS abbreviation (or a FIPS code) and `type` is one of
-  `"state"`, `"county"`, `"city"`, `"township"` (or the integer `0:3`) --
-  the same vocabulary, and the same internal coercion, as
-  [cog_gov_search()]. Both default to `NULL`.
+\item{state, type}{Name the cohort by predicate instead of by id: \code{state} is
+a 2-letter USPS abbreviation (or a FIPS code) and \code{type} is one of
+\code{"state"}, \code{"county"}, \code{"city"}, \code{"township"} (or the integer \code{0:3}) --
+the same vocabulary, and the same internal coercion, as
+\code{\link[=cog_gov_search]{cog_gov_search()}}. Both default to \code{NULL}.
 
-  The cohort is then expressed as a subquery against `canonical_fips_xwalk`
-  inside each statement rather than round-tripped through R as a literal id
-  list. For a fleet-scale cohort that is the difference between a
-  301,591-character `IN` list re-parsed in 5--8 statements per call and a
-  constant-size predicate: measured at **94 ms versus 449 ms** for the same
-  FY2022 aggregate over the 20,106-government `type = "city"` cohort, within
-  7% of the no-filter floor.
+The cohort is then expressed as a subquery against \code{canonical_fips_xwalk}
+inside each statement rather than round-tripped through R as a literal id
+list. For a fleet-scale cohort that is the difference between a
+301,591-character \code{IN} list re-parsed in 5--8 statements per call and a
+constant-size predicate: measured at \strong{94 ms versus 449 ms} for the same
+FY2022 aggregate over the 20,106-government \code{type = "city"} cohort, within
+7\% of the no-filter floor.
 
-  Supplying `govid` **and** `state`/`type` INTERSECTS them -- the
-  governments in `govid` that also match the predicate -- rather than one
-  silently taking precedence. Naming no cohort at all (`govid`, `state` and
-  `type` all `NULL`) aborts with class `uscogdata_no_cohort`.
+Supplying \code{govid} \strong{and} \code{state}/\code{type} INTERSECTS them -- the
+governments in \code{govid} that also match the predicate -- rather than one
+silently taking precedence. Naming no cohort at all (\code{govid}, \code{state} and
+\code{type} all \code{NULL}) aborts with class \code{uscogdata_no_cohort}.
 
-  When the cohort is named by predicate, `provenance$scope$govids_found`
-  and `govids_missing` are empty -- there is no id list to report against --
-  and `provenance$scope$cohort` carries `state`, `type` and
-  `n_governments` instead. A `govid`-named cohort reports exactly as before.}
+When the cohort is named by predicate, \code{provenance$scope$govids_found}
+and \code{govids_missing} are empty -- there is no id list to report against --
+and \code{provenance$scope$cohort} carries \code{state}, \code{type} and
+\code{n_governments} instead. A \code{govid}-named cohort reports exactly as before.}
 
-\item{fiscal_period}{If `TRUE`, add three columns to every row:
-`fiscal_year_end` (the government's fiscal year end that survey year, an
-MMDD integer such as `630`), and `period_start` and `period_end` (Dates,
-inclusive), the calendar months the row covers. `year` is the Census
+\item{fiscal_period}{If \code{TRUE}, add three columns to every row:
+\code{fiscal_year_end} (the government's fiscal year end that survey year, an
+MMDD integer such as \code{630}), and \code{period_start} and \code{period_end} (Dates,
+inclusive), the calendar months the row covers. \code{year} is the Census
 survey year, which covers different months for different governments;
-see "The survey-year rule" in [cog_fiscal_periods()]. The columns come
-from each government-year's own `fiscal_year_end`, so a change of fiscal
-year is respected, and are `NA` where the corpus has no value. The result
-also gains `provenance$transformations$fiscal_period`. Defaults to
-`FALSE`, which returns exactly the columns and provenance this verb
+see "The survey-year rule" in \code{\link[=cog_fiscal_periods]{cog_fiscal_periods()}}. The columns come
+from each government-year's own \code{fiscal_year_end}, so a change of fiscal
+year is respected, and are \code{NA} where the corpus has no value. The result
+also gains \code{provenance$transformations$fiscal_period}. Defaults to
+\code{FALSE}, which returns exactly the columns and provenance this verb
 returned before the argument existed.}
 }
 \value{
-Tibble with columns `year`, `canonical_govid`, `gov_name`,
-  `spend_subtype`, `category`, `amt_nominal`, optional `amt_real`,
-  optional `amt_per_capita_nominal`, optional `amt_per_capita_real`,
-  optional `pop_source`, `codes_included`, `aggregate_fallback`, `notes`,
-  `value_source` when `complete = TRUE`, and `fiscal_year_end`,
-  `period_start` and `period_end` when `fiscal_period = TRUE`.
-  Carries a `provenance` attribute matching `inst/schemas/provenance-v1.json`,
-  whose `completion` block reports `applied`, `rows_filled`, and the
-  per-year `absence_means` rule that was applied. When `limit` is set,
-  also carries a `total_rows` attribute: the full unpaginated row count,
-  computed by the same query (`COUNT(*) OVER()`) rather than a second
-  round trip -- so a caller walking pages never has to ask "how many are
-  there" separately.
+Tibble with columns \code{year}, \code{canonical_govid}, \code{gov_name},
+\code{spend_subtype}, \code{category}, \code{amt_nominal}, optional \code{amt_real},
+optional \code{amt_per_capita_nominal}, optional \code{amt_per_capita_real},
+optional \code{pop_source}, \code{codes_included}, \code{aggregate_fallback}, \code{notes},
+\code{value_source} when \code{complete = TRUE}, and \code{fiscal_year_end},
+\code{period_start} and \code{period_end} when \code{fiscal_period = TRUE}.
+Carries a \code{provenance} attribute matching \code{inst/schemas/provenance-v1.json},
+whose \code{completion} block reports \code{applied}, \code{rows_filled}, and the
+per-year \code{absence_means} rule that was applied. When \code{limit} is set,
+also carries a \code{total_rows} attribute: the full unpaginated row count,
+computed by the same query (\verb{COUNT(*) OVER()}) rather than a second
+round trip -- so a caller walking pages never has to ask "how many are
+there" separately.
 }
 \description{
-One row per `(year, canonical_govid, spend_subtype, category)`. Amounts are
-returned in **full U.S. dollars** (the raw corpus stores them in $1,000s;
+One row per \verb{(year, canonical_govid, spend_subtype, category)}. Amounts are
+returned in \strong{full U.S. dollars} (the raw corpus stores them in $1,000s;
 this verb multiplies by 1000 so downstream code can freely rescale to
 millions/billions). The conversion is recorded in the provenance attribute
-under `transformations$units_conversion`.
+under \code{transformations$units_conversion}.
 }

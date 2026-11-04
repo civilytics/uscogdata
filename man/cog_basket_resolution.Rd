@@ -7,21 +7,21 @@
 cog_basket_resolution(x, expand_candidates = FALSE)
 }
 \arguments{
-\item{x}{A tibble returned by basket-mode [cog_gov_search()].}
+\item{x}{A tibble returned by basket-mode \code{\link[=cog_gov_search]{cog_gov_search()}}.}
 
-\item{expand_candidates}{Logical. If `TRUE`, keeps the `candidates`
+\item{expand_candidates}{Logical. If \code{TRUE}, keeps the \code{candidates}
 list-column (full-schema match candidates per input row). Default
-`FALSE`.}
+\code{FALSE}.}
 }
 \value{
 A tibble with the resolution audit trail.
 }
 \description{
 Returns the resolution tibble attached to a basket-mode result of
-[cog_gov_search()]. One row per input entry; `status` is one of
-`"resolved"`, `"largest_pop"`, `"ambiguous"`, `"no_match"`. By default
-the `candidates` list-column is dropped for readable printing; pass
-`expand_candidates = TRUE` to keep it.
+\code{\link[=cog_gov_search]{cog_gov_search()}}. One row per input entry; \code{status} is one of
+\code{"resolved"}, \code{"largest_pop"}, \code{"ambiguous"}, \code{"no_match"}. By default
+the \code{candidates} list-column is dropped for readable printing; pass
+\code{expand_candidates = TRUE} to keep it.
 }
 \examples{
 \dontrun{

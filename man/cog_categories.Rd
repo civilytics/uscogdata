@@ -7,33 +7,33 @@
 cog_categories(type = NULL, pattern = NULL)
 }
 \arguments{
-\item{type}{Either `NULL` (default, every row: expenditure, revenue and
-balance), `"spending"`, `"revenue"`, or `"balance"`.}
+\item{type}{Either \code{NULL} (default, every row: expenditure, revenue and
+balance), \code{"spending"}, \code{"revenue"}, or \code{"balance"}.}
 
 \item{pattern}{Optional regex matched case-insensitively against the
-`category` column (e.g. `"Police"` or `"Tax"`).}
+\code{category} column (e.g. \code{"Police"} or \code{"Tax"}).}
 }
 \value{
-Tibble with columns `category`, `category_type`, `subtype`,
-  `n_codes`, `item_codes` (comma-separated, alphabetical). Sorted by
-  `category_type`, `category`, `subtype`. Includes one row per flow for the
-  reserved pseudo-category `"All Categories"`, which carries `NA` for
-  `subtype`, `n_codes` and `item_codes` because it is a query mode rather
-  than a crosswalk entry — see [cog_spending()]'s `category` argument.
+Tibble with columns \code{category}, \code{category_type}, \code{subtype},
+\code{n_codes}, \code{item_codes} (comma-separated, alphabetical). Sorted by
+\code{category_type}, \code{category}, \code{subtype}. Includes one row per flow for the
+reserved pseudo-category \code{"All Categories"}, which carries \code{NA} for
+\code{subtype}, \code{n_codes} and \code{item_codes} because it is a query mode rather
+than a crosswalk entry — see \code{\link[=cog_spending]{cog_spending()}}'s \code{category} argument.
 }
 \description{
 Returns the category taxonomy exposed by the corpus's
-`summary_categories` view, grouped to one row per
-`(category, subtype)` pair. Use this to discover valid `category`
-values for [cog_spending()] / [cog_revenue()] / [cog_balances()] /
-[cog_geographic_rollup()] and to audit which Census item codes feed
+\code{summary_categories} view, grouped to one row per
+\verb{(category, subtype)} pair. Use this to discover valid \code{category}
+values for \code{\link[=cog_spending]{cog_spending()}} / \code{\link[=cog_revenue]{cog_revenue()}} / \code{\link[=cog_balances]{cog_balances()}} /
+\code{\link[=cog_geographic_rollup]{cog_geographic_rollup()}} and to audit which Census item codes feed
 each category.
 }
 \details{
-`subtype` COALESCEs the crosswalk's three subtype columns, so it carries
-`spend_subtype` on expenditure rows, `revenue_subtype` on revenue rows and
-`balance_subtype` on balance rows. Note that [cog_balances()] itself takes
-no `subtype` argument — for holdings, `category` is a strict coarsening of
-`balance_subtype` — but the value is surfaced here because it is the
+\code{subtype} COALESCEs the crosswalk's three subtype columns, so it carries
+\code{spend_subtype} on expenditure rows, \code{revenue_subtype} on revenue rows and
+\code{balance_subtype} on balance rows. Note that \code{\link[=cog_balances]{cog_balances()}} itself takes
+no \code{subtype} argument — for holdings, \code{category} is a strict coarsening of
+\code{balance_subtype} — but the value is surfaced here because it is the
 discovery surface downstream consumers build their vocabulary from.
 }

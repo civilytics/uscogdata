@@ -53,7 +53,7 @@
   )
 }
 
-#' Per-subtype [min year, max year] extents for EVERY balance subtype in the
+#' Per-subtype \[min year, max year\] extents for EVERY balance subtype in the
 #' mounted corpus, memoised for the session.
 #'
 #' The query carries no govid and no year predicate -- its answer is a property

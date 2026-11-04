@@ -16,102 +16,104 @@ cog_geographic_rollup(
 }
 \arguments{
 \item{govids}{Named list with any non-empty subset of elements named
-`state`, `county`, `city`. Each element is a character vector of
-`canonical_govid` values. At least one layer required.}
+\code{state}, \code{county}, \code{city}. Each element is a character vector of
+\code{canonical_govid} values. At least one layer required.}
 
 \item{category}{Single category name or character vector (passed through
-to [cog_spending()]), or the reserved `"All Categories"` for one summed
-row per `(year, canonical_govid, subtype)` covering every category in the
-concept's scope. `"All Categories"` is the efficient way to build a
+to \code{\link[=cog_spending]{cog_spending()}}), or the reserved \code{"All Categories"} for one summed
+row per \verb{(year, canonical_govid, subtype)} covering every category in the
+concept's scope. \code{"All Categories"} is the efficient way to build a
 geographic total: without it a caller must issue one rollup per category
 and sum the results themselves.}
 
 \item{years}{Integer vector of years.}
 
-\item{per_capita}{If `TRUE`, per-capita uses each gov's own per-year
-population from `gov_population_yearly`. Govs with missing population
+\item{per_capita}{If \code{TRUE}, per-capita uses each gov's own per-year
+population from \code{gov_population_yearly}. Govs with missing population
 are excluded from the result.}
 
-\item{adjust_to_year}{Integer base year for CPI-U conversion, or `NULL`.}
+\item{adjust_to_year}{Integer base year for CPI-U conversion, or \code{NULL}.}
 
-\item{expenditure_concept}{`"primary"` (default), `"direct"`, or
-`"total"` -- see [cog_spending()] for the three concepts. `"total"` is
+\item{expenditure_concept}{\code{"primary"} (default), \code{"direct"}, or
+\code{"total"} -- see \code{\link[=cog_spending]{cog_spending()}} for the three concepts. \code{"total"} is
 refused here because combining Total across multiple layers of
 government double-counts intergovernmental transfers (a state's payment
 to a school district is the same dollar the district reports as its own
-Direct spending); `"primary"` and `"direct"` combine safely.}
+Direct spending); \code{"primary"} and \code{"direct"} combine safely.}
 
 \item{coverage}{How to handle the Census of Governments survey cycle,
-  which is a **complete census only in years ending in 2 and 7** -- every
-  other year is a sample, and the sample varies enormously (on the bundled
-  fixture, Wisconsin's 608-city universe reports 597 governments in FY2012
-  and 112 in FY2019).
+which is a \strong{complete census only in years ending in 2 and 7} -- every
+other year is a sample, and the sample varies enormously (on the bundled
+fixture, Wisconsin's 608-city universe reports 597 governments in FY2012
+and 112 in FY2019).
+\itemize{
+\item \code{"all"} (default) -- every unit that reported that year. Unchanged
+behaviour, so existing code keeps working.
+\item \code{"census"} -- census years only. Aborts if the requested range holds
+none, rather than silently returning nothing.
+\item \code{"consistent"} -- only units reporting in \emph{every} requested year, giving
+a balanced panel.
+}
 
-  * `"all"` (default) -- every unit that reported that year. Unchanged
-    behaviour, so existing code keeps working.
-  * `"census"` -- census years only. Aborts if the requested range holds
-    none, rather than silently returning nothing.
-  * `"consistent"` -- only units reporting in *every* requested year, giving
-    a balanced panel.
-
-  Regardless of mode, `provenance$coverage` always carries per-year
-  `n_units_expected`, `n_units_collected`, `n_units_reporting` and
-  `is_census_year`, and `provenance$coverage_mode` records the mode.
-  `is_census_year` is a statement about the **survey calendar**, never a
-  claim of completeness: FY1967 is a census year in which only 97 of
-  Wisconsin's 608 cities report. `n_units_reporting` is
-  category-conditional and is not a response rate on its own -- see
-  "Reading `coverage`" below for what each counter answers.}
+Regardless of mode, \code{provenance$coverage} always carries per-year
+\code{n_units_expected}, \code{n_units_collected}, \code{n_units_reporting} and
+\code{is_census_year}, and \code{provenance$coverage_mode} records the mode.
+\code{is_census_year} is a statement about the \strong{survey calendar}, never a
+claim of completeness: FY1967 is a census year in which only 97 of
+Wisconsin's 608 cities report. \code{n_units_reporting} is
+category-conditional and is not a response rate on its own -- see
+"Reading \code{coverage}" below for what each counter answers.}
 }
 \value{
-Tibble with columns `year`, `layer`, `canonical_govid`, `gov_name`,
-  `spend_subtype`, `category`, `amt_nominal`, optional `amt_real` /
-  `amt_per_capita_nominal` / `amt_per_capita_real`, optional `pop_source`,
-  `codes_included`, `aggregate_fallback`, `scope_note`, `notes`. Carries a
-  `provenance` attribute with `verb = "cog_geographic_rollup"`, `layers`,
-  and `rollup$included_govids` / `rollup$excluded_govids`.
+Tibble with columns \code{year}, \code{layer}, \code{canonical_govid}, \code{gov_name},
+\code{spend_subtype}, \code{category}, \code{amt_nominal}, optional \code{amt_real} /
+\code{amt_per_capita_nominal} / \code{amt_per_capita_real}, optional \code{pop_source},
+\code{codes_included}, \code{aggregate_fallback}, \code{scope_note}, \code{notes}. Carries a
+\code{provenance} attribute with \code{verb = "cog_geographic_rollup"}, \code{layers},
+and \code{rollup$included_govids} / \code{rollup$excluded_govids}.
 }
 \description{
-Wraps [cog_spending()], tags each row with its layer, and attaches a
-human-readable `scope_note` documenting geographic-scope caveats (e.g.
+Wraps \code{\link[=cog_spending]{cog_spending()}}, tags each row with its layer, and attaches a
+human-readable \code{scope_note} documenting geographic-scope caveats (e.g.
 "county totals include areas outside the listed city"). Useful for
 "place portraits" that compare a city to the surrounding county and
 containing state on one set of axes.
 }
 \details{
-When `per_capita = TRUE`, rows whose government has no observed
-population in that year (`pop_source == "unavailable"`) are dropped from
+When \code{per_capita = TRUE}, rows whose government has no observed
+population in that year (\code{pop_source == "unavailable"}) are dropped from
 the result. The dropped govids are recorded in
-`provenance$rollup$excluded_govids`. This excludes special districts
+\code{provenance$rollup$excluded_govids}. This excludes special districts
 (gov type 4) and school districts (gov type 5) from per-capita rollups
-by design — see `vignette('population-denominators')`.
+by design — see \code{vignette('population-denominators')}.
 }
-\section{Reading `coverage`}{
+\section{Reading \code{coverage}}{
 
-`provenance$coverage` carries three per-year counters:
+\code{provenance$coverage} carries three per-year counters:
+\itemize{
+\item \code{n_units_expected} -- how many governments you asked about.
+\item \code{n_units_collected} -- how many of those appear in the corpus at all
+that year (in ANY category), separating governments Census did not
+collect from governments it did.
+\item \code{n_units_reporting} -- how many have rows for the SPECIFIC category you
+requested. This is always <= n_units_collected. A collected government
+can have no "Police" rows and still pay for policing: the rows leave out
+intergovernmental expenditure, so a city that pays the county sheriff
+and reports the payment as intergovernmental (code \code{M62}) has none. Of
+34 cities with documented sheriff contracts, nine of 102 city-years
+(FY2012, FY2017 and FY2022; corpus build of 2026-10-26) looked like
+this, and the other 93 reported direct Police spending.
+}
 
-  * `n_units_expected` -- how many governments you asked about.
-  * `n_units_collected` -- how many of those appear in the corpus at all
-    that year (in ANY category), separating governments Census did not
-    collect from governments it did.
-  * `n_units_reporting` -- how many have rows for the SPECIFIC category you
-    requested. This is always <= n_units_collected. A collected government
-    can have no "Police" rows and still pay for policing: the rows leave out
-    intergovernmental expenditure, so a city that pays the county sheriff
-    and reports the payment as intergovernmental (code `M62`) has none. Of
-    34 cities with documented sheriff contracts, nine of 102 city-years
-    (FY2012, FY2017 and FY2022; corpus build of 2026-10-26) looked like
-    this, and the other 93 reported direct Police spending.
-
-**`n_units_reporting` is category-conditional** and therefore **not a
-response rate**: `n_units_reporting / n_units_expected` conflates sampling
+\strong{\code{n_units_reporting} is category-conditional} and therefore \strong{not a
+response rate}: \code{n_units_reporting / n_units_expected} conflates sampling
 (never collected) with collected governments that have no rows in your
-category. Use `n_units_collected / n_units_expected` for the true
-collection rate, and `n_units_reporting / n_units_collected` for category
+category. Use \code{n_units_collected / n_units_expected} for the true
+collection rate, and \code{n_units_reporting / n_units_collected} for category
 participation among collected units.
 
 In FY2022, a census year, 393 of Georgia's 567 cities report
-`category = "Police"`. Of the other 174, 32 were not collected and 142 were
+\code{category = "Police"}. Of the other 174, 32 were not collected and 142 were
 collected with no Police rows. A city that contracts with the county sheriff
 lands in the second group only when it reports no direct Police spending, for
 example when it files the payment as intergovernmental expenditure; the
@@ -120,7 +122,7 @@ counters do not say how many of the 142 do.
 A census year and a sample year collect different sets of governments, so
 participation across the two mixes a change in which governments were
 collected with any change in spending. Compare census years with each other,
-or the same governments across years. `is_census_year` marks which is which,
-and `vignette("coverage-counters")` has worked examples.
+or the same governments across years. \code{is_census_year} marks which is which,
+and \code{vignette("coverage-counters")} has worked examples.
 }
 

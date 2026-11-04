@@ -16,69 +16,72 @@ cog_gov_search(
 \item{name}{Character vector of place name(s). Length 1 = utility mode;
 length >1 = basket mode.}
 
-\item{state}{2-letter USPS abbreviation (e.g. `"FL"`), FIPS integer
-(e.g. `12`), or `NULL`. In basket mode, length 1 recycles across
-all entries; otherwise must match `length(name)`.}
+\item{state}{2-letter USPS abbreviation (e.g. \code{"FL"}), FIPS integer
+(e.g. \code{12}), or \code{NULL}. In basket mode, length 1 recycles across
+all entries; otherwise must match \code{length(name)}.}
 
-\item{type}{Government type: integer in `0:3` or one of `"state"`,
-`"county"`, `"city"`, `"township"`, or `NA`/`NULL`. Per-row optional
-in basket mode (recycles from length 1). Excluded types `4`/`5` (or
-`"special_district"` / `"school_district"`) trigger an explanatory
+\item{type}{Government type: integer in \code{0:3} or one of \code{"state"},
+\code{"county"}, \code{"city"}, \code{"township"}, or \code{NA}/\code{NULL}. Per-row optional
+in basket mode (recycles from length 1). Excluded types \code{4}/\code{5} (or
+\code{"special_district"} / \code{"school_district"}) trigger an explanatory
 message and an empty result.}
 
-\item{limit}{Maximum number of rows to return, applied in SQL. `NULL`
+\item{limit}{Maximum number of rows to return, applied in SQL. \code{NULL}
 (default) returns every match -- which, with no other filter, is the
 entire crosswalk. Utility mode only: pagination has no meaning in basket
 mode, where the result is one resolved row per requested name in input
 order, and is refused there with class
-`uscogdata_basket_pagination_conflict`.}
+\code{uscogdata_basket_pagination_conflict}.}
 
-\item{offset}{Rows to skip before `limit` starts counting (0-based).
-Ignored if `limit` is `NULL`; defaults to `0L` when `limit` is set.}
+\item{offset}{Rows to skip before \code{limit} starts counting (0-based).
+Ignored if \code{limit} is \code{NULL}; defaults to \code{0L} when \code{limit} is set.}
 }
 \value{
-A tibble of `canonical_fips_xwalk` rows. In utility mode, all
-  matches sorted by `population_acs` desc, ties broken by
-  `canonical_govid`. In basket mode, resolved rows in input order, with
-  `attr(., "resolution")` set to the sidecar tibble.
+A tibble of \code{canonical_fips_xwalk} rows. In utility mode, all
+matches sorted by \code{population_acs} desc, ties broken by
+\code{canonical_govid}. In basket mode, resolved rows in input order, with
+\code{attr(., "resolution")} set to the sidecar tibble.
 
-  When `limit` is set, carries a `total_rows` attribute: the full
-  unpaginated match count, computed by the same query (`COUNT(*) OVER()`)
-  rather than a second scan.
+When \code{limit} is set, carries a \code{total_rows} attribute: the full
+unpaginated match count, computed by the same query (\verb{COUNT(*) OVER()})
+rather than a second scan.
 }
 \description{
-Resolves human-readable place names into rows of `canonical_fips_xwalk`,
+Resolves human-readable place names into rows of \code{canonical_fips_xwalk},
 the cross-vintage canonical-government registry. Operates in two modes:
 }
 \details{
-* **Utility mode** (single `name`, the original behavior): returns all
-  rows whose `gov_name` contains `name` as a **literal, case-insensitive
-  substring**, sorted by `population_acs` descending. Useful for
-  exploratory lookups. Regex metacharacters in `name` are escaped, so a
-  government is findable by its own complete name even when that name
-  contains parentheses or a period.
-* **Basket mode** (`length(name) > 1`): resolves each input row to a
-  single canonical govid and returns a tibble in input order, suitable
-  for piping straight into [cog_spending()] / [cog_revenue()] /
-  [cog_geographic_rollup()]. Carries an audit sidecar accessible via
-  [cog_basket_resolution()] / [cog_basket_unresolved()].
+\itemize{
+\item \strong{Utility mode} (single \code{name}, the original behavior): returns all
+rows whose \code{gov_name} contains \code{name} as a \strong{literal, case-insensitive
+substring}, sorted by \code{population_acs} descending. Useful for
+exploratory lookups. Regex metacharacters in \code{name} are escaped, so a
+government is findable by its own complete name even when that name
+contains parentheses or a period.
+\item \strong{Basket mode} (\code{length(name) > 1}): resolves each input row to a
+single canonical govid and returns a tibble in input order, suitable
+for piping straight into \code{\link[=cog_spending]{cog_spending()}} / \code{\link[=cog_revenue]{cog_revenue()}} /
+\code{\link[=cog_geographic_rollup]{cog_geographic_rollup()}}. Carries an audit sidecar accessible via
+\code{\link[=cog_basket_resolution]{cog_basket_resolution()}} / \code{\link[=cog_basket_unresolved]{cog_basket_unresolved()}}.
+}
 
-
-**Basket-mode resolution algorithm** (per input row):
-1. Filter `canonical_fips_xwalk` by `state` and (if non-NA) `type`.
-2. **Exact pass:** case-insensitive equality against `gov_name`.
-   Single hit -> resolved. Multiple -> step 4.
-3. **Substring fallback:** case-insensitive literal substring against
-   `gov_name` (metacharacters escaped).
-   Single hit -> resolved (`match_method = "substring"`). Zero hits ->
-   `status = "no_match"`. Multiple hits -> step 4.
-4. **Disambiguation:** if matches share one `govs_type`, pick the
-   largest-population row (`status = "largest_pop"`). If they span >=2
-   types, no row is added (`status = "ambiguous"`); the user should
-   re-run with `type` specified.
+\strong{Basket-mode resolution algorithm} (per input row):
+\enumerate{
+\item Filter \code{canonical_fips_xwalk} by \code{state} and (if non-NA) \code{type}.
+\item \strong{Exact pass:} case-insensitive equality against \code{gov_name}.
+Single hit -> resolved. Multiple -> step 4.
+\item \strong{Substring fallback:} case-insensitive literal substring against
+\code{gov_name} (metacharacters escaped).
+Single hit -> resolved (\code{match_method = "substring"}). Zero hits ->
+\code{status = "no_match"}. Multiple hits -> step 4.
+\item \strong{Disambiguation:} if matches share one \code{govs_type}, pick the
+largest-population row (\code{status = "largest_pop"}). If they span >=2
+types, no row is added (\code{status = "ambiguous"}); the user should
+re-run with \code{type} specified.
+}
 
 Resolved rows form the returned tibble in input order. Unresolved
-inputs (`ambiguous` / `no_match`) appear only in the sidecar.
+inputs (\code{ambiguous} / \code{no_match}) appear only in the sidecar.
 }
 \examples{
 \dontrun{
@@ -113,6 +116,6 @@ refined <- cog_gov_search(
 }
 }
 \seealso{
-[cog_basket_resolution()], [cog_basket_unresolved()],
-  [cog_spending()], [cog_revenue()].
+\code{\link[=cog_basket_resolution]{cog_basket_resolution()}}, \code{\link[=cog_basket_unresolved]{cog_basket_unresolved()}},
+\code{\link[=cog_spending]{cog_spending()}}, \code{\link[=cog_revenue]{cog_revenue()}}.
 }

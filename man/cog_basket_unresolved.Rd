@@ -7,15 +7,15 @@
 cog_basket_unresolved(x)
 }
 \arguments{
-\item{x}{A tibble returned by basket-mode [cog_gov_search()].}
+\item{x}{A tibble returned by basket-mode \code{\link[=cog_gov_search]{cog_gov_search()}}.}
 }
 \value{
-A tibble (subset of [cog_basket_resolution()]).
+A tibble (subset of \code{\link[=cog_basket_resolution]{cog_basket_resolution()}}).
 }
 \description{
-Convenience wrapper that returns just the rows where `status` is
-`"ambiguous"` or `"no_match"` — the ones the user likely wants to
-refine before piping into a query verb. The `candidates` list-column
+Convenience wrapper that returns just the rows where \code{status} is
+\code{"ambiguous"} or \code{"no_match"} — the ones the user likely wants to
+refine before piping into a query verb. The \code{candidates} list-column
 is preserved so the user can drill into ambiguous match sets.
 }
 \examples{
