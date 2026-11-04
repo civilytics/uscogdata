@@ -13,14 +13,21 @@
 #   * State governments (type 0). Census's 2004 and 2006 technical
 #     documentation names the Alabama and Michigan (September 30) and Texas
 #     (August 31) state governments as exceptions "included as though they
-#     were part of the June 30 group". The published corpus agrees for survey
-#     year 2020: those three states' federal aid jumps with the CARES Act in
-#     2020, as the June-30 states' does, while New York (March 31) and 15
-#     large September-30 cities and counties jump in 2021 (measurements in
-#     uscogdata#77). For the other 47 states both rules give the same months.
+#     were part of the June 30 group". The published corpus agrees in two
+#     survey years (measurements in uscogdata#77):
+#       - 2020: those three states' federal aid jumps with the CARES Act in
+#         2020, as the June-30 states' does, while New York (March 31) and 15
+#         large September-30 cities and counties jump in 2021.
+#       - 2009: their federal aid jumps with the 2009 stimulus in survey year
+#         2009 and slows in 2011, as the June-30 states' does. Under the plain
+#         rule their 2009 would end in 2008, before the stimulus, and their
+#         2011 would be the full stimulus year. The same 15 local governments
+#         jump in 2011, as the plain rule predicts for them.
+#     For the other 47 states both rules give the same months.
 #   * The District of Columbia (type 2 here), which the same documentation
-#     lists with the September-30 exceptions. The 2020 data neither confirms
-#     nor rules this out, so it rests on the documentation alone.
+#     lists with the September-30 exceptions. The 2009 and 2020 data each
+#     neither confirm nor rule this out, so it rests on the documentation
+#     alone.
 
 # canonical_govids that follow the state-government rule without being type 0.
 .SURVEY_YEAR_SAME_YEAR_GOVIDS <- c(
@@ -218,11 +225,13 @@
 #' 30) that means October 2016 to September 2017, and for Texas (August 31)
 #' September 2016 to August 2017. Census's 2004 and 2006 technical
 #' documentation lists these three states as exceptions to the June 30 window,
-#' and the corpus agrees in survey year 2020, the one year checked. The same
-#' documentation lists the District of Columbia, so it is treated the same
-#' way. That treatment has not been checked against the data. For New York
-#' (March 31) and the 46 states with a June 30 year end, the two rules give
-#' the same months.
+#' and the corpus agrees in survey years 2009 and 2020, the two years checked:
+#' their federal aid moves with the 2009 stimulus and the 2020 CARES Act in
+#' the same survey years as the June 30 states' does. The same documentation
+#' lists the District of Columbia, so it is treated the same way. Checks
+#' against the 2009 and 2020 data were inconclusive for it, so that treatment
+#' rests on the documentation alone. For New York (March 31) and the 46 states
+#' with a June 30 year end, the two rules give the same months.
 #'
 #' A government can change its fiscal year end, so the periods are looked up
 #' per government-year. Where the corpus has no `fiscal_year_end` for a
