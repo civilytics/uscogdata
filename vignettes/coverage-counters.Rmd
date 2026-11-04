@@ -24,9 +24,11 @@ governments has a row still gets a row in the table, with `n_units_reporting` eq
 to zero.
 
 Point `USCOGDATA_URL` at the bundled fixture corpus to run the examples without
-network access or credentials. The fixture carries FY2011, FY2012, FY2019 and FY2020
-for all 50 states. Every count computed from it is fixture output and not a real
-Georgia figure.
+network access or credentials. The fixture copies four full years of the published
+corpus, FY2011, FY2012, FY2019 and FY2020, from its 2026-08-03 build. Its FY2012 and
+FY2019 counts for Georgia cities and Police match the published corpus as of the
+2026-10-26 build, except that the newer crosswalk lists 567 Georgia cities where the
+fixture lists 566.
 
 ```{r}
 library(uscogdata)
@@ -161,9 +163,38 @@ the typical Georgia city, and a larger share of them report Police spending. A
 sample-year participation rate describes the cities Census sampled that year, so use
 a census year to estimate the share of all Georgia cities with Police spending.
 
-The collection rate shows which kind of year you are looking at. When it is low, treat
-both the amounts and the participation rate as statements about the sampled
-governments.
+To compare a census year with a sample year, hold the governments fixed. Take the
+cities collected in both years and measure participation among them:
+
+```{r}
+both <- intersect(
+  collected$canonical_govid[collected$year == 2012],
+  collected$canonical_govid[collected$year == 2019]
+)
+length(both)
+
+reported <- unique(police[, c("year", "canonical_govid")])
+sapply(c(FY2012 = 2012, FY2019 = 2019), function(y) {
+  mean(both %in% reported$canonical_govid[reported$year == y])
+})
+```
+
+On the fixture, 99 Georgia cities were collected in both FY2012 and FY2019. Among
+them, participation is 0.97 in FY2012 and 0.94 in FY2019, against 0.75 and 0.93 among
+all collected cities. Once the cities are the same, the FY2019 rate is no longer
+higher than the FY2012 rate.
+
+The published corpus shows the same pattern for every US city. As of its 2026-10-26
+build, Police participation among collected cities is 0.70, 0.73 and 0.72 in the
+census years FY2012, FY2017 and FY2022, and between 0.93 and 0.95 in every sample year
+from FY2013 to FY2023. Among the 3,867 cities collected in both FY2022 and FY2021, it
+is 0.929 in FY2022 and 0.935 in FY2021. Fire, Libraries and Housing & Community behave
+the same way: participation among the same cities moves by 0.01 or less between those
+two years, while participation among all collected cities rises by 0.16 to 0.24.
+
+Compare participation between two census years, or between the same governments in
+two years. All collected governments in a census year and all collected governments
+in a sample year are two different sets of cities.
 
 # The FY2022 example on the published corpus
 
@@ -182,10 +213,11 @@ police_2022 <- cog_geographic_rollup(
 attr(police_2022, "provenance")$coverage
 ```
 
-Those pages report 393 of 567 Georgia cities with Police rows in FY2022 and attribute
-most of the 174-city gap to cities that contract policing to the county sheriff. Run
-the chunk and read `n_units_collected` to split the 174 into the two groups: the
-cities Census did not collect, and the collected cities with no Police rows.
+On the published corpus, as of its 2026-10-26 build, the chunk returns 567 expected,
+535 collected and 393 reporting. The 174 cities without Police rows split into 32
+that Census did not collect and 142 that were collected and have no Police rows. The
+reference pages attribute most of the gap to cities that contract policing to the
+county sheriff, and the counters place 142 of the 174 in the second group.
 
 # Peer comparisons count peers only
 
@@ -266,5 +298,6 @@ year, the fixture has spending rows for 534 of its 566 Georgia cities.
   governments.
 - `n_units_reporting / n_units_expected` mixes the two, so read the counters
   separately before you explain a gap.
-- A sample year collects a different set of governments from a census year, so
-  compare participation rates across those years with care.
+- A sample year collects a different set of governments from a census year.
+  Compare participation between census years, or between the same governments
+  across years.
