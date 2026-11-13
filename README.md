@@ -133,7 +133,7 @@ After that, nothing in your analysis touches an external service.
 ### Configuration
 
 - `USCOGDATA_URL` — corpus root: an HTTPS URL or a local path, **trailing slash required**
-- `USCOGDATA_CACHE_DIR` — where the manifest is cached (default: user cache dir)
+- `USCOGDATA_CACHE_DIR` — where the manifest and the corpus's metadata tables (about 3 MB) are cached (default: user cache dir)
 - `USCOGDATA_MANIFEST_TTL_SECS` — manifest re-fetch interval (default 3600)
 - `USCOGDATA_DUCKDB_THREADS` — cap DuckDB's thread count (default: every visible core)
 - `USCOGDATA_DUCKDB_MEMORY_LIMIT` — cap DuckDB's memory, e.g. `"4GB"` (default: DuckDB's own)

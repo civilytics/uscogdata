@@ -20,12 +20,20 @@ cog_open <- function(url = .resolve_url(),
   # a remote read should already be bound by whatever budget the operator set.
   .apply_duckdb_limits(con, threads, memory_limit)
   DBI::dbExecute(con, "INSTALL httpfs; LOAD httpfs;")
+  # Remote path: without this, every CREATE VIEW in .register_views() and
+  # every query re-requests the same file metadata over HTTP -- about 4 s of
+  # a 5.6 s session open against the public corpus (#64). The cache lives as
+  # long as the connection; cog_close() discards it. A corpus republished
+  # mid-session is not picked up until then, which matches the manifest,
+  # already fixed for the session.
+  DBI::dbExecute(con, "SET enable_http_metadata_cache = true")
 
   manifest <- .fetch_or_cache_manifest(url, cache_dir)
   .validate_schema(manifest, supported = c(4L, 5L, 6L, 7L))
   .validate_scope(manifest)
 
-  .register_views(con, url, manifest)
+  meta_url <- .cache_metadata_tables(url, manifest, cache_dir)
+  .register_views(con, url, manifest, meta_url = meta_url)
 
   .uscogdata_env$con       <- con
   .uscogdata_env$manifest  <- manifest

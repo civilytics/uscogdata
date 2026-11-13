@@ -1,5 +1,22 @@
 # uscogdata (development version)
 
+## Faster sessions on the remote corpus
+
+Opening a session against the public corpus took about 5.6 seconds. It now takes
+about 1.8 seconds the first time and about 0.4 seconds after that (measured
+2026-11-12, one run each). Two changes do it:
+
+- A session keeps the HTTP file details it has already requested instead of asking
+  again for every view and query. A repeated query in the same session drops from
+  about 0.55 seconds to 0.02.
+- The ten metadata tables, about 3 MB, are kept in `USCOGDATA_CACHE_DIR` and used
+  only while their SHA-256 matches the manifest. A republished corpus is picked up
+  when the manifest is, and if a download fails or does not match, the session reads
+  the tables remotely as before.
+
+The yearly data files are still read remotely. For repeat work on them,
+`cog_mirror()` remains the fastest option. Results are unchanged.
+
 ## Fiscal-year periods for each row
 
 `year` is the Census survey year, and a survey year covers different months for
