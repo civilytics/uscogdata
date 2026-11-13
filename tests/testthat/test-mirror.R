@@ -65,3 +65,17 @@ test_that("cog_mirror reads back via a fresh session against the mirror", {
   expect_gt(nrow(r), 0L)
   expect_equal(unique(r$canonical_govid), "121011212191")
 })
+
+test_that("cog_mirror(include = 'docs') copies the fixture's four docs (#73)", {
+  skip_if_no_corpus()
+  tmp <- tempfile("uscogmirror_"); dir.create(tmp)
+  on.exit(unlink(tmp, recursive = TRUE))
+
+  # .mirror_docs() skips a missing local doc without a message, so this is
+  # the only thing that notices when the fixture loses its docs/.
+  cog_mirror(tmp, include = "docs", progress = FALSE)
+  for (doc in c("README.md", "data_dictionary.md",
+                "series_breaks.md", "reader-specification.md")) {
+    expect_true(file.exists(file.path(tmp, "docs", doc)), info = doc)
+  }
+})
