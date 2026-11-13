@@ -138,14 +138,16 @@
 #' lived in the original `{url}` substitution, unnoticed because nothing ever
 #' ran on Windows until the mirror's check matrix existed.
 #' @noRd
-.render_view_sql <- function(sql, url, manifest = list()) {
+.render_view_sql <- function(sql, url, manifest = list(), meta_url = url) {
   sql <- gsub("{long_files}", .long_files_sql(url, manifest), sql, fixed = TRUE)
-  gsub("{url}", url, sql, fixed = TRUE)
+  # {url} appears only in the metadata-table views, so `meta_url` can point
+  # them at the local cache (#64) while {long_files} stays on the corpus.
+  gsub("{url}", meta_url, sql, fixed = TRUE)
 }
 
 #' Register DuckDB views from inst/sql/ SQL files
 #' @noRd
-.register_views <- function(con, url, manifest) {
+.register_views <- function(con, url, manifest, meta_url = url) {
   sql_dir <- system.file("sql", package = "uscogdata")
   files   <- sort(list.files(sql_dir, pattern = "\\.sql$", full.names = TRUE))
   schema_version <- suppressWarnings(as.integer(manifest$schema_version %||% 0L))
@@ -156,7 +158,7 @@
         !.corpus_has_table(manifest, .representation_view_files[[base]])) next
     if (base %in% .balance_view_files && !.corpus_has_balance_subtype(con)) next
     sql <- paste(readLines(f, warn = FALSE), collapse = "\n")
-    sql <- .render_view_sql(sql, url, manifest)
+    sql <- .render_view_sql(sql, url, manifest, meta_url = meta_url)
     DBI::dbExecute(con, sql)
   }
 }

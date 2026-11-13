@@ -32,7 +32,8 @@ cog_open <- function(url = .resolve_url(),
   .validate_schema(manifest, supported = c(4L, 5L, 6L, 7L))
   .validate_scope(manifest)
 
-  .register_views(con, url, manifest)
+  meta_url <- .cache_metadata_tables(url, manifest, cache_dir)
+  .register_views(con, url, manifest, meta_url = meta_url)
 
   .uscogdata_env$con       <- con
   .uscogdata_env$manifest  <- manifest
