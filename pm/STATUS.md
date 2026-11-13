@@ -7,20 +7,14 @@
 
 ## Where this stands
 
-uscogdata's code now lives only in Gitea; the old Nextcloud folder keeps just build
-output and working files. The move changed no test result: 1,101 pass and the two
-opt-in live-corpus tests skip, before and after. It turned up one defect, #73: the
-fixture's reference docs have never been in git, because a `.gitignore` rule matches
-too broadly. Next in line are #73 and #72 (a vignette for the coverage counters), with
-#52 (data-correction intake) and #74 (the stale state section in `CLAUDE.md`) waiting
-on a decision.
+uscogdata reads the public Census of Governments finance corpus from R. A remote session now opens in under half a second after the first, because the package keeps the small metadata tables on disk and checks them against the manifest. The yearly data is still read remotely, and `cog_mirror()` is still the fastest way to do heavy work. Rows can carry the months each survey year covers; the cog-api half of that (#77) is still open. Fifty-eight governments keep Census's "NOT AVAILABLE" name, and eight more get their real names back with the next corpus publish (#76).
 
 ## Ready to work on next
 
-- **#73** The fixture corpus's docs/ never reaches git: .gitignore's docs/ rule is unanchored · `ws/corpus` — nothing is blocking it; something is currently wrong
-- **#72** docs: add a vignette explaining provenance$coverage counters · `ws/docs` — nothing is blocking it; owed work from an earlier change
+- **#83** cog_mirror() records a file as downloaded without checking its sha256 · `ws/corpus` — nothing is blocking it; something is currently wrong
 - **#2** Extend population data to be households as an alternate spending denominator · `ws/corpus` — nothing is blocking it
-- **#64** Partition-level caching: R/cache.R is still a stub, and the remote path pays for it every session · `ws/corpus` — nothing is blocking it
+- **#77** Expose fiscal-year timing: what months each survey year covers, per government · `ws/api` — nothing is blocking it
+- **#76** 66 governments in the roster are named NOT AVAILABLE, so no search by name can find them · `ws/corpus` — waiting on a person, not on other work
 - **#74** CLAUDE.md's Current State section is frozen at 2026-08-03 · `ws/docs` — waiting on a person, not on other work
 - **#52** Release 11/11: design the data-correction intake (deferred; gates the API announcement) · `ws/corpus` — waiting on a person, not on other work
 
@@ -28,9 +22,9 @@ on a decision.
 
 | Stream | Commits since | Open | Debt | Owes docs |
 |---|---|---|---|---|
-| Query verbs and results | 0 | 0 | 0 | no |
-| Corpus, mirror, provenance | 0 | 4 | 0 | no |
-| Vignettes and guides | 0 | 2 | 2 | no |
+| Query verbs and results | 5 | 1 | 0 | no |
+| Corpus, mirror, provenance | 5 | 4 | 0 | no |
+| Vignettes and guides | 9 | 1 | 1 | no |
 
 ## CI
 
@@ -42,8 +36,8 @@ on a decision.
 
 _Nothing blocks anything else, so there is no graph to draw._
 
-- Marker: `9adb9211` (2026-09-09)
-- Commits since: 3
+- Marker: `ba57f9cb` (2026-09-30)
+- Commits since: 15
 - Open issues: 6
 
 </details>
