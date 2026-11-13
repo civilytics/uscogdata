@@ -110,3 +110,26 @@ test_that("every flow code carrying dollars has a category, J-prefix included", 
   expect_true(all(j$spend_subtype == "assistance"))
   expect_false(any(is.na(j$category)))
 })
+
+test_that("every doc the fixture manifest names is in the fixture (#73)", {
+  skip_if_no_corpus()
+  # .gitignore once excluded docs/ at any depth, so a fresh clone had a
+  # manifest pointing at files that were never committed, and
+  # cog_mirror(include = "docs") copied nothing without saying so.
+  m <- jsonlite::fromJSON(
+    file.path(fixture_corpus_path(), "manifest.json"), simplifyVector = FALSE
+  )
+  named <- c(m$schema$data_dictionary, m$series_breaks_ref, m$reader_spec_ref)
+  expect_length(named, 3L)
+  for (rel in named) {
+    expect_true(file.exists(file.path(fixture_corpus_path(), rel)), info = rel)
+  }
+  # The four docs data-raw/regenerate_fixture_corpus.R copies, which
+  # cog_mirror(include = "docs") expects to find.
+  for (doc in c("README.md", "data_dictionary.md",
+                "series_breaks.md", "reader-specification.md")) {
+    expect_true(
+      file.exists(file.path(fixture_corpus_path(), "docs", doc)), info = doc
+    )
+  }
+})

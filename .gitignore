@@ -8,7 +8,9 @@ inst/doc
 # docs/decisions/, which forced this to be written as children with two
 # re-includes -- git cannot re-include anything beneath an excluded directory.
 # Compass lives in pm/ now, so the whole directory can be excluded again.
-docs/
+# Anchored: unanchored, it also matched inst/extdata/fixture_corpus/docs/
+# and kept the fixture's reference docs out of git (#73).
+/docs/
 /doc/
 /Meta/
 .DS_Store
